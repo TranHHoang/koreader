@@ -195,7 +195,6 @@ local order = {
         "mass_storage_actions", -- if Device:canToggleMassStorage()
         "----------------------------",
         "ota_update", -- if Device:hasOTAUpdates()
-        "help",
         "----------------------------",
         "exit_menu",
     },

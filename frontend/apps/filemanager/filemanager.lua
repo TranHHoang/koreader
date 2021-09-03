@@ -105,90 +105,51 @@ end
 
 function FileManager:setupLayout()
     self.show_parent = self.show_parent or self
-    local icon_size = Screen:scaleBySize(DGENERIC_ICON_SIZE * 0.8)
-    local home_button = Button:new{
-        text = "⌂",
+    local home_button = IconButton:new{
+        icon = "home",
         bordersize = 0,
+        width = Screen:scaleBySize(24),
+        height = Screen:scaleBySize(24),
         padding = Size.padding.default,
-        padding_bottom = 0,
-        face = Font:getFace("smallinfofont", 20),
         callback = function()
             self:goHome()
         end,
         hold_callback = function() self:onShowPlusMenu() end,
     }
 
-    local up_button = Button:new{
-        text = "↰",
+    local up_button = IconButton:new{
+        icon = "up",
         bordersize = 0,
+        width = Screen:scaleBySize(24), -- our icons are square
+        height = Screen:scaleBySize(24),
         padding = Size.padding.default,
-        padding_bottom = 0,
-        face = Font:getFace("smallinfofont", 20),
         callback = function()
             self.file_chooser:onFolderUp()
         end,
     }
 
-    -- local plus_button = IconButton:new{
-    --     icon = "plus",
-    --     width = icon_size,
-    --     height = icon_size,
-    --     padding = Size.padding.default,
-    --     padding_left = Size.padding.tiny,
-    --     padding_right = Size.padding.tiny,
-    --     padding_bottom = 0,
-    --     callback = function() self:onShowPlusMenu() end,
-    -- }
-
     self.path_text = TextWidget:new{
         face = Font:getFace("smallinfofont", 18),
-        text = BD.directory(filemanagerutil.abbreviate(self.root_path)),
+        text = BD.directory(filemanagerutil.abbreviate(self.root_path)):gsub("/", " ᐅ "),
         max_width = Screen:getWidth() - 2*Size.padding.large,
         truncate_left = true,
     }
 
     local WidgetContainer = require("ui/widget/container/widgetcontainer")
+    local HorizontalSpan = require("ui/widget/horizontalspan")
 
     self.banner = FrameContainer:new{
         padding = Size.padding.default,
         bordersize = 0,
-            WidgetContainer:new {
-                dimen = { w = Screen:getWidth(), h = nil },
-                HorizontalGroup:new {
-                    home_button,
-                    up_button,
-                    -- VerticalGroup:new {
-                    --     dimen = { w = Screen:getWidth() - home_button:getSize().w - plus_button:getSize().w, h = nil },
-                        -- Button:new {
-                        --     readonly = true,
-                        --     bordersize = 0,
-                        --     padding = 0,
-                        --     text_font_bold = false,
-                        --     text_font_face = "smalltfont",
-                        --     -- text_font_size = 24,
-                        --     text = self.path_text,
-                        --     width = Screen:getWidth() - 2 * icon_size - 4 * Size.padding.large,
-                        -- },
-                    -- plus_button,
-                    self.path_text,
-                }
-            },
-            -- CenterContainer:new{
-            --     dimen = { w = Screen:getWidth(), h = nil },
-            -- require("ui/widget/horizontalspan"):new{
-            --     Button:new{
-            --         text = "",
-            --         bordersize = 0,
-            --         text_font_bold = false,
-            --     },
-            --     self.path_text
-            -- },
-                -- CenterContainer:new{
-                --     dimen = { w = Screen:getWidth() - 100, h = nil },
-                    -- self.path_text,
-                -- },
-            -- },
-            -- VerticalSpan:new{ width = Screen:scaleBySize(5) },
+        WidgetContainer:new {
+            dimen = { w = Screen:getWidth(), h = nil },
+            HorizontalGroup:new {
+                home_button,
+                up_button,
+                HorizontalSpan:new { width = Screen:scaleBySize(5) },
+                self.path_text,
+            }
+        },
     }
 
     local show_hidden

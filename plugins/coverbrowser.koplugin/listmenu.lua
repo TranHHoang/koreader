@@ -245,11 +245,13 @@ function ListMenuItem:update()
             height_overflow_show_ellipsis = true,
         }
         
+        local scale_factor = math.min(max_img_w / 48, max_img_h / 48)
+
         local folderIcon = HorizontalGroup:new{
             ImageWidget:new {
                 file = "./resources/icons/mdlight/folder.svg",
                 alpha = true,
-                scale_factor = 0.5,
+                scale_factor = scale_factor * 0.5,
             },
             HorizontalSpan:new{ width = pad_width },
         }
@@ -1025,7 +1027,7 @@ function ListMenu:_updateItemsBuildUI()
         -- Insert some margin
         table.insert(self.item_group, item_tmp)
         table.insert(self.item_group, LineWidget:new{
-                        dimen = Geom:new{ w = self.width - 90, h = Size.line.thin },
+                        dimen = Geom:new{ w = self.width, h = Size.line.thin },
                         background = Blitbuffer.COLOR_LIGHT_GRAY,
                         style = "dashed",
                     })

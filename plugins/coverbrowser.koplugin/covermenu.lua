@@ -135,7 +135,9 @@ function CoverMenu:updateItems(select_number)
         for i=1, #self.items_to_update do
             table.insert(files_to_index, {
                 filepath = self.items_to_update[i].filepath,
-                cover_specs = self.items_to_update[i].cover_specs
+                cover_specs = self.items_to_update[i].cover_specs,
+                -- Only get exact number of covers
+                files_to_show_cover = self.items_to_update[i].files_to_show_cover
             })
         end
         -- Launch it at nextTick, so UIManager can render us smoothly
@@ -354,30 +356,6 @@ function CoverMenu:updateItems(select_number)
                     },
                 })
                 table.insert(orig_buttons, {
-                    { -- Allow user to ignore some offending cover image
-                        text = bookinfo.ignore_cover and _("Unignore cover") or _("Ignore cover"),
-                        enabled = bookinfo.has_cover and true or false,
-                        callback = function()
-                            BookInfoManager:setBookInfoProperties(file, {
-                                ["ignore_cover"] = not bookinfo.ignore_cover and 'Y' or false,
-                            })
-                            UIManager:close(self.file_dialog)
-                            self:updateItems()
-                        end,
-                    },
-                    { -- Allow user to ignore some bad metadata (filename will be used instead)
-                        text = bookinfo.ignore_meta and _("Unignore metadata") or _("Ignore metadata"),
-                        enabled = bookinfo.has_meta and true or false,
-                        callback = function()
-                            BookInfoManager:setBookInfoProperties(file, {
-                                ["ignore_meta"] = not bookinfo.ignore_meta and 'Y' or false,
-                            })
-                            UIManager:close(self.file_dialog)
-                            self:updateItems()
-                        end,
-                    },
-                })
-                table.insert(orig_buttons, {
                     { -- Allow a new extraction (multiple interruptions, book replaced)...
                         text = _("Refresh cached book information"),
                         enabled = bookinfo and true or false,
@@ -487,30 +465,6 @@ function CoverMenu:onHistoryMenuHold(item)
         },
     })
     table.insert(orig_buttons, {
-        { -- Allow user to ignore some offending cover image
-            text = bookinfo.ignore_cover and _("Unignore cover") or _("Ignore cover"),
-            enabled = bookinfo.has_cover and true or false,
-            callback = function()
-                BookInfoManager:setBookInfoProperties(file, {
-                    ["ignore_cover"] = not bookinfo.ignore_cover and 'Y' or false,
-                })
-                UIManager:close(self.histfile_dialog)
-                self:updateItems()
-            end,
-        },
-        { -- Allow user to ignore some bad metadata (filename will be used instead)
-            text = bookinfo.ignore_meta and _("Unignore metadata") or _("Ignore metadata"),
-            enabled = bookinfo.has_meta and true or false,
-            callback = function()
-                BookInfoManager:setBookInfoProperties(file, {
-                    ["ignore_meta"] = not bookinfo.ignore_meta and 'Y' or false,
-                })
-                UIManager:close(self.histfile_dialog)
-                self:updateItems()
-            end,
-        },
-    })
-    table.insert(orig_buttons, {
         { -- Allow a new extraction (multiple interruptions, book replaced)...
             text = _("Refresh cached book information"),
             enabled = bookinfo and true or false,
@@ -605,30 +559,6 @@ function CoverMenu:onCollectionsMenuHold(item)
                 }
                 UIManager:close(self.collfile_dialog)
                 UIManager:show(textviewer)
-            end,
-        },
-    })
-    table.insert(orig_buttons, {
-        { -- Allow user to ignore some offending cover image
-            text = bookinfo.ignore_cover and _("Unignore cover") or _("Ignore cover"),
-            enabled = bookinfo.has_cover and true or false,
-            callback = function()
-                BookInfoManager:setBookInfoProperties(file, {
-                    ["ignore_cover"] = not bookinfo.ignore_cover and 'Y' or false,
-                })
-                UIManager:close(self.collfile_dialog)
-                self:updateItems()
-            end,
-        },
-        { -- Allow user to ignore some bad metadata (filename will be used instead)
-            text = bookinfo.ignore_meta and _("Unignore metadata") or _("Ignore metadata"),
-            enabled = bookinfo.has_meta and true or false,
-            callback = function()
-                BookInfoManager:setBookInfoProperties(file, {
-                    ["ignore_meta"] = not bookinfo.ignore_meta and 'Y' or false,
-                })
-                UIManager:close(self.collfile_dialog)
-                self:updateItems()
             end,
         },
     })

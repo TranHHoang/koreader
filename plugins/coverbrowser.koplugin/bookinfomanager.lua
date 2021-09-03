@@ -384,7 +384,18 @@ function BookInfoManager:getBookInfo(filepath, get_cover)
     return bookinfo
 end
 
-function BookInfoManager:extractBookInfo(filepath, cover_specs)
+function BookInfoManager:extractBookInfo(filepath, cover_specs, files_to_show_cover)
+    -- WARNING: Recursively extract every book in this path
+    -- If there are too many nested directory, the app might crash
+    -- Proceed with caution
+    -- This is a special case, a directory that contains books' covers
+    if lfs.attributes(filepath, "mode") == "directory" then
+        -- getFilesRecur(filepath, files)
+        for idx = 1, #files_to_show_cover do
+            self:extractBookInfo(files_to_show_cover[idx], cover_specs)
+        end
+    end
+
     -- This will be run in a subprocess
     -- We use a temporary directory for cre cache (that will not affect parent process),
     -- so we don't fill the main cache with books we're not actually reading
@@ -690,8 +701,9 @@ function BookInfoManager:extractInBackground(files)
         for idx = 1, #files do
             local filepath = files[idx].filepath
             local cover_specs = files[idx].cover_specs
-            logger.dbg("  BG extracting:", filepath)
-            self:extractBookInfo(filepath, cover_specs)
+            local files_to_show_cover = files[idx].files_to_show_cover
+            logger.dbg("  BG extracting:", filepath, files_to_show_cover)
+            self:extractBookInfo(filepath, cover_specs, files_to_show_cover)
         end
         logger.dbg("  BG extraction done")
     end
