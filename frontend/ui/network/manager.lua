@@ -573,15 +573,11 @@ function NetworkMgr:getMenuTable(common_settings)
         common_settings.network_wifi = self:getWifiMenuTable()
     end
 
-    common_settings.network_proxy = self:getProxyMenuTable()
     common_settings.network_info = self:getInfoMenuTable()
 
     if Device:hasWifiManager() then
         common_settings.network_powersave = self:getPowersaveMenuTable()
-        common_settings.network_restore = self:getRestoreMenuTable()
         common_settings.network_dismiss_scan = self:getDismissScanMenuTable()
-        common_settings.network_before_wifi_action = self:getBeforeWifiActionMenuTable()
-        common_settings.network_after_wifi_action = self:getAfterWifiActionMenuTable()
     end
 end
 

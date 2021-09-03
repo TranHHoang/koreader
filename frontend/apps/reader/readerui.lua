@@ -167,12 +167,6 @@ function ReaderUI:init()
     })
     -- reader goto controller
     -- "goto" being a dirty keyword in Lua?
-    self:registerModule("gotopage", ReaderGoto:new{
-        dialog = self.dialog,
-        view = self.view,
-        ui = self,
-        document = self.document,
-    })
     -- dictionary
     self:registerModule("dictionary", ReaderDictionary:new{
         dialog = self.dialog,

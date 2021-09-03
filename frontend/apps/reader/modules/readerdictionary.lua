@@ -205,37 +205,6 @@ function ReaderDictionary:addToMainMenu(menu_items)
             self:onShowDictionaryLookup()
         end,
     }
-    menu_items.dictionary_lookup_history = {
-        text = _("Dictionary lookup history"),
-        enabled_func = function()
-            return lookup_history:has("lookup_history")
-        end,
-        callback = function()
-            local lookup_history_table = lookup_history:readSetting("lookup_history")
-            local kv_pairs = {}
-            local previous_title
-            for i = #lookup_history_table, 1, -1 do
-                local value = lookup_history_table[i]
-                if value.book_title ~= previous_title then
-                    table.insert(kv_pairs, { value.book_title..":", "" })
-                end
-                previous_title = value.book_title
-                table.insert(kv_pairs, {
-                    os.date("%Y-%m-%d %H:%M:%S", value.time),
-                    value.word,
-                    callback = function()
-                        -- Word had been cleaned before being added to history
-                        self:onLookupWord(value.word, true)
-                    end
-                })
-            end
-            UIManager:show(KeyValuePage:new{
-                title = _("Dictionary lookup history"),
-                value_overflow_align = "right",
-                kv_pairs = kv_pairs,
-            })
-        end,
-    }
     menu_items.dictionary_settings = {
         text = _("Dictionary settings"),
         sub_item_table = {
@@ -257,23 +226,6 @@ function ReaderDictionary:addToMainMenu(menu_items)
                         if touchmenu_instance then touchmenu_instance:updateItems() end
                     end)
                 end,
-            },
-            {
-                text = _("Download dictionaries"),
-                sub_item_table = self:_genDownloadDictionariesMenu()
-            },
-            {
-                text = _("Enable fuzzy search"),
-                checked_func = function()
-                    return not self.disable_fuzzy_search == true
-                end,
-                callback = function()
-                    self.disable_fuzzy_search = not self.disable_fuzzy_search
-                end,
-                hold_callback = function()
-                    self:toggleFuzzyDefault()
-                end,
-                separator = true,
             },
             {
                 text = _("Enable dictionary lookup history"),
@@ -303,15 +255,6 @@ function ReaderDictionary:addToMainMenu(menu_items)
                     })
                 end,
                 separator = true,
-            },
-            { -- setting used by dictquicklookup
-                text = _("Large window"),
-                checked_func = function()
-                    return G_reader_settings:isTrue("dict_largewindow")
-                end,
-                callback = function()
-                    G_reader_settings:flipNilOrFalse("dict_largewindow")
-                end,
             },
             { -- setting used by dictquicklookup
                 text = _("Justify text"),
@@ -909,6 +852,7 @@ function ReaderDictionary:showDict(word, results, box, link)
             html_dictionary_link_tapped_callback = function(dictionary, html_link)
                 self:onHtmlDictionaryLinkTapped(dictionary, html_link)
             end,
+            file = self.ui.document.file
         }
         table.insert(self.dict_window_list, self.dict_window)
         if self.lookup_progress_msg then

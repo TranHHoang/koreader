@@ -47,11 +47,6 @@ function ReaderFont:init()
     -- Build face_table for menu
     self.face_table = {}
     -- Font settings
-    table.insert(self.face_table, {
-        text = _("Font settings"),
-        sub_item_table = self:getFontSettingsTable(),
-        separator = true,
-    })
     -- Font list
     local face_list = cre.getFontFaces()
     for k,v in ipairs(face_list) do

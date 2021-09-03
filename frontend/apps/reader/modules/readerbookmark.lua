@@ -75,58 +75,6 @@ function ReaderBookmark:addToMainMenu(menu_items)
             end,
         }
     end
-    menu_items.bookmarks_items_per_page = {
-        text = _("Bookmarks per page"),
-        keep_menu_open = true,
-        callback = function()
-            local SpinWidget = require("ui/widget/spinwidget")
-            local curr_perpage = G_reader_settings:readSetting("bookmarks_items_per_page") or self.bookmarks_items_per_page_default
-            local items = SpinWidget:new{
-                width = math.floor(Screen:getWidth() * 0.6),
-                value = curr_perpage,
-                value_min = 6,
-                value_max = 24,
-                default_value = self.bookmarks_items_per_page_default,
-                title_text =  _("Bookmarks per page"),
-                callback = function(spin)
-                    G_reader_settings:saveSetting("bookmarks_items_per_page", spin.value)
-                end
-            }
-            UIManager:show(items)
-        end
-    }
-    menu_items.bookmarks_items_font_size = {
-        text = _("Bookmark font size"),
-        keep_menu_open = true,
-        callback = function()
-            local SpinWidget = require("ui/widget/spinwidget")
-            local curr_perpage = G_reader_settings:readSetting("bookmarks_items_per_page") or self.bookmarks_items_per_page_default
-            local default_font_size = Menu.getItemFontSize(curr_perpage)
-            local curr_font_size = G_reader_settings:readSetting("bookmarks_items_font_size") or default_font_size
-            local items_font = SpinWidget:new{
-                width = math.floor(Screen:getWidth() * 0.6),
-                value = curr_font_size,
-                value_min = 10,
-                value_max = 72,
-                default_value = default_font_size,
-                title_text =  _("Bookmark font size"),
-                callback = function(spin)
-                    G_reader_settings:saveSetting("bookmarks_items_font_size", spin.value)
-                end
-            }
-            UIManager:show(items_font)
-        end,
-    }
-    menu_items.bookmarks_items_show_more_text = {
-        text = _("Shrink bookmark font size to fit more text"),
-        keep_menu_open = true,
-        checked_func = function()
-            return G_reader_settings:isTrue("bookmarks_items_multilines_show_more_text")
-        end,
-        callback = function()
-            G_reader_settings:flipNilOrFalse("bookmarks_items_multilines_show_more_text")
-        end
-    }
 end
 
 function ReaderBookmark:enableBookmarkBrowsingMode()
@@ -616,7 +564,7 @@ function ReaderBookmark:renameBookmark(item, from_highlight)
                             end
                         end
                     end
-                    bookmark.text = T(_("Page %1 %2 @ %3"), page, bookmark.notes, bookmark.datetime)
+                    bookmark.text = T(_("“%1” — "), bookmark.notes)
                 end
                 break
             end

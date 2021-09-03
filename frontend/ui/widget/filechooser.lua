@@ -264,7 +264,7 @@ end
 function FileChooser:genItemTableFromPath(path)
     local dirs = {}
     local files = {}
-    local up_folder_arrow = BD.mirroredUILayout() and BD.ltr("../ ⬆") or "⬆ ../"
+    local up_folder_arrow = BD.mirroredUILayout() and BD.ltr("../ ⬆") or ""
 
     self.list(path, dirs, files)
 
@@ -292,13 +292,14 @@ function FileChooser:genItemTableFromPath(path)
         local text
         local bidi_wrap_func
         if dir.name == ".." then
-            text = up_folder_arrow
+            goto continue
+            -- text = up_folder_arrow
         elseif dir.name == "." then -- possible with show_current_dir_for_hold
             text = _("Long-press to choose current folder")
         elseif dir.name == "./." then -- added as content of an unreadable directory
             text = _("Current folder not readable. Some content may not be shown.")
         else
-            text = dir.name.."/"
+            text = dir.name
             bidi_wrap_func = BD.directory
         end
         table.insert(item_table, {
@@ -308,6 +309,7 @@ function FileChooser:genItemTableFromPath(path)
             path = subdir_path,
             is_go_up = dir.name == ".."
         })
+        ::continue::
     end
 
     -- set to false to show all files in regular font

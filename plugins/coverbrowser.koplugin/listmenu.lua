@@ -230,7 +230,7 @@ function ListMenuItem:update()
         -- nb items on the right, directory name on the left
         local wright = TextWidget:new{
             text = self.mandatory_func and self.mandatory_func() or self.mandatory,
-            face = Font:getFace("infont", _fontSize(14, 18)),
+            face = Font:getFace("cfont", _fontSize(14, 18)),
         }
         local pad_width = Screen:scaleBySize(10) -- on the left, in between, and on the right
         local wleft_width = dimen.w - wright:getWidth() - 3*pad_width
@@ -244,12 +244,22 @@ function ListMenuItem:update()
             height_adjust = true,
             height_overflow_show_ellipsis = true,
         }
+        
+        local folderIcon = HorizontalGroup:new{
+            ImageWidget:new {
+                file = "./resources/icons/mdlight/folder.svg",
+                alpha = true,
+                scale_factor = 0.5,
+            },
+            HorizontalSpan:new{ width = pad_width },
+        }
         widget = OverlapGroup:new{
             dimen = dimen,
             LeftContainer:new{
                 dimen = dimen,
                 HorizontalGroup:new{
                     HorizontalSpan:new{ width = pad_width },
+                    self.filepath:sub(-2) == ".." and WidgetContainer:new{} or folderIcon,
                     wleft,
                 }
             },
@@ -1011,11 +1021,13 @@ function ListMenu:_updateItemsBuildUI()
                 do_hint_opened = self._do_hint_opened,
                 do_filename_only = self._do_filename_only,
             }
+        
+        -- Insert some margin
         table.insert(self.item_group, item_tmp)
         table.insert(self.item_group, LineWidget:new{
-                        dimen = Geom:new{ w = self.width, h = Size.line.thin },
-                        background = Blitbuffer.COLOR_DARK_GRAY,
-                        style = "solid",
+                        dimen = Geom:new{ w = self.width - 90, h = Size.line.thin },
+                        background = Blitbuffer.COLOR_LIGHT_GRAY,
+                        style = "dashed",
                     })
 
         -- this is for focus manager

@@ -708,21 +708,6 @@ function CoverMenu:tapPlus()
     UIManager:close(self.file_dialog)
     UIManager:clearRenderStack()
 
-    -- Add a new button to original buttons set
-    table.insert(orig_buttons, {}) -- separator
-    table.insert(orig_buttons, {
-        {
-            text = _("Extract and cache book information"),
-            callback = function()
-                UIManager:close(self.file_dialog)
-                local Trapper = require("ui/trapper")
-                Trapper:wrap(function()
-                    BookInfoManager:extractBooksInDirectory(current_path, current_cover_specs)
-                end)
-            end,
-        },
-    })
-
     -- Create the new ButtonDialogTitle, and let UIManager show it
     local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
     self.file_dialog = ButtonDialogTitle:new{

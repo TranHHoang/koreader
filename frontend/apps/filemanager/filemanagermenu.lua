@@ -417,19 +417,11 @@ To:
     end
     -- insert common settings
     for id, common_setting in pairs(dofile("frontend/ui/elements/common_settings_menu_table.lua")) do
+        logger.dbg("AAAAAAA", id, common_setting);
         self.menu_items[id] = common_setting
     end
 
     -- tools tab
-    self.menu_items.advanced_settings = {
-        text = _("Advanced settings"),
-        callback = function()
-            SetDefaults:ConfirmEdit()
-        end,
-        hold_callback = function()
-            SetDefaults:ConfirmSave()
-        end,
-    }
     self.menu_items.plugin_management = {
         text = _("Plugin management"),
         sub_item_table = PluginLoader:genPluginManagerSubItem()
@@ -438,62 +430,6 @@ To:
     self.menu_items.developer_options = {
         text = _("Developer options"),
         sub_item_table = {
-            {
-                text = _("Clear caches"),
-                callback = function()
-                    UIManager:show(ConfirmBox:new{
-                        text = _("Clear the cache folder?"),
-                        ok_callback = function()
-                            local DataStorage = require("datastorage")
-                            local cachedir = DataStorage:getDataDir() .. "/cache"
-                            if lfs.attributes(cachedir, "mode") == "directory" then
-                                FFIUtil.purgeDir(cachedir)
-                            end
-                            lfs.mkdir(cachedir)
-                            -- Also remove from the Cache objet references to the cache files we've just deleted
-                            local Cache = require("cache")
-                            Cache.cached = {}
-                            local InfoMessage = require("ui/widget/infomessage")
-                            UIManager:show(InfoMessage:new{
-                                text = _("Caches cleared. Please restart KOReader."),
-                            })
-                        end,
-                    })
-                end,
-            },
-            {
-                text = _("Enable debug logging"),
-                checked_func = function()
-                    return G_reader_settings:isTrue("debug")
-                end,
-                callback = function()
-                    G_reader_settings:flipNilOrFalse("debug")
-                    if G_reader_settings:isTrue("debug") then
-                        dbg:turnOn()
-                    else
-                        dbg:setVerbose(false)
-                        dbg:turnOff()
-                        G_reader_settings:makeFalse("debug_verbose")
-                    end
-                end,
-            },
-            {
-                text = _("Enable verbose debug logging"),
-                enabled_func = function()
-                    return G_reader_settings:isTrue("debug")
-                end,
-                checked_func = function()
-                    return G_reader_settings:isTrue("debug_verbose")
-                end,
-                callback = function()
-                    G_reader_settings:flipNilOrFalse("debug_verbose")
-                    if G_reader_settings:isTrue("debug_verbose") then
-                        dbg:setVerbose(true)
-                    else
-                        dbg:setVerbose(false)
-                    end
-                end,
-            },
         }
     }
     if Device:isKobo() and not Device:isSunxi() then

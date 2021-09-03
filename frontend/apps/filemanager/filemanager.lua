@@ -105,68 +105,90 @@ end
 
 function FileManager:setupLayout()
     self.show_parent = self.show_parent or self
-    local icon_size = Screen:scaleBySize(DGENERIC_ICON_SIZE)
-    local home_button = IconButton:new{
-        icon = "home",
-        width = icon_size,
-        height = icon_size,
+    local icon_size = Screen:scaleBySize(DGENERIC_ICON_SIZE * 0.8)
+    local home_button = Button:new{
+        text = "⌂",
+        bordersize = 0,
         padding = Size.padding.default,
-        padding_left = Size.padding.large,
-        padding_right = Size.padding.large,
         padding_bottom = 0,
+        face = Font:getFace("smallinfofont", 20),
         callback = function()
             self:goHome()
         end,
-        hold_callback = function() self:setHome() end,
+        hold_callback = function() self:onShowPlusMenu() end,
     }
 
-    local plus_button = IconButton:new{
-        icon = "plus",
-        width = icon_size,
-        height = icon_size,
+    local up_button = Button:new{
+        text = "↰",
+        bordersize = 0,
         padding = Size.padding.default,
-        padding_left = Size.padding.large,
-        padding_right = Size.padding.large,
         padding_bottom = 0,
-        callback = function() self:onShowPlusMenu() end,
+        face = Font:getFace("smallinfofont", 20),
+        callback = function()
+            self.file_chooser:onFolderUp()
+        end,
     }
+
+    -- local plus_button = IconButton:new{
+    --     icon = "plus",
+    --     width = icon_size,
+    --     height = icon_size,
+    --     padding = Size.padding.default,
+    --     padding_left = Size.padding.tiny,
+    --     padding_right = Size.padding.tiny,
+    --     padding_bottom = 0,
+    --     callback = function() self:onShowPlusMenu() end,
+    -- }
 
     self.path_text = TextWidget:new{
-        face = Font:getFace("xx_smallinfofont"),
+        face = Font:getFace("smallinfofont", 18),
         text = BD.directory(filemanagerutil.abbreviate(self.root_path)),
         max_width = Screen:getWidth() - 2*Size.padding.large,
         truncate_left = true,
     }
 
+    local WidgetContainer = require("ui/widget/container/widgetcontainer")
+
     self.banner = FrameContainer:new{
-        padding = 0,
+        padding = Size.padding.default,
         bordersize = 0,
-        VerticalGroup:new {
-            CenterContainer:new {
+            WidgetContainer:new {
                 dimen = { w = Screen:getWidth(), h = nil },
                 HorizontalGroup:new {
                     home_button,
-                    VerticalGroup:new {
-                        Button:new {
-                            readonly = true,
-                            bordersize = 0,
-                            padding = 0,
-                            text_font_bold = false,
-                            text_font_face = "smalltfont",
-                            text_font_size = 24,
-                            text = self.title,
-                            width = Screen:getWidth() - 2 * icon_size - 4 * Size.padding.large,
-                        },
-                    },
-                    plus_button,
+                    up_button,
+                    -- VerticalGroup:new {
+                    --     dimen = { w = Screen:getWidth() - home_button:getSize().w - plus_button:getSize().w, h = nil },
+                        -- Button:new {
+                        --     readonly = true,
+                        --     bordersize = 0,
+                        --     padding = 0,
+                        --     text_font_bold = false,
+                        --     text_font_face = "smalltfont",
+                        --     -- text_font_size = 24,
+                        --     text = self.path_text,
+                        --     width = Screen:getWidth() - 2 * icon_size - 4 * Size.padding.large,
+                        -- },
+                    -- plus_button,
+                    self.path_text,
                 }
             },
-            CenterContainer:new{
-                dimen = { w = Screen:getWidth(), h = nil },
-                self.path_text,
-            },
-            VerticalSpan:new{ width = Screen:scaleBySize(5) },
-        }
+            -- CenterContainer:new{
+            --     dimen = { w = Screen:getWidth(), h = nil },
+            -- require("ui/widget/horizontalspan"):new{
+            --     Button:new{
+            --         text = "",
+            --         bordersize = 0,
+            --         text_font_bold = false,
+            --     },
+            --     self.path_text
+            -- },
+                -- CenterContainer:new{
+                --     dimen = { w = Screen:getWidth() - 100, h = nil },
+                    -- self.path_text,
+                -- },
+            -- },
+            -- VerticalSpan:new{ width = Screen:scaleBySize(5) },
     }
 
     local show_hidden
@@ -205,7 +227,7 @@ function FileManager:setupLayout()
     self.focused_file = nil -- use it only once
 
     function file_chooser:onPathChanged(path)  -- luacheck: ignore
-        FileManager.instance.path_text:setText(BD.directory(filemanagerutil.abbreviate(path)))
+        FileManager.instance.path_text:setText(BD.directory(filemanagerutil.abbreviate(path)):gsub("/", " ᐅ "))
         UIManager:setDirty(FileManager.instance, function()
             return "ui", FileManager.instance.path_text.dimen, FileManager.instance.dithered
         end)
@@ -645,33 +667,6 @@ function FileManager:tapPlus()
                 end
             }
         },
-        {
-            {
-                text = _("Go to HOME folder"),
-                callback = function()
-                    self:goHome()
-                    UIManager:close(self.file_dialog)
-                end
-            }
-        },
-        {
-            {
-                text = _("Open random document"),
-                callback = function()
-                    self:openRandomFile(self.file_chooser.path)
-                    UIManager:close(self.file_dialog)
-                end
-            }
-        },
-        {
-            {
-                text = _("Folder shortcuts"),
-                callback = function()
-                    self:handleEvent(Event:new("ShowFolderShortcutsDialog"))
-                    UIManager:close(self.file_dialog)
-                end
-            }
-        }
     }
 
     if Device:canImportFiles() then
@@ -1100,16 +1095,16 @@ end
 function FileManager:getSortingMenuTable()
     local fm = self
     local collates = {
-        strcoll = {_("filename"), _("Sort by filename")},
-        natural = {_("natural"), _("Sort by filename (natural sorting)")},
-        strcoll_mixed = {_("name mixed"), _("Sort by name – mixed files and folders")},
-        access = {_("date read"), _("Sort by last read date")},
-        change = {_("date added"), _("Sort by date added")},
-        modification = {_("date modified"), _("Sort by date modified")},
-        size = {_("size"), _("Sort by size")},
-        type = {_("type"), _("Sort by type")},
-        percent_unopened_first = {_("percent – unopened first"), _("Sort by percent – unopened first")},
-        percent_unopened_last = {_("percent – unopened last"), _("Sort by percent – unopened last")},
+        strcoll = {_("File Name"), _("File name")},
+        natural = {_("Natural"), _("File name (natural sorting)")},
+        strcoll_mixed = {_("Name Mixed"), _("Name – mixed files and folders")},
+        access = {_("Date Read"), _("Last read date")},
+        change = {_("Date Added"), _("Date added")},
+        modification = {_("Date Modified"), _("Date modified")},
+        size = {_("Size"), _("Size")},
+        type = {_("Type"), _("Type")},
+        percent_unopened_first = {_("Percent – unopened first"), _("Percent – unopened first")},
+        percent_unopened_last = {_("Percent – unopened last"), _("Percent – unopened last")},
     }
     local set_collate_table = function(collate)
         return {
@@ -1162,11 +1157,10 @@ end
 function FileManager:getStartWithMenuTable()
     local start_with_setting = G_reader_settings:readSetting("start_with") or "filemanager"
     local start_withs = {
-        filemanager = {_("file browser"), _("Start with file browser")},
-        history = {_("history"), _("Start with history")},
-        favorites = {_("favorites"), _("Start with favorites")},
-        folder_shortcuts = {_("folder shortcuts"), _("Start with folder shortcuts")},
-        last = {_("last file"), _("Start with last file")},
+        filemanager = {_("File Browser"), _("Start with file browser")},
+        history = {_("History"), _("Start with history")},
+        favorites = {_("Favorites"), _("Start with favorites")},
+        last = {_("Last File"), _("Start with last file")},
     }
     local set_sw_table = function(start_with)
         return {
@@ -1191,7 +1185,6 @@ function FileManager:getStartWithMenuTable()
             set_sw_table("filemanager"),
             set_sw_table("history"),
             set_sw_table("favorites"),
-            set_sw_table("folder_shortcuts"),
             set_sw_table("last"),
         }
     }

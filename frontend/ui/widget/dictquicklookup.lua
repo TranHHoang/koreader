@@ -33,6 +33,7 @@ local C_ = _.pgettext
 local Input = Device.input
 local Screen = Device.screen
 local T = require("ffi/util").template
+local VocabBuilder = require("ui/data/vocab_builder")
 
 --[[
 Display quick lookup word definition
@@ -56,11 +57,12 @@ local DictQuickLookup = InputContainer:new{
     -- refresh_callback will be called before we trigger full refresh in onSwipe
     refresh_callback = nil,
     html_dictionary_link_tapped_callback = nil,
+    file = nil,
 }
 
 local highlight_strings = {
-    highlight =_("Highlight"),
-    unhighlight = _("Unhighlight"),
+    highlight =_(""),
+    unhighlight = _(""),
 }
 
 function DictQuickLookup:canSearch()
@@ -84,6 +86,8 @@ function DictQuickLookup:canSearch()
 end
 
 function DictQuickLookup:init()
+    VocabBuilder:init()
+
     self.dict_font_size = G_reader_settings:readSetting("dict_font_size") or 20
     self.content_face = Font:getFace("cfont", self.dict_font_size)
     local font_size_alt = self.dict_font_size - 4
@@ -428,8 +432,8 @@ function DictQuickLookup:init()
             },
         }
     else
-        local prev_dict_text = "◁◁"
-        local next_dict_text = "▷▷"
+        local prev_dict_text = ""
+        local next_dict_text = ""
         if BD.mirroredUILayout() then
             prev_dict_text, next_dict_text = next_dict_text, prev_dict_text
         end
@@ -445,6 +449,18 @@ function DictQuickLookup:init()
                     end,
                     hold_callback = function()
                         self:changeToFirstDict()
+                    end,
+                },
+                {
+                    id = "next_dict",
+                    text = next_dict_text,
+                    vsync = true,
+                    enabled = self:isNextDictAvaiable(),
+                    callback = function()
+                        self:changeToNextDict()
+                    end,
+                    hold_callback = function()
+                        self:changeToLastDict()
                     end,
                 },
                 {
@@ -466,29 +482,15 @@ function DictQuickLookup:init()
                     end,
                 },
                 {
-                    id = "next_dict",
-                    text = next_dict_text,
-                    vsync = true,
-                    enabled = self:isNextDictAvaiable(),
-                    callback = function()
-                        self:changeToNextDict()
-                    end,
-                    hold_callback = function()
-                        self:changeToLastDict()
-                    end,
-                },
-            },
-            {
-                {
                     id = "wikipedia",
                     -- if dictionary result, do the same search on wikipedia
                     -- if already wiki, get the full page for the current result
                     text_func = function()
                         if self.is_wiki then
                             -- @translators Full Wikipedia article.
-                            return C_("Button", "Wikipedia full")
+                            return C_("Button", "")
                         else
-                            return _("Wikipedia")
+                            return _("")
                         end
                     end,
                     callback = function()
@@ -505,7 +507,7 @@ function DictQuickLookup:init()
                     text = self.is_wiki
                         and ( #self.wiki_languages > 1 and BD.wrap(self.wiki_languages[1]).." > "..BD.wrap(self.wiki_languages[2])
                                                         or self.wiki_languages[1] ) -- (this " > " will be auro-mirrored by bidi)
-                        or _("Search"),
+                        or _(""),
                     enabled = self:canSearch(),
                     callback = function()
                         if self.is_wiki then
@@ -519,11 +521,22 @@ function DictQuickLookup:init()
                     end,
                 },
                 {
-                    id = "close",
-                    text = _("Close"),
+                    id = "save",
+                    text = VocabBuilder:exists(self.lookupword) and _("✖") or _(""),
+                    -- enabled = not VocabBuilder:exists(self.lookupword),
                     callback = function()
-                        -- UIManager:close(self)
-                        self:onClose()
+                        local this = self.button_table:getButtonById("save")
+                        if not this then return end
+
+                        if VocabBuilder:exists(self.lookupword:lower()) then
+                            VocabBuilder:delete(self.lookupword:lower())
+                            this:setText(_(""), this.width)
+                        else
+                            VocabBuilder:add(self.lookupword:lower(), self.file)
+                            this:setText(_("✖"), this.width)
+                        end
+                        -- Just update, repaint and refresh *this* button
+                        this:refresh()
                     end,
                 },
             },
@@ -1117,6 +1130,12 @@ end
 
 function DictQuickLookup:onClose()
     UIManager:close(self)
+
+    if #self.window_list == 1 then
+        VocabBuilder:close()
+        logger.dbg("DB Closed");
+    end
+
     for i = #self.window_list, 1, -1 do
         local window = self.window_list[i]
         if window == self then
@@ -1233,7 +1252,7 @@ function DictQuickLookup:lookupInputWord(hint)
         buttons = {
             {
                 {
-                    text = _("Translate"),
+                    text = _(""),
                     is_enter_default = false,
                     callback = function()
                         if self.input_dialog:getInputText() == "" then return end
@@ -1242,7 +1261,7 @@ function DictQuickLookup:lookupInputWord(hint)
                     end,
                 },
                 {
-                    text = _("Search Wikipedia"),
+                    text = _(""),
                     is_enter_default = self.is_wiki,
                     callback = function()
                         if self.input_dialog:getInputText() == "" then return end
@@ -1251,22 +1270,20 @@ function DictQuickLookup:lookupInputWord(hint)
                         self:inputLookup()
                     end,
                 },
-            },
-            {
                 {
-                    text = _("Cancel"),
-                    callback = function()
-                        self:closeInputDialog()
-                    end,
-                },
-                {
-                    text = _("Search dictionary"),
+                    text = _(""),
                     is_enter_default = not self.is_wiki,
                     callback = function()
                         if self.input_dialog:getInputText() == "" then return end
                         self.is_wiki = false
                         self:closeInputDialog()
                         self:inputLookup()
+                    end,
+                },
+                {
+                    text = _(""),
+                    callback = function()
+                        self:closeInputDialog()
                     end,
                 },
             },

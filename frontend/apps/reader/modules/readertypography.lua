@@ -271,13 +271,6 @@ When the book's language tag is not among our presets, no specific features will
     end
 
     self.language_submenu.max_per_page = 5
-    table.insert(self.menu_table, {
-        text_func = function()
-            local lang_name = LANG_TAG_TO_LANG_NAME[self.text_lang_tag] or self.text_lang_tag
-            return T(_("Typography rules: %1"), lang_name)
-        end,
-        sub_item_table = self.language_submenu,
-    })
 
     table.insert(self.menu_table, {
         text = _("Respect embedded lang tags"),
@@ -561,13 +554,6 @@ end
 function ReaderTypography:addToMainMenu(menu_items)
     self.menu_table.max_per_page = 7
     -- insert table to main reader menu
-    menu_items.typography = {
-        text_func = function()
-            local lang_name = LANG_TAG_TO_LANG_NAME[self.text_lang_tag] or self.text_lang_tag
-            return T(_("Typography rules: %1"), lang_name)
-        end,
-        sub_item_table = self.menu_table,
-    }
 end
 
 function ReaderTypography:onToggleFloatingPunctuation(toggle)

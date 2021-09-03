@@ -104,13 +104,13 @@ function ReaderStatus:onEndOfBook()
                 },
             },
             {
-                {
-                    text = _("Delete file"),
-                    callback = function()
-                        self:deleteFile(self.document.file, false)
-                        UIManager:close(choose_action)
-                    end,
-                },
+                -- {
+                --     text = _("Delete file"),
+                --     callback = function()
+                --         self:deleteFile(self.document.file, false)
+                --         UIManager:close(choose_action)
+                --     end,
+                -- },
                 {
                     text = _("File browser"),
                     callback = function()
@@ -119,18 +119,18 @@ function ReaderStatus:onEndOfBook()
                     end,
                 },
             },
-            {
-                {
-                    text = _("Cancel"),
-                    callback = function()
-                        UIManager:close(choose_action)
-                    end,
-                },
-            },
+            -- {
+            --     {
+            --         text = _("Cancel"),
+            --         callback = function()
+            --             UIManager:close(choose_action)
+            --         end,
+            --     },
+            -- },
         }
         choose_action = ButtonDialogTitle:new{
             name = "end_document",
-            title = _("You've reached the end of the document.\nWhat would you like to do?"),
+            title = _("You've reached the end of the document"),
             title_align = "center",
             buttons = buttons,
         }

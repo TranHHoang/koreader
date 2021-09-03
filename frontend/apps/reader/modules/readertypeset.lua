@@ -437,10 +437,6 @@ end
 
 function ReaderTypeset:addToMainMenu(menu_items)
     -- insert table to main reader menu
-    menu_items.set_render_style = {
-        text = self.css_menu_title,
-        sub_item_table = self:genStyleSheetMenu(),
-    }
 end
 
 function ReaderTypeset:makeDefaultStyleSheet(css, text, touchmenu_instance)

@@ -2,7 +2,6 @@ local DateWidget = require("ui/widget/datewidget")
 local Device = require("device")
 local Event = require("ui/event")
 local InfoMessage = require("ui/widget/infomessage")
-local Language = require("ui/language")
 local NetworkMgr = require("ui/network/manager")
 local UIManager = require("ui/uimanager")
 local TimeWidget = require("ui/widget/timewidget")
@@ -337,139 +336,6 @@ if Device:isTouchDevice() then
     }
 end
 
-common_settings.navigation = {
-    text = _("Navigation"),
-}
-local back_to_exit_str = {
-    prompt = {_("Prompt"), _("prompt")},
-    always = {_("Always"), _("always")},
-    disable ={_("Disable"), _("disable")},
-}
-common_settings.back_to_exit = {
-    text_func = function()
-        local back_to_exit = G_reader_settings:readSetting("back_to_exit") or "prompt"
-        return T(_("Back to exit (%1)"),
-                 back_to_exit_str[back_to_exit][2])
-    end,
-    sub_item_table = {
-        {
-            text = back_to_exit_str.prompt[1],
-            checked_func = function()
-                local setting = G_reader_settings:readSetting("back_to_exit")
-                return setting == "prompt" or setting == nil
-            end,
-            callback = function()
-                G_reader_settings:saveSetting("back_to_exit", "prompt")
-            end,
-        },
-        {
-            text = back_to_exit_str.always[1],
-            checked_func = function()
-                return G_reader_settings:readSetting("back_to_exit")
-                           == "always"
-            end,
-            callback = function()
-                G_reader_settings:saveSetting("back_to_exit", "always")
-            end,
-        },
-        {
-            text = back_to_exit_str.disable[1],
-            checked_func = function()
-                return G_reader_settings:readSetting("back_to_exit")
-                           == "disable"
-            end,
-            callback = function()
-                G_reader_settings:saveSetting("back_to_exit", "disable")
-            end,
-        },
-    },
-}
-common_settings.back_in_filemanager = {
-    text = _("Back in file browser"),
-    sub_item_table = {
-        {
-            text_func = function()
-                local back_to_exit = G_reader_settings:readSetting("back_to_exit") or "prompt"
-                return T(_("Back to exit (%1)"),
-                         back_to_exit_str[back_to_exit][2])
-            end,
-            checked_func = function()
-                local back_in_filemanager = G_reader_settings:readSetting("back_in_filemanager")
-                return back_in_filemanager == nil or back_in_filemanager == "default"
-            end,
-            callback = function()
-                G_reader_settings:saveSetting("back_in_filemanager", "default")
-            end,
-        },
-        {
-            text = _("Go to parent folder"),
-            checked_func = function()
-                return G_reader_settings:readSetting("back_in_filemanager")
-                           == "parent_folder"
-            end,
-            callback = function()
-                G_reader_settings:saveSetting("back_in_filemanager", "parent_folder")
-            end,
-        },
-    },
-}
-common_settings.back_in_reader = {
-    -- All these options are managed by ReaderBack
-    text = _("Back in reader"),
-    sub_item_table = {
-        {
-            text_func = function()
-                local back_to_exit = G_reader_settings:readSetting("back_to_exit") or "prompt"
-                return T(_("Back to exit (%1)"),
-                         back_to_exit_str[back_to_exit][2])
-            end,
-            checked_func = function()
-                return G_reader_settings:readSetting("back_in_reader") == "default"
-            end,
-            callback = function()
-                G_reader_settings:saveSetting("back_in_reader", "default")
-            end,
-        },
-        {
-            text = _("Go to file browser"),
-            checked_func = function()
-                return G_reader_settings:readSetting("back_in_reader") == "filebrowser"
-            end,
-            callback = function()
-                G_reader_settings:saveSetting("back_in_reader", "filebrowser")
-            end,
-        },
-        {
-            text = _("Go to previous location"),
-            checked_func = function()
-                local back_in_reader = G_reader_settings:readSetting("back_in_reader")
-                return back_in_reader == "previous_location" or back_in_reader == nil
-            end,
-            callback = function()
-                G_reader_settings:saveSetting("back_in_reader", "previous_location")
-            end,
-        },
-        {
-            text = _("Go to previous read page"),
-            checked_func = function()
-                return G_reader_settings:readSetting("back_in_reader") == "previous_read_page"
-            end,
-            callback = function()
-                G_reader_settings:saveSetting("back_in_reader", "previous_read_page")
-            end,
-        },
-    },
-}
-common_settings.opening_page_location_stack = {
-        text = _("Add opening page to location history"),
-        checked_func = function()
-            return G_reader_settings:isTrue("opening_page_location_stack")
-        end,
-        callback = function()
-            G_reader_settings:flipNilOrFalse("opening_page_location_stack")
-        end,
-}
-
 -- Auto-save settings: default value, info text and warning, and menu items
 if G_reader_settings:hasNot("auto_save_settings_interval_minutes") then
     -- Default to auto save every 15 mn
@@ -676,15 +542,6 @@ common_settings.document = {
             }
         },
     },
-}
-common_settings.language = Language:getLangMenuTable()
-
-common_settings.screenshot = {
-    text = _("Screenshot folder"),
-    callback = function()
-        local Screenshoter = require("ui/widget/screenshoter")
-        Screenshoter:chooseFolder()
-    end,
 }
 
 return common_settings

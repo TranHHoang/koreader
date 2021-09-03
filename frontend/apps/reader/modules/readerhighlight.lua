@@ -48,7 +48,7 @@ function ReaderHighlight:init()
         -- so we put them first.
         ["01_highlight"] = function(_self)
             return {
-                text = _("Highlight"),
+                text = _(""),
                 callback = function()
                     _self:saveHighlight()
                     _self:onClose()
@@ -58,7 +58,7 @@ function ReaderHighlight:init()
         end,
         ["02_add_note"] = function(_self)
             return {
-                text = _("Add Note"),
+                text = _(""),
                 callback = function()
                     _self:addNote()
                     _self:onClose()
@@ -70,7 +70,7 @@ function ReaderHighlight:init()
         -- hence the second line.
         ["03_copy"] = function(_self)
             return {
-                text = C_("Text", "Copy"),
+                text = C_("Text", ""),
                 enabled = Device:hasClipboard(),
                 callback = function()
                     Device.input.setClipboardText(cleanupSelectedText(_self.selected_text.text))
@@ -84,7 +84,7 @@ function ReaderHighlight:init()
         end,
         ["04_search"] = function(_self)
             return {
-                text = _("Search"),
+                text = _(""),
                 callback = function()
                     _self:onHighlightSearch()
                     -- We don't call _self:onClose(), crengine will highlight
@@ -97,7 +97,7 @@ function ReaderHighlight:init()
         -- depend on an internet connection.
         ["05_wikipedia"] = function(_self)
             return {
-                text = _("Wikipedia"),
+                text = _(""),
                 callback = function()
                     UIManager:scheduleIn(0.1, function()
                         _self:lookupWikipedia()
@@ -110,39 +110,14 @@ function ReaderHighlight:init()
         end,
         ["06_dictionary"] = function(_self)
             return {
-                text = _("Dictionary"),
+                text = _(""),
                 callback = function()
                     _self:onHighlightDictLookup()
                     -- We don't call _self:onClose(), same reason as above
                 end,
             }
         end,
-        ["07_translate"] = function(_self)
-            return {
-                text = _("Translate"),
-                callback = function()
-                    _self:translate(_self.selected_text)
-                    -- We don't call _self:onClose(), so one can still see
-                    -- the highlighted text when moving the translated
-                    -- text window, and also if NetworkMgr:promptWifiOn()
-                    -- is needed, so the user can just tap again on this
-                    -- button and does not need to select the text again.
-                end,
-            }
-        end,
     }
-
-    -- Text export functions if applicable.
-    if not self.ui.document.info.has_pages then
-        self:addToHighlightDialog("08_view_html", function(_self)
-            return {
-                text = _("View HTML"),
-                callback = function()
-                    _self:viewSelectionHTML()
-                end,
-            }
-        end)
-    end
 
     if Device:canShareText() then
         self:addToHighlightDialog("09_share_text", function(_self)
@@ -161,7 +136,7 @@ function ReaderHighlight:init()
     -- Links
     self:addToHighlightDialog("10_follow_link", function(_self)
         return {
-            text = _("Follow Link"),
+            text = _(""),
             show_in_highlight_dialog_func = function()
                 return _self.selected_link ~= nil
             end,
@@ -280,37 +255,6 @@ function ReaderHighlight:addToMainMenu(menu_items)
             text = _("Panel zoom (manga/comic)"),
             sub_item_table = self:genPanelZoomMenu(),
         }
-    end
-    menu_items.translation_settings = Translator:genSettingsMenu()
-    menu_items.long_press = {
-        text = _("Long-press on text"),
-        sub_item_table = {
-            {
-                text = _("Dictionary on single word selection"),
-                checked_func = function()
-                    return not self.view.highlight.disabled and G_reader_settings:nilOrFalse("highlight_action_on_single_word")
-                end,
-                enabled_func = function()
-                    return not self.view.highlight.disabled
-                end,
-                callback = function()
-                    G_reader_settings:flipNilOrFalse("highlight_action_on_single_word")
-                end,
-                separator = true,
-            },
-        },
-    }
-    for _, v in ipairs(long_press_action) do
-        table.insert(menu_items.long_press.sub_item_table, {
-            text = v[1],
-            checked_func = function()
-                return G_reader_settings:readSetting("default_highlight_action", "ask") == v[2]
-            end,
-            callback = function()
-                G_reader_settings:saveSetting("default_highlight_action", v[2])
-                self.view.highlight.disabled = v[2] == "nothing"
-            end,
-        })
     end
 end
 
@@ -740,13 +684,9 @@ end
 function ReaderHighlight:onShowHighlightMenu()
     local highlight_buttons = {{}}
 
-    local columns = 2
     for idx, fn_button in ffiUtil.orderedPairs(self._highlight_buttons) do
         local button = fn_button(self)
         if not button.show_in_highlight_dialog_func or button.show_in_highlight_dialog_func() then
-            if #highlight_buttons[#highlight_buttons] >= columns then
-                table.insert(highlight_buttons, {})
-            end
             table.insert(highlight_buttons[#highlight_buttons], button)
             logger.dbg("ReaderHighlight", idx..": line "..#highlight_buttons..", col "..#highlight_buttons[#highlight_buttons])
         end
@@ -1259,16 +1199,24 @@ function ReaderHighlight:onHoldRelease()
 end
 
 function ReaderHighlight:onCycleHighlightAction()
-    local current_action = G_reader_settings:readSetting("default_highlight_action", "ask")
-    local next_action_num
-    for i, v in ipairs(long_press_action) do
-        if v[2] == current_action then
-            next_action_num = i + 1
-            break
-        end
-    end
-    if next_action_num > #long_press_action then
-        next_action_num = 1
+    local next_actions = {
+        highlight = "wikipedia",
+        wikipedia = "dictionary",
+        dictionary = "search",
+        search = nil,
+    }
+    if G_reader_settings:hasNot("default_highlight_action") then
+        G_reader_settings:saveSetting("default_highlight_action", "highlight")
+        UIManager:show(Notification:new{
+            text = _("Default highlight action changed to 'highlight'."),
+        })
+    else
+        local current_action = G_reader_settings:readSetting("default_highlight_action")
+        local next_action = next_actions[current_action]
+        G_reader_settings:saveSetting("default_highlight_action", next_action)
+        UIManager:show(Notification:new{
+            text = T(_("Default highlight action changed to '%1'."), (next_action or "default")),
+        })
     end
     G_reader_settings:saveSetting("default_highlight_action", long_press_action[next_action_num][2])
     UIManager:show(Notification:new{
