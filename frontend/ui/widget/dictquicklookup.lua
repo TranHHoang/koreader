@@ -58,6 +58,7 @@ local DictQuickLookup = InputContainer:new{
     refresh_callback = nil,
     html_dictionary_link_tapped_callback = nil,
     file = nil,
+    word_context = nil,
 }
 
 local highlight_strings = {
@@ -522,17 +523,17 @@ function DictQuickLookup:init()
                 },
                 {
                     id = "save",
-                    text = VocabBuilder:exists(self.lookupword) and _("✖") or _(""),
+                    text = VocabBuilder:exists(self.lookupword, self.file, self.word_context) and _("✖") or _(""),
                     -- enabled = not VocabBuilder:exists(self.lookupword),
                     callback = function()
                         local this = self.button_table:getButtonById("save")
                         if not this then return end
 
-                        if VocabBuilder:exists(self.lookupword:lower()) then
-                            VocabBuilder:delete(self.lookupword:lower())
+                        if VocabBuilder:exists(self.lookupword:lower(), self.file, self.word_context) then
+                            VocabBuilder:delete(self.lookupword:lower(), self.file, self.word_context)
                             this:setText(_(""), this.width)
                         else
-                            VocabBuilder:add(self.lookupword:lower(), self.file)
+                            VocabBuilder:add(self.lookupword:lower(), self.file, self.word_context)
                             this:setText(_("✖"), this.width)
                         end
                         -- Just update, repaint and refresh *this* button

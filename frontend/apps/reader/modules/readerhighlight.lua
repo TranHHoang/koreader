@@ -973,7 +973,7 @@ function ReaderHighlight:lookup(selected_word, selected_link)
     -- if we extracted text directly
     if selected_word.word and self.hold_pos then
         local word_box = self.view:pageToScreenTransform(self.hold_pos.page, selected_word.sbox)
-        self.ui:handleEvent(Event:new("LookupWord", selected_word.word, false, word_box, self, selected_link))
+        self.ui:handleEvent(Event:new("LookupWord", selected_word.word, false, word_box, self, selected_link, selected_word))
     -- or we will do OCR
     elseif selected_word.sbox and self.hold_pos then
         local word = self.ui.document:getOCRWord(self.hold_pos.page, selected_word)
@@ -1449,7 +1449,7 @@ function ReaderHighlight:onHighlightDictLookup()
     logger.dbg("dictionary lookup highlight")
     self:highlightFromHoldPos()
     if self.selected_text then
-        self.ui:handleEvent(Event:new("LookupWord", cleanupSelectedText(self.selected_text.text)))
+        self.ui:handleEvent(Event:new("LookupWord", cleanupSelectedText(self.selected_text.text), nil, nil, nil, nil, self.selected_text))
     end
 end
 

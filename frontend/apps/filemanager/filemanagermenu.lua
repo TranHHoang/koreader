@@ -417,7 +417,6 @@ To:
     end
     -- insert common settings
     for id, common_setting in pairs(dofile("frontend/ui/elements/common_settings_menu_table.lua")) do
-        logger.dbg("AAAAAAA", id, common_setting);
         self.menu_items[id] = common_setting
     end
 

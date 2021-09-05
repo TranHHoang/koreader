@@ -32,7 +32,7 @@ local Screen = Device.screen
 local T = require("ffi/util").template
 local getMenuText = require("ui/widget/menu").getMenuText
 local RightContainer = require("ui/widget/container/rightcontainer")
-
+local FileManager = require("apps/filemanager/filemanager")
 local BookInfoManager = require("bookinfomanager")
 
 -- Here is the specific UI implementation for "mosaic" display modes
@@ -360,6 +360,31 @@ local MosaicMenuItem = InputContainer:new{
     has_description = false,
 }
 
+local function pickCovers(path, count, pick_one, result)
+    local function shuffle(arr)
+        for i = 1, #arr - 1 do
+            local j = math.random(i, #arr)
+            arr[i], arr[j] = arr[j], arr[i]
+        end
+    end
+    local files_map = FileManager.__files_map
+    logger.dbg("Enter", path, files_map[path])
+
+    if not files_map[path] then return end
+
+    shuffle(files_map[path])
+
+    for _, v in ipairs(files_map[path]) do
+        if #result == count then break end
+        if files_map[v] then
+            pickCovers(v, count, true, result)
+        else
+            table.insert(result, v)
+            if pick_one then break end
+        end
+    end
+end
+
 function MosaicMenuItem:init()
     -- filepath may be provided as 'file' (history) or 'path' (filechooser)
     -- store it as attribute so we can use it elsewhere
@@ -420,129 +445,19 @@ function MosaicMenuItem:init()
     }
     self[1] = self._underline_container
 
-    -- Get at most 3 items from the path (if it is a directory)
+    -- Get at most 2 items from the path (if it is a directory)
     self.files_to_show_cover = {}
     self.total_cover_found = 0
 
     local file_mode = lfs.attributes(self.filepath, "mode")
     if file_mode == "directory" then
-        self:getFilesRecur(self.filepath, 3, true, self.files_to_show_cover)
+        pickCovers(self.filepath, 2, false, self.files_to_show_cover)
     end
 
     -- Remaining part of initialization is done in update(), because we may
     -- have to do it more than once if item not found in db
     self:update()
     self.init_done = true
-end
-
-local exclude_dirs = {
-    -- KOReader / Kindle
-    "%.sdr$",
-    -- Kobo
-    "^%.adobe%-digital%-editions$",
-    "^certificates$",
-    "^custom%-dict$",
-    "^dict$",
-    "^iink$",
-    "^kepub$",
-    "^markups$",
-    "^webstorage$",
-    "^%.kobo%-images$",
-    -- macOS
-    "^%.fseventsd$",
-    "^%.Trashes$",
-    "^%.Spotlight%-V100$",
-    -- *nix
-    "^%.Trash$",
-    "^%.Trash%-%d+$",
-    -- Windows
-    "^RECYCLED$",
-    "^RECYCLER$",
-    "^%$Recycle%.Bin$",
-    "^System Volume Information$",
-    -- Plato
-    "^%.thumbnail%-previews$",
-    "^%.reading%-states$",
-}
-local exclude_files = {
-    -- Kobo
-    "^BookReader%.sqlite",
-    "^KoboReader%.sqlite",
-    "^device%.salt%.conf$",
-    -- macOS
-    "^%.DS_Store$",
-    -- *nix
-    "^%.directory$",
-    -- Windows
-    "^Thumbs%.db$",
-    -- Calibre
-    "^driveinfo%.calibre$",
-    "^metadata%.calibre$",
-    -- Plato
-    "^%.fat32%-epoch$",
-    "^%.metadata%.json$",
-}
-
-local function show_dir(dirname)
-    for _, pattern in ipairs(exclude_dirs) do
-        if dirname:match(pattern) then return false end
-    end
-    return true
-end
-
-local function show_file(filename)
-    for _, pattern in ipairs(exclude_files) do
-        if filename:match(pattern) then return false end
-    end
-    return true
-end
-
-function MosaicMenuItem:getFilesRecur(path, count, is_base, result)
-    -- Get at most 'count' files before returning
-    -- lfs.dir directory without permission will give error
-    local dirs = {}
-    local files = {}
-
-    local ok, iter, dir_obj = pcall(lfs.dir, path)
-    if ok then
-        -- TODO: Sort if necessary
-        for f in iter, dir_obj do
-            if not util.stringStartsWith(f, ".") then
-                local filename = path.."/"..f
-                local attributes = lfs.attributes(filename)
-                if attributes ~= nil then
-                    if attributes.mode == "directory" and f ~= "." and f ~= ".." and show_dir(f) then
-                        table.insert(dirs, filename)
-                    -- Always ignore macOS resource forks.
-                    elseif attributes.mode == "file" and not util.stringStartsWith(f, "._") and show_file(f) then
-                        table.insert(files, filename)
-                    end
-                end
-            end
-        end
-
-        -- Sort dirs and results
-        table.sort(dirs, function(a, b) return a < b end)
-        table.sort(files, function(a, b) return a < b end)
-
-        if not is_base and files[1] then -- Only get the first
-            table.insert(result, files[1])
-        else
-            for _, v in ipairs(files) do
-                if #result < count then table.insert(result, v) else break end
-            end
-        end
-
-        if #result == count then return true end
-
-        for _, p in pairs(dirs) do
-            if self:getFilesRecur(p, count, false, result) then
-                return true
-            end
-        end
-    end
-
-    return false
 end
 
 -- Only used on directory
@@ -553,8 +468,8 @@ function MosaicMenuItem:bookCoverWidget(path, scale)
     }
 
     local border_size = Size.border.thin
-    local max_img_w = dimen.w - 2*border_size
-    local max_img_h = dimen.h - 2*border_size
+    local max_img_w = dimen.w
+    local max_img_h = dimen.h - border_size * 2
     local cover_specs = {
         sizetag = "M",
         max_cover_w = max_img_w,
@@ -608,7 +523,7 @@ function MosaicMenuItem:bookCoverWidget(path, scale)
             local scale_factor = math.min(max_img_w / bookinfo.cover_w, max_img_h / bookinfo.cover_h)
             local image= ImageWidget:new{
                 image = bookinfo.cover_bb,
-                scale_factor = scale_factor * scale,
+                scale_factor = scale_factor,
             }
             image:_render()
             local image_size = image:getSize()
@@ -706,14 +621,8 @@ function MosaicMenuItem:update()
     local file_mode = lfs.attributes(self.filepath, "mode")
     if file_mode == "directory" then
         self.is_directory = true
-        -- Directory : rounded corners
-        local margin = Screen:scaleBySize(5) -- make directories less wide
-        local padding = 0
         border_size = Size.border.thick -- make directories' borders larger
-        local dimen_in = Geom:new{
-            w = dimen.w - (margin + padding + border_size)*2,
-            h = dimen.h - (margin + padding + border_size)*2
-        }
+        
         local text = self.text
         if text:match('/$') then -- remove /, more readable
             text = text:sub(1, -2)
@@ -731,8 +640,8 @@ function MosaicMenuItem:update()
         -- We could use 2*nbitems:getSize().h to keep that centering,
         -- but using 3* will avoid getting the directory name stuck
         -- to nbitems.
-        local available_height = dimen_in.h - 3 * nbitems:getSize().h
-        local dir_font_size = 20
+        local available_width = dimen.w - 10
+        local dir_font_size = 14
         local directory
         while true do
             if directory then
@@ -741,47 +650,43 @@ function MosaicMenuItem:update()
             directory = TextWidget:new{
                 text = text,
                 face = Font:getFace("cfont", dir_font_size),
-                width = dimen_in.w,
+                width = dimen.w - 10,
                 alignment = "center",
                 bold = true,
+                fgcolor = Blitbuffer.COLOR_WHITE,
             }
-            if directory:getSize().h <= available_height then
+            if directory:getSize().w <= available_width then
                 break
             end
             dir_font_size = dir_font_size - 1
             if dir_font_size < 10 then -- don't go too low
-                directory:free()
-                directory.height = available_height
-                directory.height_adjust = true
-                directory.height_overflow_show_ellipsis = true
-                directory:init()
+                directory:setMaxWidth(available_width)
                 break
             end
         end
 
-        local img_scale = 0.95
-        local img = self.files_to_show_cover[1] and self:bookCoverWidget(self.files_to_show_cover[1], img_scale) or nil
-        local img2 = self.files_to_show_cover[2] and self:bookCoverWidget(self.files_to_show_cover[2], img_scale) or nil
-        local img3 = self.files_to_show_cover[3] and self:bookCoverWidget(self.files_to_show_cover[3], img_scale) or nil
+        local img = self.files_to_show_cover[1] and self:bookCoverWidget(self.files_to_show_cover[1], 1) or nil
+        local img2 = self.files_to_show_cover[2] and self:bookCoverWidget(self.files_to_show_cover[2], 0.75) or nil
+
+        border_size = img and Size.border.thin or border_size
 
         widget = FrameContainer:new{
-            width = dimen.w,
-            height = dimen.h,
-            margin = margin,
-            padding = padding,
+            width = dimen.w + Size.border.thick,
+            height = dimen.h + Size.border.thick,
+            margin = 0,
+            padding = 0,
             bordersize = img and 0 or border_size,
+            color = Blitbuffer.COLOR_LIGHT_GRAY,
             OverlapGroup:new{
-                dimen = dimen_in,
-                img3 and RightContainer:new{ dimen = dimen_in, img3 } or WidgetContainer:new{},
+                dimen = dimen,
+                img2 and RightContainer:new{ dimen = dimen, img2 } or WidgetContainer:new{},
 
-                img2 and CenterContainer:new{ dimen = dimen_in, img2 }
+                img and not img2 and CenterContainer:new { dimen = dimen, img }
+                or img and LeftContainer:new{ dimen = dimen, img }
                 or WidgetContainer:new{},
 
-                img and LeftContainer:new{ dimen = dimen_in, img }
-                or CenterContainer:new { dimen = dimen_in, directory },
-                
                 LeftContainer:new {
-                    dimen = Geom:new{ w = dimen_in.w, h = dimen_in.h },
+                    dimen = dimen,
                     FrameContainer:new {
                         bordersize = 0,
                         background = Blitbuffer.COLOR_DARK_GRAY,
@@ -790,6 +695,19 @@ function MosaicMenuItem:update()
                         padding_right = 5 + (#num == 1 and nbitems:getSize().w / 2 or 0),
                         margin = 0,
                         nbitems,
+                    }
+                },
+
+                BottomContainer:new {
+                    dimen = dimen,
+                    FrameContainer:new {
+                        bordersize = 0,
+                        padding_top = (dimen.h / 7 - directory:getSize().h) / 2,
+                        padding_bottom = (dimen.h / 7 - directory:getSize().h) / 2,
+                        padding_left = (dimen.w - directory:getSize().w + border_size) / 2,
+                        padding_right = (dimen.w - directory:getSize().w + border_size) / 2,
+                        background = Blitbuffer.COLOR_DARK_GRAY,
+                        directory,
                     }
                 }
             },
@@ -1108,6 +1026,27 @@ function MosaicMenu:_recalculateDimen()
         h = self.item_height
     }
 
+    if not FileManager.__already_extract_cover then
+        local dimen = Geom:new{
+            w = self.item_width,
+            h = self.item_height
+        }
+        local border_size = Size.border.thin
+        local max_img_w = dimen.w - 2*border_size
+        local max_img_h = dimen.h - 2*border_size
+        local cover_specs = {
+            sizetag = "M",
+            max_cover_w = max_img_w,
+            max_cover_h = max_img_h,
+        }
+
+        local home_dir = G_reader_settings:readSetting("home_dir")
+        if home_dir then
+            -- BookInfoManager:extractBooksInDirectory(home_dir, cover_specs)
+            FileManager.__already_extract_cover = true
+        end
+    end
+
     -- Create or replace corner_mark if needed
     -- 1/12 (larger) or 1/16 (smaller) of cover looks allright
     local mark_size = math.floor(math.min(self.item_width, self.item_height) / 16)
@@ -1151,7 +1090,7 @@ function MosaicMenu:_updateItemsBuildUI()
         -- Keyboard shortcuts, as done in Menu
         local item_shortcut = nil
         local shortcut_style = "square"
-        if not self.is_enable_shortcut then
+        if self.is_enable_shortcut then
             -- give different shortcut_style to keys in different
             -- lines of keyboard
             if idx >= 11 and idx <= 20 then

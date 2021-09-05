@@ -343,12 +343,61 @@ function ReaderDictionary:addToMainMenu(menu_items)
     end
 end
 
-function ReaderDictionary:onLookupWord(word, is_sane, box, highlight, link)
+function ReaderDictionary:onLookupWord(word, is_sane, box, highlight, link, selected_word)
+    -- error("Callstack")
     logger.dbg("dict lookup word:", word, box)
     -- escape quotes and other funny characters in word
     word = self:cleanSelection(word, is_sane)
     logger.dbg("dict stripped word:", word)
 
+    -- -- Get context of the word by expanding selected position on both side
+    local context = word
+    local MAX_CONTEXT_LENGTH = 150
+
+    if selected_word then
+        while true do
+            local pos = self.ui.document:getPrevVisibleWordStart(selected_word.pos0)
+            if not pos then break end
+            
+            local text = self.ui.document:getTextFromXPointers(pos, selected_word.pos0)
+
+            local last_char = util.rtrim(text):sub(-1)
+            if last_char == nil or (last_char ~= nil and (last_char == "." or last_char == "\\")) then
+                break
+            end
+
+            context = text..context
+            selected_word.pos0 = pos
+
+            -- Fail-safe, avoid infinite loop
+            if #context > MAX_CONTEXT_LENGTH then break end
+        end
+
+        while true do
+            local pos = self.ui.document:getNextVisibleWordEnd(selected_word.pos1)
+            if not pos then break end
+            
+            local text = self.ui.document:getTextFromXPointers(selected_word.pos1, pos)
+            local first_char = text:sub(1, 1)
+            local first_char_trimmed = util.trim(text):sub(1, 1)
+            
+            if first_char == nil
+            or (first_char ~= nil and first_char == "\\" 
+                or first_char_trimmed == '.'
+                or first_char_trimmed == '!'
+                or first_char_trimmed == '?') then
+                break
+            end
+
+            context = context..text
+            selected_word.pos1 = pos
+
+            -- Fail-safe, avoid infinite loop
+            if #context > MAX_CONTEXT_LENGTH * 2 then break end
+        end
+        self.word_context = util.trim(context)
+    end
+    
     self.highlight = highlight
 
     -- Wrapped through Trapper, as we may be using Trapper:dismissablePopen() in it
@@ -852,7 +901,8 @@ function ReaderDictionary:showDict(word, results, box, link)
             html_dictionary_link_tapped_callback = function(dictionary, html_link)
                 self:onHtmlDictionaryLinkTapped(dictionary, html_link)
             end,
-            file = self.ui.document.file
+            file = self.ui.document.file,
+            word_context = self.word_context
         }
         table.insert(self.dict_window_list, self.dict_window)
         if self.lookup_progress_msg then

@@ -781,36 +781,40 @@ function BookInfoManager:extractBooksInDirectory(path, cover_specs)
     local Trapper = require("ui/trapper")
     local Screen = require("device").screen
 
-    local go_on = Trapper:confirm(_([[
-This will extract metadata and cover images from books in the current directory.
-Once extraction has started, you can abort at any moment by tapping on the screen.
+--     local go_on = Trapper:confirm(_([[
+-- This will extract metadata and cover images from books in the current directory.
+-- Once extraction has started, you can abort at any moment by tapping on the screen.
 
-Cover images will be saved with the adequate size for the current display mode.
-If you later change display mode, they may need to be extracted again.
+-- Cover images will be saved with the adequate size for the current display mode.
+-- If you later change display mode, they may need to be extracted again.
 
-This extraction may take time and use some battery power: you may wish to keep your device plugged in.]]
-    ), _("Cancel"), _("Continue"))
-    if not go_on then
-        return
-    end
+-- This extraction may take time and use some battery power: you may wish to keep your device plugged in.]]
+--     ), _("Cancel"), _("Continue"))
+--     if not go_on then
+--         return
+--     end
 
-    local recursive = Trapper:confirm(_([[
-Also extract book information from books in subdirectories?]]
-    ),
-        -- @translators Extract book information only for books in this directory.
-        _("Here only"),
-        -- @translators Extract book information for books in this directory as well as in subdirectories.
-        _("Here and under"))
+--     local recursive = Trapper:confirm(_([[
+-- Also extract book information from books in subdirectories?]]
+--     ),
+--         -- @translators Extract book information only for books in this directory.
+--         _("Here only"),
+--         -- @translators Extract book information for books in this directory as well as in subdirectories.
+--         _("Here and under"))
 
-    local refresh_existing = Trapper:confirm(_([[
-Do you want to refresh metadata and covers that have already been extracted?]]
-    ), _("Don't refresh"), _("Refresh"))
+--     local refresh_existing = Trapper:confirm(_([[
+-- Do you want to refresh metadata and covers that have already been extracted?]]
+--     ), _("Don't refresh"), _("Refresh"))
 
-    local prune = Trapper:confirm(_([[
-If you have removed many books, or have renamed some directories, it is good to remove them from the cache database.
+--     local prune = Trapper:confirm(_([[
+-- If you have removed many books, or have renamed some directories, it is good to remove them from the cache database.
 
-Do you want to prune the cache of removed books?]]
-    ), _("Don't prune"), _("Prune"))
+-- Do you want to prune the cache of removed books?]]
+--     ), _("Don't prune"), _("Prune"))
+
+    local recursive = true
+    local refresh_existing = false
+    local prune = true
 
     Trapper:clear()
 
@@ -914,6 +918,8 @@ Do you want to prune the cache of removed books?]]
                 UIManager:close(info)
                 info = InfoMessage:new{text = _("No books were found that need to be indexed.")}
                 UIManager:show(info)
+                FFIUtil.sleep(2) -- Let the user see that
+                UIManager:close(info)
                 return
             else
                 break

@@ -1,9 +1,12 @@
+local Device = require("device")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local UIManager = require("ui/uimanager")
 local logger = require("logger")
 local _ = require("gettext")
 local BookInfoManager = require("bookinfomanager")
 local Screen = require("device").screen
+local lfs = require("libs/libkoreader-lfs")
+local util = require("util")
 
 --[[
     This plugin provides additional display modes to file browsers (File Manager
@@ -50,6 +53,104 @@ local CoverBrowser = InputContainer:new{
     name = "coverbrowser",
 }
 
+local exclude_dirs = {
+    -- KOReader / Kindle
+    "%.sdr$",
+    -- Kobo
+    "^%.adobe%-digital%-editions$",
+    "^certificates$",
+    "^custom%-dict$",
+    "^dict$",
+    "^iink$",
+    "^kepub$",
+    "^markups$",
+    "^webstorage$",
+    "^%.kobo%-images$",
+    -- macOS
+    "^%.fseventsd$",
+    "^%.Trashes$",
+    "^%.Spotlight%-V100$",
+    -- *nix
+    "^%.Trash$",
+    "^%.Trash%-%d+$",
+    -- Windows
+    "^RECYCLED$",
+    "^RECYCLER$",
+    "^%$Recycle%.Bin$",
+    "^System Volume Information$",
+    -- Plato
+    "^%.thumbnail%-previews$",
+    "^%.reading%-states$",
+}
+local exclude_files = {
+    -- Kobo
+    "^BookReader%.sqlite",
+    "^KoboReader%.sqlite",
+    "^device%.salt%.conf$",
+    -- macOS
+    "^%.DS_Store$",
+    -- *nix
+    "^%.directory$",
+    -- Windows
+    "^Thumbs%.db$",
+    -- Calibre
+    "^driveinfo%.calibre$",
+    "^metadata%.calibre$",
+    -- Plato
+    "^%.fat32%-epoch$",
+    "^%.metadata%.json$",
+}
+
+local function show_dir(dirname)
+    for _, pattern in ipairs(exclude_dirs) do
+        if dirname:match(pattern) then return false end
+    end
+    return true
+end
+
+local function show_file(filename)
+    for _, pattern in ipairs(exclude_files) do
+        if filename:match(pattern) then return false end
+    end
+    return true
+end
+
+local function getFilesRecur(path, result)
+    -- Get at most 'count' files before returning
+    -- lfs.dir directory without permission will give error
+    local dirs = {}
+    local files = {}
+
+    local ok, iter, dir_obj = pcall(lfs.dir, path)
+    if ok then
+        -- TODO: Sort if necessary
+        for f in iter, dir_obj do
+            if not util.stringStartsWith(f, ".") then
+                local filename = path.."/"..f
+                local attributes = lfs.attributes(filename)
+                if attributes ~= nil then
+                    if attributes.mode == "directory" and f ~= "." and f ~= ".." and show_dir(f) then
+                        table.insert(dirs, filename)
+                    -- Always ignore macOS resource forks.
+                    elseif attributes.mode == "file" and not util.stringStartsWith(f, "._") and show_file(f) then
+                        table.insert(files, filename)
+                    end
+                end
+            end
+        end
+
+        result[path] = {}
+        for _, f in ipairs(files) do
+            table.insert(result[path], f)
+        end
+
+        for _, d in pairs(dirs) do
+            table.insert(result[path], d)
+            getFilesRecur(d, result)
+        end
+    end
+end
+
 function CoverBrowser:init()
     self.ui.menu:registerToMainMenu(self)
 
@@ -76,6 +177,16 @@ function CoverBrowser:init()
 
     init_done = true
     BookInfoManager:closeDbConnection() -- will be re-opened if needed
+
+    -- logger.dbg(self.files_in_home_dir)
+    local files_map = {}
+    local home_dir = G_reader_settings:readSetting("home_dir") or Device.home_dir
+    if home_dir then
+        getFilesRecur(home_dir, files_map)
+    end
+
+    -- Double score to avoid clashing in the future
+    FileManager.__files_map = files_map
 end
 
 function CoverBrowser:addToMainMenu(menu_items)
