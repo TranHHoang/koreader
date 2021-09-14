@@ -28,10 +28,8 @@ local order = {
         "screen",
         "----------------------------",
         "taps_and_gestures",
-        "navigation",
         "document",
         "----------------------------",
-        "language",
         "device",
         -- end common settings
     },

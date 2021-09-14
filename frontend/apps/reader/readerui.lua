@@ -63,6 +63,7 @@ local util = require("util")
 local _ = require("gettext")
 local Screen = require("device").screen
 local T = ffiUtil.template
+local VocabBuilder = require("ui/data/vocab_builder")
 
 local ReaderUI = InputContainer:new{
     name = "ReaderUI",
@@ -165,8 +166,12 @@ function ReaderUI:init()
         view = self.view,
         ui = self
     })
-    -- reader goto controller
-    -- "goto" being a dirty keyword in Lua?
+    self:registerModule("gotopage", ReaderGoto:new{
+        dialog = self.dialog,
+        view = self.view,
+        ui = self,
+        document = self.document,
+    })
     -- dictionary
     self:registerModule("dictionary", ReaderDictionary:new{
         dialog = self.dialog,
@@ -456,6 +461,9 @@ function ReaderUI:init()
         logger.err("ReaderUI instance mismatch! Opened", tostring(self), "while we still have an existing instance:", tostring(ReaderUI.instance), debug.traceback())
     end
     ReaderUI.instance = self
+
+    VocabBuilder:init()
+    logger.dbg("VocabBuilder init")
 end
 
 function ReaderUI:setLastDirForFileBrowser(dir)
@@ -763,6 +771,8 @@ function ReaderUI:onClose(full_refresh)
         self:notifyCloseDocument()
     end
     UIManager:close(self.dialog, full_refresh and "full")
+    VocabBuilder:close()
+    logger.dbg("VocabBuilder Closed");
 end
 
 function ReaderUI:onCloseWidget()

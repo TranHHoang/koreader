@@ -283,7 +283,7 @@ function ReaderBookmark:onShowBookmark()
             end
         end
         if v.text == nil or v.text == "" then
-            v.text = T(_("Page %1 %2 @ %3"), page, v.notes, v.datetime)
+            v.text = T(_("\n ‒ “%1”"), v.notes)
         end
     end
 
@@ -532,9 +532,7 @@ function ReaderBookmark:updateBookmark(item)
             self.bookmarks[i].pos0 = item.updated_highlight.pos0
             self.bookmarks[i].pos1 = item.updated_highlight.pos1
             self.bookmarks[i].notes = item.updated_highlight.text
-            self.bookmarks[i].text = T(_("Page %1 %2 @ %3"), page,
-                                        new_text,
-                                        item.updated_highlight.datetime)
+            self.bookmarks[i].text = T(_("%1"), new_text)
             self.bookmarks[i].datetime = item.updated_highlight.datetime
             self.bookmarks[i].chapter = item.updated_highlight.chapter
             self:onSaveSettings()
@@ -564,7 +562,7 @@ function ReaderBookmark:renameBookmark(item, from_highlight)
                             end
                         end
                     end
-                    bookmark.text = T(_("“%1” — "), bookmark.notes)
+                    bookmark.text = T(_("\n ‒ “%1”"), bookmark.notes)
                 end
                 break
             end

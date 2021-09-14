@@ -368,7 +368,6 @@ local function pickCovers(path, count, pick_one, result)
         end
     end
     local files_map = FileManager.__files_map
-    logger.dbg("Enter", path, files_map[path])
 
     if not files_map[path] then return end
 
@@ -595,7 +594,7 @@ function MosaicMenuItem:update()
     local widget
 
     local dimen = Geom:new{
-        w = self.width,
+        w = self.width - Screen:scaleBySize(10),
         h = self.height - self.underline_h
     }
 
@@ -704,8 +703,8 @@ function MosaicMenuItem:update()
                         bordersize = 0,
                         padding_top = (dimen.h / 7 - directory:getSize().h) / 2,
                         padding_bottom = (dimen.h / 7 - directory:getSize().h) / 2,
-                        padding_left = (dimen.w - directory:getSize().w + border_size) / 2,
-                        padding_right = (dimen.w - directory:getSize().w + border_size) / 2,
+                        padding_left = (dimen.w - directory:getSize().w + border_size) / 2 - 0.5,
+                        padding_right = (dimen.w - directory:getSize().w + border_size) / 2 - 0.5,
                         background = Blitbuffer.COLOR_DARK_GRAY,
                         directory,
                     }
@@ -1025,27 +1024,6 @@ function MosaicMenu:_recalculateDimen()
         w = self.item_width,
         h = self.item_height
     }
-
-    if not FileManager.__already_extract_cover then
-        local dimen = Geom:new{
-            w = self.item_width,
-            h = self.item_height
-        }
-        local border_size = Size.border.thin
-        local max_img_w = dimen.w - 2*border_size
-        local max_img_h = dimen.h - 2*border_size
-        local cover_specs = {
-            sizetag = "M",
-            max_cover_w = max_img_w,
-            max_cover_h = max_img_h,
-        }
-
-        local home_dir = G_reader_settings:readSetting("home_dir")
-        if home_dir then
-            -- BookInfoManager:extractBooksInDirectory(home_dir, cover_specs)
-            FileManager.__already_extract_cover = true
-        end
-    end
 
     -- Create or replace corner_mark if needed
     -- 1/12 (larger) or 1/16 (smaller) of cover looks allright

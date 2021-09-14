@@ -382,7 +382,7 @@ function ReaderDictionary:onLookupWord(word, is_sane, box, highlight, link, sele
             local first_char_trimmed = util.trim(text):sub(1, 1)
             
             if first_char == nil
-            or (first_char ~= nil and first_char == "\\" 
+            or (first_char ~= nil and first_char == "\\"
                 or first_char_trimmed == '.'
                 or first_char_trimmed == '!'
                 or first_char_trimmed == '?') then

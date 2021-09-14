@@ -764,7 +764,10 @@ local function findFilesInDir(path, recursive)
                 if recursive and attributes.mode == "directory" and f ~= "." and f ~= ".." and (G_reader_settings:isTrue("show_hidden") or not util.stringStartsWith(f, ".")) then
                     table.insert(new_dirs, fullpath)
                 -- Always ignore macOS resource forks, too.
-                elseif attributes.mode == "file" and not util.stringStartsWith(f, "._") and DocumentRegistry:hasProvider(fullpath) then
+                elseif attributes.mode == "file" 
+                and not util.stringStartsWith(f, "._") 
+                and DocumentRegistry:hasProvider(fullpath) 
+                and util.stringEndsWith(f, ".epub") then -- TODO: For now, only scan for EPUB
                     table.insert(files, fullpath)
                 end
             end

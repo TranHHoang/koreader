@@ -87,8 +87,6 @@ function DictQuickLookup:canSearch()
 end
 
 function DictQuickLookup:init()
-    VocabBuilder:init()
-
     self.dict_font_size = G_reader_settings:readSetting("dict_font_size") or 20
     self.content_face = Font:getFace("cfont", self.dict_font_size)
     local font_size_alt = self.dict_font_size - 4
@@ -1131,11 +1129,6 @@ end
 
 function DictQuickLookup:onClose()
     UIManager:close(self)
-
-    if #self.window_list == 1 then
-        VocabBuilder:close()
-        logger.dbg("DB Closed");
-    end
 
     for i = #self.window_list, 1, -1 do
         local window = self.window_list[i]

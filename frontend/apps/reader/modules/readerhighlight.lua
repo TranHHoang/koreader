@@ -583,19 +583,19 @@ function ReaderHighlight:onShowHighlightDialog(page, index)
     local buttons = {
         {
             {
-                text = _("Delete"),
+                text = _(""),
                 callback = function()
-                    self:deleteHighlight(page, index)
-                    -- other part outside of the dialog may be dirty
-                    UIManager:close(self.edit_highlight_dialog, "ui")
+                    self:editHighlight(page, index)
+                    UIManager:close(self.edit_highlight_dialog)
                     self.edit_highlight_dialog = nil
                 end,
             },
             {
-                text = _("Edit"),
+                text = _(""),
                 callback = function()
-                    self:editHighlight(page, index)
-                    UIManager:close(self.edit_highlight_dialog)
+                    self:deleteHighlight(page, index)
+                    -- other part outside of the dialog may be dirty
+                    UIManager:close(self.edit_highlight_dialog, "ui")
                     self.edit_highlight_dialog = nil
                 end,
             },
