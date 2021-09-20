@@ -9,9 +9,9 @@ common_info.more_tools = {
     text = _("More tools"),
 }
 
-common_info.device = {
-    text = _("Device"),
-}
+-- common_info.device = {
+--     text = _("Device"),
+-- }
 
 if Device:canSuspend() then
     common_info.sleep = {

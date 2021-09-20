@@ -112,180 +112,180 @@ function ReaderDeviceStatus:init()
 end
 
 function ReaderDeviceStatus:addToMainMenu(menu_items)
-    menu_items.device_status_alarm = {
-        text = _("Device status alerts"),
-        sub_item_table = {},
-    }
-    if Device:hasBattery() then
-        table.insert(menu_items.device_status_alarm.sub_item_table,
-            {
-                text = _("Battery level"),
-                checked_func = function()
-                    return G_reader_settings:isTrue("device_status_battery_alarm")
-                end,
-                callback = function()
-                    G_reader_settings:flipNilOrFalse("device_status_battery_alarm")
-                    if G_reader_settings:isTrue("device_status_battery_alarm") then
-                        self:startBatteryChecker()
-                    else
-                        self:stopBatteryChecker()
-                        powerd:setDismissBatteryStatus(false)
-                    end
-                end,
-            })
-        table.insert(menu_items.device_status_alarm.sub_item_table,
-            {
-                text_func = function()
-                    return T(_("Check interval: %1 min"), self.battery_interval)
-                end,
-                enabled_func = function()
-                    return G_reader_settings:isTrue("device_status_battery_alarm")
-                end,
-                keep_menu_open = true,
-                callback = function(touchmenu_instance)
-                    UIManager:show(SpinWidget:new{
-                        value = self.battery_interval,
-                        value_min = 1,
-                        value_max = 60,
-                        default_value = 10,
-                        value_hold_step = 5,
-                        title_text = _("Battery check interval"),
-                        callback = function(spin)
-                            self.battery_interval = spin.value
-                            G_reader_settings:saveSetting("device_status_battery_interval", self.battery_interval)
-                            touchmenu_instance:updateItems()
-                            powerd:setDismissBatteryStatus(false)
-                            UIManager:scheduleIn(self.battery_interval * 60, self.checkLowBatteryLevel)
-                        end,
-                    })
-                end,
-            })
-        table.insert(menu_items.device_status_alarm.sub_item_table,
-            {
-                text_func = function()
-                    return T(_("Thresholds: %1% – %2%"), self.battery_threshold, self.battery_threshold_high)
-                end,
-                enabled_func = function()
-                    return G_reader_settings:isTrue("device_status_battery_alarm")
-                end,
-                keep_menu_open = true,
-                callback = function(touchmenu_instance)
-                    local DoubleSpinWidget = require("/ui/widget/doublespinwidget")
-                    local thresholds_widget = DoubleSpinWidget:new{
-                        title_text = _("Battery level alert thresholds"),
-                        info_text = _([[
-Low level threshold is checked when the device is not charging.
-High level threshold is checked when the device is charging.]]),
-                        left_text = _("Low"),
-                        left_value = self.battery_threshold,
-                        left_min = 1,
-                        left_max = self.battery_threshold_high,
-                        left_default = 20,
-                        left_hold_step = 5,
-                        right_text = _("High"),
-                        right_value = self.battery_threshold_high,
-                        right_min = self.battery_threshold,
-                        right_max = 100,
-                        right_default = 100,
-                        right_hold_step = 5,
-                        default_values = true,
-                        callback = function(left_value, right_value)
-                            if not left_value then return end -- "Use defaults" pressed
-                            self.battery_threshold = left_value
-                            self.battery_threshold_high = right_value
-                            G_reader_settings:saveSetting("device_status_battery_threshold", self.battery_threshold)
-                            G_reader_settings:saveSetting("device_status_battery_threshold_high", self.battery_threshold_high)
-                            touchmenu_instance:updateItems()
-                            powerd:setDismissBatteryStatus(false)
-                        end,
-                    }
-                    UIManager:show(thresholds_widget)
-                end,
-                separator = true,
-            })
-    end
-    if not Device:isAndroid() then
-        table.insert(menu_items.device_status_alarm.sub_item_table,
-            {
-                text = _("High memory usage"),
-                checked_func = function()
-                    return G_reader_settings:isTrue("device_status_memory_alarm")
-                end,
-                callback = function()
-                    G_reader_settings:flipNilOrFalse("device_status_memory_alarm")
-                    if G_reader_settings:isTrue("device_status_memory_alarm") then
-                        self:startMemoryChecker()
-                    else
-                        self:stopMemoryChecker()
-                    end
-                end,
-            })
-        table.insert(menu_items.device_status_alarm.sub_item_table,
-            {
-                text_func = function()
-                    return T(_("Check interval: %1 min"), self.memory_interval)
-                end,
-                enabled_func = function()
-                    return G_reader_settings:isTrue("device_status_memory_alarm")
-                end,
-                keep_menu_open = true,
-                callback = function(touchmenu_instance)
-                    UIManager:show(SpinWidget:new{
-                        value = self.memory_interval,
-                        value_min = 1,
-                        value_max = 60,
-                        default_value = 5,
-                        value_hold_step = 5,
-                        title_text = _("Memory check interval"),
-                        callback = function(spin)
-                            self.memory_interval = spin.value
-                            G_reader_settings:saveSetting("device_status_memory_interval", self.memory_interval)
-                            touchmenu_instance:updateItems()
-                            UIManager:scheduleIn(self.memory_interval * 60, self.checkHighMemoryUsage)
-                        end,
-                    })
-                end,
-            })
-        table.insert(menu_items.device_status_alarm.sub_item_table,
-            {
-                text_func = function()
-                    return T(_("Threshold: %1 MB"), self.memory_threshold)
-                end,
-                enabled_func = function()
-                    return G_reader_settings:isTrue("device_status_memory_alarm")
-                end,
-                keep_menu_open = true,
-                callback = function(touchmenu_instance)
-                    UIManager:show(SpinWidget:new{
-                        value = self.memory_threshold,
-                        value_min = 20,
-                        value_max = 500,
-                        default_value = 100,
-                        value_step = 5,
-                        value_hold_step = 10,
-                        title_text = _("Memory alert threshold"),
-                        callback = function(spin)
-                            self.memory_threshold = spin.value
-                            G_reader_settings:saveSetting("device_status_memory_threshold", self.memory_threshold)
-                            touchmenu_instance:updateItems()
-                        end,
-                    })
-                end,
-            })
-        table.insert(menu_items.device_status_alarm.sub_item_table,
-            {
-                text = _("Automatic restart"),
-                enabled_func = function()
-                    return G_reader_settings:isTrue("device_status_memory_alarm") and Device:canRestart()
-                end,
-                checked_func = function()
-                    return G_reader_settings:isTrue("device_status_memory_auto_restart")
-                end,
-                callback = function()
-                    G_reader_settings:flipNilOrFalse("device_status_memory_auto_restart")
-                end,
-            })
-    end
+--     menu_items.device_status_alarm = {
+--         text = _("Device status alerts"),
+--         sub_item_table = {},
+--     }
+--     if Device:hasBattery() then
+--         table.insert(menu_items.device_status_alarm.sub_item_table,
+--             {
+--                 text = _("Battery level"),
+--                 checked_func = function()
+--                     return G_reader_settings:isTrue("device_status_battery_alarm")
+--                 end,
+--                 callback = function()
+--                     G_reader_settings:flipNilOrFalse("device_status_battery_alarm")
+--                     if G_reader_settings:isTrue("device_status_battery_alarm") then
+--                         self:startBatteryChecker()
+--                     else
+--                         self:stopBatteryChecker()
+--                         powerd:setDismissBatteryStatus(false)
+--                     end
+--                 end,
+--             })
+--         table.insert(menu_items.device_status_alarm.sub_item_table,
+--             {
+--                 text_func = function()
+--                     return T(_("Check interval: %1 min"), self.battery_interval)
+--                 end,
+--                 enabled_func = function()
+--                     return G_reader_settings:isTrue("device_status_battery_alarm")
+--                 end,
+--                 keep_menu_open = true,
+--                 callback = function(touchmenu_instance)
+--                     UIManager:show(SpinWidget:new{
+--                         value = self.battery_interval,
+--                         value_min = 1,
+--                         value_max = 60,
+--                         default_value = 10,
+--                         value_hold_step = 5,
+--                         title_text = _("Battery check interval"),
+--                         callback = function(spin)
+--                             self.battery_interval = spin.value
+--                             G_reader_settings:saveSetting("device_status_battery_interval", self.battery_interval)
+--                             touchmenu_instance:updateItems()
+--                             powerd:setDismissBatteryStatus(false)
+--                             UIManager:scheduleIn(self.battery_interval * 60, self.checkLowBatteryLevel)
+--                         end,
+--                     })
+--                 end,
+--             })
+--         table.insert(menu_items.device_status_alarm.sub_item_table,
+--             {
+--                 text_func = function()
+--                     return T(_("Thresholds: %1% – %2%"), self.battery_threshold, self.battery_threshold_high)
+--                 end,
+--                 enabled_func = function()
+--                     return G_reader_settings:isTrue("device_status_battery_alarm")
+--                 end,
+--                 keep_menu_open = true,
+--                 callback = function(touchmenu_instance)
+--                     local DoubleSpinWidget = require("/ui/widget/doublespinwidget")
+--                     local thresholds_widget = DoubleSpinWidget:new{
+--                         title_text = _("Battery level alert thresholds"),
+--                         info_text = _([[
+-- Low level threshold is checked when the device is not charging.
+-- High level threshold is checked when the device is charging.]]),
+--                         left_text = _("Low"),
+--                         left_value = self.battery_threshold,
+--                         left_min = 1,
+--                         left_max = self.battery_threshold_high,
+--                         left_default = 20,
+--                         left_hold_step = 5,
+--                         right_text = _("High"),
+--                         right_value = self.battery_threshold_high,
+--                         right_min = self.battery_threshold,
+--                         right_max = 100,
+--                         right_default = 100,
+--                         right_hold_step = 5,
+--                         default_values = true,
+--                         callback = function(left_value, right_value)
+--                             if not left_value then return end -- "Use defaults" pressed
+--                             self.battery_threshold = left_value
+--                             self.battery_threshold_high = right_value
+--                             G_reader_settings:saveSetting("device_status_battery_threshold", self.battery_threshold)
+--                             G_reader_settings:saveSetting("device_status_battery_threshold_high", self.battery_threshold_high)
+--                             touchmenu_instance:updateItems()
+--                             powerd:setDismissBatteryStatus(false)
+--                         end,
+--                     }
+--                     UIManager:show(thresholds_widget)
+--                 end,
+--                 separator = true,
+--             })
+--     end
+--     if not Device:isAndroid() then
+--         table.insert(menu_items.device_status_alarm.sub_item_table,
+--             {
+--                 text = _("High memory usage"),
+--                 checked_func = function()
+--                     return G_reader_settings:isTrue("device_status_memory_alarm")
+--                 end,
+--                 callback = function()
+--                     G_reader_settings:flipNilOrFalse("device_status_memory_alarm")
+--                     if G_reader_settings:isTrue("device_status_memory_alarm") then
+--                         self:startMemoryChecker()
+--                     else
+--                         self:stopMemoryChecker()
+--                     end
+--                 end,
+--             })
+--         table.insert(menu_items.device_status_alarm.sub_item_table,
+--             {
+--                 text_func = function()
+--                     return T(_("Check interval: %1 min"), self.memory_interval)
+--                 end,
+--                 enabled_func = function()
+--                     return G_reader_settings:isTrue("device_status_memory_alarm")
+--                 end,
+--                 keep_menu_open = true,
+--                 callback = function(touchmenu_instance)
+--                     UIManager:show(SpinWidget:new{
+--                         value = self.memory_interval,
+--                         value_min = 1,
+--                         value_max = 60,
+--                         default_value = 5,
+--                         value_hold_step = 5,
+--                         title_text = _("Memory check interval"),
+--                         callback = function(spin)
+--                             self.memory_interval = spin.value
+--                             G_reader_settings:saveSetting("device_status_memory_interval", self.memory_interval)
+--                             touchmenu_instance:updateItems()
+--                             UIManager:scheduleIn(self.memory_interval * 60, self.checkHighMemoryUsage)
+--                         end,
+--                     })
+--                 end,
+--             })
+--         table.insert(menu_items.device_status_alarm.sub_item_table,
+--             {
+--                 text_func = function()
+--                     return T(_("Threshold: %1 MB"), self.memory_threshold)
+--                 end,
+--                 enabled_func = function()
+--                     return G_reader_settings:isTrue("device_status_memory_alarm")
+--                 end,
+--                 keep_menu_open = true,
+--                 callback = function(touchmenu_instance)
+--                     UIManager:show(SpinWidget:new{
+--                         value = self.memory_threshold,
+--                         value_min = 20,
+--                         value_max = 500,
+--                         default_value = 100,
+--                         value_step = 5,
+--                         value_hold_step = 10,
+--                         title_text = _("Memory alert threshold"),
+--                         callback = function(spin)
+--                             self.memory_threshold = spin.value
+--                             G_reader_settings:saveSetting("device_status_memory_threshold", self.memory_threshold)
+--                             touchmenu_instance:updateItems()
+--                         end,
+--                     })
+--                 end,
+--             })
+--         table.insert(menu_items.device_status_alarm.sub_item_table,
+--             {
+--                 text = _("Automatic restart"),
+--                 enabled_func = function()
+--                     return G_reader_settings:isTrue("device_status_memory_alarm") and Device:canRestart()
+--                 end,
+--                 checked_func = function()
+--                     return G_reader_settings:isTrue("device_status_memory_auto_restart")
+--                 end,
+--                 callback = function()
+--                     G_reader_settings:flipNilOrFalse("device_status_memory_auto_restart")
+--                 end,
+--             })
+--     end
 end
 
 function ReaderDeviceStatus:startBatteryChecker()

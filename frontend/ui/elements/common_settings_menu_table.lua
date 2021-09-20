@@ -34,31 +34,31 @@ if Device:hasFrontlight() then
     }
 end
 
-if Device:canToggleMassStorage() then
-    local MassStorage = require("ui/elements/mass_storage")
+-- if Device:canToggleMassStorage() then
+--     local MassStorage = require("ui/elements/mass_storage")
 
-    -- mass storage settings
-    common_settings.mass_storage_settings = {
-        text = _("USB mass storage"),
-        sub_item_table = MassStorage:getSettingsMenuTable()
-    }
+--     -- mass storage settings
+--     common_settings.mass_storage_settings = {
+--         text = _("USB mass storage"),
+--         sub_item_table = MassStorage:getSettingsMenuTable()
+--     }
 
-    -- mass storage actions
-    common_settings.mass_storage_actions = MassStorage:getActionsMenuTable()
-end
+--     -- mass storage actions
+--     common_settings.mass_storage_actions = MassStorage:getActionsMenuTable()
+-- end
 
-if Device:canToggleChargingLED() then
-    -- Charging LED settings
-    common_settings.charging_led = {
-        text = _("Turn on the power LED when charging"),
-        checked_func = function()
-            return G_reader_settings:nilOrTrue("enable_charging_led")
-        end,
-        callback = function()
-            G_reader_settings:flipNilOrTrue("enable_charging_led")
-        end
-    }
-end
+-- if Device:canToggleChargingLED() then
+--     -- Charging LED settings
+--     common_settings.charging_led = {
+--         text = _("Turn on the power LED when charging"),
+--         checked_func = function()
+--             return G_reader_settings:nilOrTrue("enable_charging_led")
+--         end,
+--         callback = function()
+--             G_reader_settings:flipNilOrTrue("enable_charging_led")
+--         end
+--     }
+-- end
 
 -- Associate OS level file extensions (must be off by default, because we're not associated initially)
 if Device:canAssociateFileExtensions() then
@@ -69,152 +69,152 @@ if Device:canAssociateFileExtensions() then
 end
 
 -- This affects the topmenu, we want to be able to access it even if !Device:setDateTime()
-common_settings.time = {
-    text = _("Time and date"),
-    sub_item_table = {
-        {
-        text = _("12-hour clock"),
-        keep_menu_open = true,
-        checked_func = function()
-            return G_reader_settings:isTrue("twelve_hour_clock")
-        end,
-        callback = function()
-            G_reader_settings:flipNilOrFalse("twelve_hour_clock")
-            UIManager:broadcastEvent(Event:new("TimeFormatChanged"))
-        end,
-        },
-        {
-            text_func = function ()
-                local duration_format = G_reader_settings:readSetting("duration_format", "classic")
-                local text = duration_format == "classic" and _("Classic") or _("Modern")
-                return T(_("Duration format: %1"), text)
-            end,
-            sub_item_table = {
-                {
-                    text_func = function()
-                        local util = require('util');
-                        -- sample text shows 1:23:45
-                        local duration_format_str = util.secondsToClockDuration("classic", 5025, false);
-                        return T(_("Classic (%1)"), duration_format_str)
-                    end,
-                    checked_func = function()
-                        return G_reader_settings:readSetting("duration_format") == "classic"
-                    end,
-                    callback = function()
-                        G_reader_settings:saveSetting("duration_format", "classic")
-                    end,
-                },
-                {
-                    text_func = function()
-                        local util = require('util');
-                        -- sample text shows 1h23m45s
-                        local duration_format_str = util.secondsToClockDuration("modern", 5025, false);
-                        return T(_("Modern (%1)"), duration_format_str)
-                    end,
-                    checked_func = function()
-                        return G_reader_settings:readSetting("duration_format") == "modern"
-                    end,
-                    callback = function()
-                        G_reader_settings:saveSetting("duration_format", "modern")
-                    end,
-                },
-            }
-        }
-    }
-}
-if Device:setDateTime() then
-    table.insert(common_settings.time.sub_item_table, {
-        text = _("Set time"),
-        keep_menu_open = true,
-        callback = function()
-            local now_t = os.date("*t")
-            local curr_hour = now_t.hour
-            local curr_min = now_t.min
-            local time_widget = TimeWidget:new{
-                hour = curr_hour,
-                min = curr_min,
-                ok_text = _("Set time"),
-                title_text = _("Set time"),
-                callback = function(time)
-                    if Device:setDateTime(nil, nil, nil, time.hour, time.min) then
-                        now_t = os.date("*t")
-                        UIManager:show(InfoMessage:new{
-                            text = T(_("Current time: %1:%2"), string.format("%02d", now_t.hour),
-                                string.format("%02d", now_t.min))
-                        })
-                    else
-                        UIManager:show(InfoMessage:new{
-                            text = _("Time couldn't be set"),
-                        })
-                    end
-                end
-            }
-            UIManager:show(time_widget)
-        end,
-    })
-    table.insert(common_settings.time.sub_item_table, {
-        text = _("Set date"),
-        keep_menu_open = true,
-        callback = function()
-            local now_t = os.date("*t")
-            local curr_year = now_t.year
-            local curr_month = now_t.month
-            local curr_day = now_t.day
-            local date_widget = DateWidget:new{
-                year = curr_year,
-                month = curr_month,
-                day = curr_day,
-                ok_text = _("Set date"),
-                title_text = _("Set date"),
-                callback = function(time)
-                    now_t = os.date("*t")
-                    if Device:setDateTime(time.year, time.month, time.day, now_t.hour, now_t.min, now_t.sec) then
-                        now_t = os.date("*t")
-                        UIManager:show(InfoMessage:new{
-                            text = T(_("Current date: %1-%2-%3"), now_t.year, string.format("%02d", now_t.month),
-                                string.format("%02d", now_t.day))
-                        })
-                    else
-                        UIManager:show(InfoMessage:new{
-                            text = _("Date couldn't be set"),
-                        })
-                    end
-                end
-            }
-            UIManager:show(date_widget)
-        end,
-    })
-end
+-- common_settings.time = {
+--     text = _("Time and date"),
+--     sub_item_table = {
+--         {
+--         text = _("12-hour clock"),
+--         keep_menu_open = true,
+--         checked_func = function()
+--             return G_reader_settings:isTrue("twelve_hour_clock")
+--         end,
+--         callback = function()
+--             G_reader_settings:flipNilOrFalse("twelve_hour_clock")
+--             UIManager:broadcastEvent(Event:new("TimeFormatChanged"))
+--         end,
+--         },
+--         {
+--             text_func = function ()
+--                 local duration_format = G_reader_settings:readSetting("duration_format", "classic")
+--                 local text = duration_format == "classic" and _("Classic") or _("Modern")
+--                 return T(_("Duration format: %1"), text)
+--             end,
+--             sub_item_table = {
+--                 {
+--                     text_func = function()
+--                         local util = require('util');
+--                         -- sample text shows 1:23:45
+--                         local duration_format_str = util.secondsToClockDuration("classic", 5025, false);
+--                         return T(_("Classic (%1)"), duration_format_str)
+--                     end,
+--                     checked_func = function()
+--                         return G_reader_settings:readSetting("duration_format") == "classic"
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:saveSetting("duration_format", "classic")
+--                     end,
+--                 },
+--                 {
+--                     text_func = function()
+--                         local util = require('util');
+--                         -- sample text shows 1h23m45s
+--                         local duration_format_str = util.secondsToClockDuration("modern", 5025, false);
+--                         return T(_("Modern (%1)"), duration_format_str)
+--                     end,
+--                     checked_func = function()
+--                         return G_reader_settings:readSetting("duration_format") == "modern"
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:saveSetting("duration_format", "modern")
+--                     end,
+--                 },
+--             }
+--         }
+--     }
+-- }
+-- if Device:setDateTime() then
+--     table.insert(common_settings.time.sub_item_table, {
+--         text = _("Set time"),
+--         keep_menu_open = true,
+--         callback = function()
+--             local now_t = os.date("*t")
+--             local curr_hour = now_t.hour
+--             local curr_min = now_t.min
+--             local time_widget = TimeWidget:new{
+--                 hour = curr_hour,
+--                 min = curr_min,
+--                 ok_text = _("Set time"),
+--                 title_text = _("Set time"),
+--                 callback = function(time)
+--                     if Device:setDateTime(nil, nil, nil, time.hour, time.min) then
+--                         now_t = os.date("*t")
+--                         UIManager:show(InfoMessage:new{
+--                             text = T(_("Current time: %1:%2"), string.format("%02d", now_t.hour),
+--                                 string.format("%02d", now_t.min))
+--                         })
+--                     else
+--                         UIManager:show(InfoMessage:new{
+--                             text = _("Time couldn't be set"),
+--                         })
+--                     end
+--                 end
+--             }
+--             UIManager:show(time_widget)
+--         end,
+--     })
+--     table.insert(common_settings.time.sub_item_table, {
+--         text = _("Set date"),
+--         keep_menu_open = true,
+--         callback = function()
+--             local now_t = os.date("*t")
+--             local curr_year = now_t.year
+--             local curr_month = now_t.month
+--             local curr_day = now_t.day
+--             local date_widget = DateWidget:new{
+--                 year = curr_year,
+--                 month = curr_month,
+--                 day = curr_day,
+--                 ok_text = _("Set date"),
+--                 title_text = _("Set date"),
+--                 callback = function(time)
+--                     now_t = os.date("*t")
+--                     if Device:setDateTime(time.year, time.month, time.day, now_t.hour, now_t.min, now_t.sec) then
+--                         now_t = os.date("*t")
+--                         UIManager:show(InfoMessage:new{
+--                             text = T(_("Current date: %1-%2-%3"), now_t.year, string.format("%02d", now_t.month),
+--                                 string.format("%02d", now_t.day))
+--                         })
+--                     else
+--                         UIManager:show(InfoMessage:new{
+--                             text = _("Date couldn't be set"),
+--                         })
+--                     end
+--                 end
+--             }
+--             UIManager:show(date_widget)
+--         end,
+--     })
+-- end
 
-if Device:isKobo() then
-    common_settings.ignore_sleepcover = {
-        text = _("Ignore all sleepcover events"),
-        checked_func = function()
-            return G_reader_settings:isTrue("ignore_power_sleepcover")
-        end,
-        callback = function()
-            G_reader_settings:toggle("ignore_power_sleepcover")
-            G_reader_settings:makeFalse("ignore_open_sleepcover")
-            UIManager:show(InfoMessage:new{
-                text = _("This will take effect on next restart."),
-            })
-        end
-    }
+-- if Device:isKobo() then
+--     common_settings.ignore_sleepcover = {
+--         text = _("Ignore all sleepcover events"),
+--         checked_func = function()
+--             return G_reader_settings:isTrue("ignore_power_sleepcover")
+--         end,
+--         callback = function()
+--             G_reader_settings:toggle("ignore_power_sleepcover")
+--             G_reader_settings:makeFalse("ignore_open_sleepcover")
+--             UIManager:show(InfoMessage:new{
+--                 text = _("This will take effect on next restart."),
+--             })
+--         end
+--     }
 
-    common_settings.ignore_open_sleepcover = {
-        text = _("Ignore sleepcover wakeup events"),
-        checked_func = function()
-            return G_reader_settings:isTrue("ignore_open_sleepcover")
-        end,
-        callback = function()
-            G_reader_settings:toggle("ignore_open_sleepcover")
-            G_reader_settings:makeFalse("ignore_power_sleepcover")
-            UIManager:show(InfoMessage:new{
-                text = _("This will take effect on next restart."),
-            })
-        end
-    }
-end
+--     common_settings.ignore_open_sleepcover = {
+--         text = _("Ignore sleepcover wakeup events"),
+--         checked_func = function()
+--             return G_reader_settings:isTrue("ignore_open_sleepcover")
+--         end,
+--         callback = function()
+--             G_reader_settings:toggle("ignore_open_sleepcover")
+--             G_reader_settings:makeFalse("ignore_power_sleepcover")
+--             UIManager:show(InfoMessage:new{
+--                 text = _("This will take effect on next restart."),
+--             })
+--         end
+--     }
+-- end
 
 common_settings.night_mode = {
     text = _("Night mode"),
@@ -232,9 +232,9 @@ common_settings.screen = {
     text = _("Screen"),
 }
 common_settings.screen_rotation = require("ui/elements/screen_rotation_menu_table")
-common_settings.screen_dpi = require("ui/elements/screen_dpi_menu_table")
+-- common_settings.screen_dpi = require("ui/elements/screen_dpi_menu_table")
 common_settings.screen_eink_opt = require("ui/elements/screen_eink_opt_menu_table")
-common_settings.screen_notification = require("ui/elements/screen_notification_menu_table")
+-- common_settings.screen_notification = require("ui/elements/screen_notification_menu_table")
 common_settings.menu_activate = require("ui/elements/menu_activate")
 common_settings.screen_disable_double_tab = require("ui/elements/screen_disable_double_tap_table")
 common_settings.ignore_hold_corners = {
@@ -327,10 +327,10 @@ Please don't change any settings unless you know what you're doing.]])
 end
 
 if Device:isTouchDevice() then
-    common_settings.keyboard_layout = {
-        text = _("Keyboard"),
-        sub_item_table = require("ui/elements/menu_keyboard_layout"),
-    }
+    -- common_settings.keyboard_layout = {
+    --     text = _("Keyboard"),
+    --     sub_item_table = require("ui/elements/menu_keyboard_layout"),
+    -- }
     common_settings.taps_and_gestures = {
         text = _("Taps and gestures"),
     }
@@ -377,171 +377,171 @@ local function genAutoSaveMenuItem(value)
     }
 end
 
-common_settings.document = {
-    text = _("Document"),
-    sub_item_table = {
-        {
-            text_func = function()
-                local interval = G_reader_settings:readSetting("auto_save_settings_interval_minutes")
-                local s_interval
-                if interval == false then
-                    s_interval = _("only on close")
-                else
-                    s_interval = T(N_("every 1 m", "every %1 m", interval), interval)
-                end
-                return T(_("Auto-save book metadata: %1"), s_interval)
-            end,
-            help_text = auto_save_help_text,
-            sub_item_table = {
-                genAutoSaveMenuItem(false),
-                genAutoSaveMenuItem(5),
-                genAutoSaveMenuItem(15),
-                genAutoSaveMenuItem(60),
-                warn_about_auto_save and {
-                    text = _("Important info about this auto-save option"),
-                    keep_menu_open = true,
-                    callback = function()
-                        UIManager:show(InfoMessage:new{ text = auto_save_help_text, })
-                    end,
-                } or nil,
-            },
-        },
-        {
-            text = _("Save document (write highlights into PDF)"),
-            sub_item_table = {
-                {
-                    text = _("Prompt"),
-                    checked_func = function()
-                        local setting = G_reader_settings:readSetting("save_document")
-                        return setting == "prompt" or setting == nil
-                    end,
-                    callback = function()
-                        G_reader_settings:delSetting("save_document")
-                    end,
-                },
-                {
-                    text = _("Always"),
-                    checked_func = function()
-                        return G_reader_settings:readSetting("save_document")
-                                   == "always"
-                    end,
-                    callback = function()
-                        G_reader_settings:saveSetting("save_document", "always")
-                    end,
-                },
-                {
-                    text = _("Disable"),
-                    checked_func = function()
-                        return G_reader_settings:readSetting("save_document")
-                                   == "disable"
-                    end,
-                    callback = function()
-                        G_reader_settings:saveSetting("save_document", "disable")
-                    end,
-                },
-            },
-        },
-        {
-            text = _("End of document action"),
-            sub_item_table = {
-                {
-                    text = _("Always mark as read"),
-                    checked_func = function()
-                        return G_reader_settings:isTrue("end_document_auto_mark")
-                    end,
-                    callback = function()
-                        G_reader_settings:flipNilOrFalse("end_document_auto_mark")
-                    end,
-                    separator = true,
-                },
-                {
-                    text = _("Ask with popup dialog"),
-                    checked_func = function()
-                        local setting = G_reader_settings:readSetting("end_document_action")
-                        return setting == "pop-up" or setting == nil
-                    end,
-                    callback = function()
-                        G_reader_settings:saveSetting("end_document_action", "pop-up")
-                    end,
-                },
-                {
-                    text = _("Do nothing"),
-                    checked_func = function()
-                        return G_reader_settings:readSetting("end_document_action") == "nothing"
-                    end,
-                    callback = function()
-                        G_reader_settings:saveSetting("end_document_action", "nothing")
-                    end,
-                },
-                {
-                    text = _("Book status"),
-                    checked_func = function()
-                        return G_reader_settings:readSetting("end_document_action") == "book_status"
-                    end,
-                    callback = function()
-                        G_reader_settings:saveSetting("end_document_action", "book_status")
-                    end,
-                },
-                {
-                    text = _("Delete file"),
-                    checked_func = function()
-                        return G_reader_settings:readSetting("end_document_action") == "delete_file"
-                    end,
-                    callback = function()
-                        G_reader_settings:saveSetting("end_document_action", "delete_file")
-                    end,
-                },
-                {
-                    text = _("Open next file"),
-                    enabled_func = function()
-                        return G_reader_settings:readSetting("collate") ~= "access"
-                    end,
-                    checked_func = function()
-                        return G_reader_settings:readSetting("end_document_action") == "next_file"
-                    end,
-                    callback = function()
-                        G_reader_settings:saveSetting("end_document_action", "next_file")
-                    end,
-                },
-                {
-                    text = _("Go to beginning"),
-                    checked_func = function()
-                        return G_reader_settings:readSetting("end_document_action") == "goto_beginning"
-                    end,
-                    callback = function()
-                        G_reader_settings:saveSetting("end_document_action", "goto_beginning")
-                    end,
-                },
-                {
-                    text = _("Return to file browser"),
-                    checked_func = function()
-                        return G_reader_settings:readSetting("end_document_action") == "file_browser"
-                    end,
-                    callback = function()
-                        G_reader_settings:saveSetting("end_document_action", "file_browser")
-                    end,
-                },
-                {
-                    text = _("Mark book as read"),
-                    checked_func = function()
-                        return G_reader_settings:readSetting("end_document_action") == "mark_read"
-                    end,
-                    callback = function()
-                        G_reader_settings:saveSetting("end_document_action", "mark_read")
-                    end,
-                },
-                {
-                    text = _("Book status and return to file browser"),
-                    checked_func = function()
-                        return G_reader_settings:readSetting("end_document_action") == "book_status_file_browser"
-                    end,
-                    callback = function()
-                        G_reader_settings:saveSetting("end_document_action", "book_status_file_browser")
-                    end,
-                },
-            }
-        },
-    },
-}
+-- common_settings.document = {
+--     text = _("Document"),
+--     sub_item_table = {
+--         {
+--             text_func = function()
+--                 local interval = G_reader_settings:readSetting("auto_save_settings_interval_minutes")
+--                 local s_interval
+--                 if interval == false then
+--                     s_interval = _("only on close")
+--                 else
+--                     s_interval = T(N_("every 1 m", "every %1 m", interval), interval)
+--                 end
+--                 return T(_("Auto-save book metadata: %1"), s_interval)
+--             end,
+--             help_text = auto_save_help_text,
+--             sub_item_table = {
+--                 genAutoSaveMenuItem(false),
+--                 genAutoSaveMenuItem(5),
+--                 genAutoSaveMenuItem(15),
+--                 genAutoSaveMenuItem(60),
+--                 warn_about_auto_save and {
+--                     text = _("Important info about this auto-save option"),
+--                     keep_menu_open = true,
+--                     callback = function()
+--                         UIManager:show(InfoMessage:new{ text = auto_save_help_text, })
+--                     end,
+--                 } or nil,
+--             },
+--         },
+--         {
+--             text = _("Save document (write highlights into PDF)"),
+--             sub_item_table = {
+--                 {
+--                     text = _("Prompt"),
+--                     checked_func = function()
+--                         local setting = G_reader_settings:readSetting("save_document")
+--                         return setting == "prompt" or setting == nil
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:delSetting("save_document")
+--                     end,
+--                 },
+--                 {
+--                     text = _("Always"),
+--                     checked_func = function()
+--                         return G_reader_settings:readSetting("save_document")
+--                                    == "always"
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:saveSetting("save_document", "always")
+--                     end,
+--                 },
+--                 {
+--                     text = _("Disable"),
+--                     checked_func = function()
+--                         return G_reader_settings:readSetting("save_document")
+--                                    == "disable"
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:saveSetting("save_document", "disable")
+--                     end,
+--                 },
+--             },
+--         },
+--         {
+--             text = _("End of document action"),
+--             sub_item_table = {
+--                 {
+--                     text = _("Always mark as read"),
+--                     checked_func = function()
+--                         return G_reader_settings:isTrue("end_document_auto_mark")
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:flipNilOrFalse("end_document_auto_mark")
+--                     end,
+--                     separator = true,
+--                 },
+--                 {
+--                     text = _("Ask with popup dialog"),
+--                     checked_func = function()
+--                         local setting = G_reader_settings:readSetting("end_document_action")
+--                         return setting == "pop-up" or setting == nil
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:saveSetting("end_document_action", "pop-up")
+--                     end,
+--                 },
+--                 {
+--                     text = _("Do nothing"),
+--                     checked_func = function()
+--                         return G_reader_settings:readSetting("end_document_action") == "nothing"
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:saveSetting("end_document_action", "nothing")
+--                     end,
+--                 },
+--                 {
+--                     text = _("Book status"),
+--                     checked_func = function()
+--                         return G_reader_settings:readSetting("end_document_action") == "book_status"
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:saveSetting("end_document_action", "book_status")
+--                     end,
+--                 },
+--                 {
+--                     text = _("Delete file"),
+--                     checked_func = function()
+--                         return G_reader_settings:readSetting("end_document_action") == "delete_file"
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:saveSetting("end_document_action", "delete_file")
+--                     end,
+--                 },
+--                 {
+--                     text = _("Open next file"),
+--                     enabled_func = function()
+--                         return G_reader_settings:readSetting("collate") ~= "access"
+--                     end,
+--                     checked_func = function()
+--                         return G_reader_settings:readSetting("end_document_action") == "next_file"
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:saveSetting("end_document_action", "next_file")
+--                     end,
+--                 },
+--                 {
+--                     text = _("Go to beginning"),
+--                     checked_func = function()
+--                         return G_reader_settings:readSetting("end_document_action") == "goto_beginning"
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:saveSetting("end_document_action", "goto_beginning")
+--                     end,
+--                 },
+--                 {
+--                     text = _("Return to file browser"),
+--                     checked_func = function()
+--                         return G_reader_settings:readSetting("end_document_action") == "file_browser"
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:saveSetting("end_document_action", "file_browser")
+--                     end,
+--                 },
+--                 {
+--                     text = _("Mark book as read"),
+--                     checked_func = function()
+--                         return G_reader_settings:readSetting("end_document_action") == "mark_read"
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:saveSetting("end_document_action", "mark_read")
+--                     end,
+--                 },
+--                 {
+--                     text = _("Book status and return to file browser"),
+--                     checked_func = function()
+--                         return G_reader_settings:readSetting("end_document_action") == "book_status_file_browser"
+--                     end,
+--                     callback = function()
+--                         G_reader_settings:saveSetting("end_document_action", "book_status_file_browser")
+--                     end,
+--                 },
+--             }
+--         },
+--     },
+-- }
 
 return common_settings

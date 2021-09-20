@@ -176,7 +176,7 @@ function ReaderMenu:setUpdateItemTable()
     end
 
     -- typeset tab
-    self.menu_items.page_overlap = require("ui/elements/page_overlap")
+    -- self.menu_items.page_overlap = require("ui/elements/page_overlap")
 
     -- settings tab
     -- insert common settings

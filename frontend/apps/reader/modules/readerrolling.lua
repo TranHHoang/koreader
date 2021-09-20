@@ -391,31 +391,31 @@ function ReaderRolling:getLastProgress()
 end
 
 function ReaderRolling:addToMainMenu(menu_items)
-    if self.ui.document:hasNonLinearFlows() then
-        local hide_nonlinear_text = _("When hide non-linear fragments is enabled, any non-linear fragments will be hidden from the normal page flow. Such fragments will always remain accessible through links, the table of contents and the 'Go to' dialog. This only works in single-page mode.")
-        menu_items.hide_nonlinear_flows = {
-            text = _("Hide non-linear fragments"),
-            enabled_func = function()
-                return self.view.view_mode == "page" and self.ui.document:getVisiblePageCount() == 1
-            end,
-            checked_func = function() return self.hide_nonlinear_flows end,
-            callback = function()
-                self:onToggleHideNonlinear()
-            end,
-            hold_callback = function()
-                UIManager:show(ConfirmBox:new{
-                    text = T(
-                        hide_nonlinear_text .. "\n\n" .. _("Set default hide non-linear fragments to %1?"),
-                        self.hide_nonlinear_flows and _("enabled") or _("disabled")
-                    ),
-                    ok_callback = function()
-                        G_reader_settings:saveSetting("hide_nonlinear_flows", self.hide_nonlinear_flows)
-                    end,
-                })
-            end,
-            help_text = hide_nonlinear_text,
-        }
-    end
+    -- if self.ui.document:hasNonLinearFlows() then
+    --     local hide_nonlinear_text = _("When hide non-linear fragments is enabled, any non-linear fragments will be hidden from the normal page flow. Such fragments will always remain accessible through links, the table of contents and the 'Go to' dialog. This only works in single-page mode.")
+    --     menu_items.hide_nonlinear_flows = {
+    --         text = _("Hide non-linear fragments"),
+    --         enabled_func = function()
+    --             return self.view.view_mode == "page" and self.ui.document:getVisiblePageCount() == 1
+    --         end,
+    --         checked_func = function() return self.hide_nonlinear_flows end,
+    --         callback = function()
+    --             self:onToggleHideNonlinear()
+    --         end,
+    --         hold_callback = function()
+    --             UIManager:show(ConfirmBox:new{
+    --                 text = T(
+    --                     hide_nonlinear_text .. "\n\n" .. _("Set default hide non-linear fragments to %1?"),
+    --                     self.hide_nonlinear_flows and _("enabled") or _("disabled")
+    --                 ),
+    --                 ok_callback = function()
+    --                     G_reader_settings:saveSetting("hide_nonlinear_flows", self.hide_nonlinear_flows)
+    --                 end,
+    --             })
+    --         end,
+    --         help_text = hide_nonlinear_text,
+    --     }
+    -- end
 end
 
 function ReaderRolling:getLastPercent()

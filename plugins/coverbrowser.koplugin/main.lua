@@ -151,6 +151,28 @@ local function getFilesRecur(path, result)
     end
 end
 
+local function pickCovers(files_map, path, count, pick_one, result)
+    local function shuffle(arr)
+        for i = 1, #arr - 1 do
+            local j = math.random(i, #arr)
+            arr[i], arr[j] = arr[j], arr[i]
+        end
+    end
+    if not files_map[path] then return end
+
+    shuffle(files_map[path])
+
+    for _, v in ipairs(files_map[path]) do
+        if #result == count then break end
+        if files_map[v] then
+            pickCovers(files_map, v, count, true, result)
+        else
+            table.insert(result, v)
+            if pick_one then break end
+        end
+    end
+end
+
 function CoverBrowser:init()
     self.ui.menu:registerToMainMenu(self)
 
@@ -178,7 +200,6 @@ function CoverBrowser:init()
     init_done = true
     BookInfoManager:closeDbConnection() -- will be re-opened if needed
 
-    -- logger.dbg(self.files_in_home_dir)
     local files_map = {}
     local home_dir = G_reader_settings:readSetting("home_dir") or Device.home_dir
     if home_dir then
@@ -186,6 +207,11 @@ function CoverBrowser:init()
     end
 
     -- Double score to avoid clashing in the future
+    for k, _ in pairs(files_map) do
+        local files = {}
+        pickCovers(files_map, k, 2, false, files)
+        files_map[k] = files
+    end
     FileManager.__files_map = files_map
 end
 
@@ -200,13 +226,13 @@ function CoverBrowser:addToMainMenu(menu_items)
         sub_item_table = {
             -- selecting these does not close menu, which may be nice
             -- so one can see how they look below the menu
-            {
-                text = _("Classic (filename only)"),
-                checked_func = function() return not filemanager_display_mode end,
-                callback = function()
-                   self:setupFileManagerDisplayMode("")
-                end,
-            },
+            -- {
+            --     text = _("Classic (filename only)"),
+            --     checked_func = function() return not filemanager_display_mode end,
+            --     callback = function()
+            --        self:setupFileManagerDisplayMode("")
+            --     end,
+            -- },
             {
                 text = _("Mosaic with cover images"),
                 checked_func = function() return filemanager_display_mode == "mosaic_image" end,
@@ -214,13 +240,13 @@ function CoverBrowser:addToMainMenu(menu_items)
                    self:setupFileManagerDisplayMode("mosaic_image")
                 end,
             },
-            {
-                text = _("Mosaic with text covers"),
-                checked_func = function() return filemanager_display_mode == "mosaic_text" end,
-                callback = function()
-                   self:setupFileManagerDisplayMode("mosaic_text")
-                end,
-            },
+            -- {
+            --     text = _("Mosaic with text covers"),
+            --     checked_func = function() return filemanager_display_mode == "mosaic_text" end,
+            --     callback = function()
+            --        self:setupFileManagerDisplayMode("mosaic_text")
+            --     end,
+            -- },
             {
                 text = _("Detailed list with cover images and metadata"),
                 checked_func = function() return filemanager_display_mode == "list_image_meta" end,
@@ -228,33 +254,33 @@ function CoverBrowser:addToMainMenu(menu_items)
                    self:setupFileManagerDisplayMode("list_image_meta")
                 end,
             },
-            {
-                text = _("Detailed list with metadata, no images"),
-                checked_func = function() return filemanager_display_mode == "list_only_meta" end,
-                callback = function()
-                   self:setupFileManagerDisplayMode("list_only_meta")
-                end,
-            },
-            {
-                text = _("Detailed list with cover images and filenames"),
-                checked_func = function() return filemanager_display_mode == "list_image_filename" end,
-                callback = function()
-                   self:setupFileManagerDisplayMode("list_image_filename")
-                end,
-                separator = true,
-            },
+            -- {
+            --     text = _("Detailed list with metadata, no images"),
+            --     checked_func = function() return filemanager_display_mode == "list_only_meta" end,
+            --     callback = function()
+            --        self:setupFileManagerDisplayMode("list_only_meta")
+            --     end,
+            -- },
+            -- {
+            --     text = _("Detailed list with cover images and filenames"),
+            --     checked_func = function() return filemanager_display_mode == "list_image_filename" end,
+            --     callback = function()
+            --        self:setupFileManagerDisplayMode("list_image_filename")
+            --     end,
+            --     separator = true,
+            -- },
             -- Plug the same choices for History here as a submenu
             -- (Any other suitable place for that ?)
             {
                 text = _("History display mode"),
                 sub_item_table = {
-                    {
-                        text = _("Classic (filename only)"),
-                        checked_func = function() return not history_display_mode end,
-                        callback = function()
-                           self:setupHistoryDisplayMode("")
-                        end,
-                    },
+                    -- {
+                    --     text = _("Classic (filename only)"),
+                    --     checked_func = function() return not history_display_mode end,
+                    --     callback = function()
+                    --        self:setupHistoryDisplayMode("")
+                    --     end,
+                    -- },
                     {
                         text = _("Mosaic with cover images"),
                         checked_func = function() return history_display_mode == "mosaic_image" end,
@@ -262,13 +288,13 @@ function CoverBrowser:addToMainMenu(menu_items)
                            self:setupHistoryDisplayMode("mosaic_image")
                         end,
                     },
-                    {
-                        text = _("Mosaic with text covers"),
-                        checked_func = function() return history_display_mode == "mosaic_text" end,
-                        callback = function()
-                           self:setupHistoryDisplayMode("mosaic_text")
-                        end,
-                    },
+                    -- {
+                    --     text = _("Mosaic with text covers"),
+                    --     checked_func = function() return history_display_mode == "mosaic_text" end,
+                    --     callback = function()
+                    --        self:setupHistoryDisplayMode("mosaic_text")
+                    --     end,
+                    -- },
                     {
                         text = _("Detailed list with cover images and metadata"),
                         checked_func = function() return history_display_mode == "list_image_meta" end,
@@ -276,32 +302,32 @@ function CoverBrowser:addToMainMenu(menu_items)
                            self:setupHistoryDisplayMode("list_image_meta")
                         end,
                     },
-                    {
-                        text = _("Detailed list with metadata, no images"),
-                        checked_func = function() return history_display_mode == "list_only_meta" end,
-                        callback = function()
-                           self:setupHistoryDisplayMode("list_only_meta")
-                        end,
-                    },
-                    {
-                        text = _("Detailed list with cover images and filenames"),
-                        checked_func = function() return history_display_mode == "list_image_filename" end,
-                        callback = function()
-                           self:setupHistoryDisplayMode("list_image_filename")
-                        end,
-                    },
+                    -- {
+                    --     text = _("Detailed list with metadata, no images"),
+                    --     checked_func = function() return history_display_mode == "list_only_meta" end,
+                    --     callback = function()
+                    --        self:setupHistoryDisplayMode("list_only_meta")
+                    --     end,
+                    -- },
+                    -- {
+                    --     text = _("Detailed list with cover images and filenames"),
+                    --     checked_func = function() return history_display_mode == "list_image_filename" end,
+                    --     callback = function()
+                    --        self:setupHistoryDisplayMode("list_image_filename")
+                    --     end,
+                    -- },
                 },
             },
             {
                 text = _("Favorites display mode"),
                 sub_item_table = {
-                    {
-                        text = _("Classic (filename only)"),
-                        checked_func = function() return not collection_display_mode end,
-                        callback = function()
-                            self:setupCollectionDisplayMode("")
-                        end,
-                    },
+                    -- {
+                    --     text = _("Classic (filename only)"),
+                    --     checked_func = function() return not collection_display_mode end,
+                    --     callback = function()
+                    --         self:setupCollectionDisplayMode("")
+                    --     end,
+                    -- },
                     {
                         text = _("Mosaic with cover images"),
                         checked_func = function() return collection_display_mode == "mosaic_image" end,
@@ -309,13 +335,13 @@ function CoverBrowser:addToMainMenu(menu_items)
                             self:setupCollectionDisplayMode("mosaic_image")
                         end,
                     },
-                    {
-                        text = _("Mosaic with text covers"),
-                        checked_func = function() return collection_display_mode == "mosaic_text" end,
-                        callback = function()
-                            self:setupCollectionDisplayMode("mosaic_text")
-                        end,
-                    },
+                    -- {
+                    --     text = _("Mosaic with text covers"),
+                    --     checked_func = function() return collection_display_mode == "mosaic_text" end,
+                    --     callback = function()
+                    --         self:setupCollectionDisplayMode("mosaic_text")
+                    --     end,
+                    -- },
                     {
                         text = _("Detailed list with cover images and metadata"),
                         checked_func = function() return collection_display_mode == "list_image_meta" end,
@@ -323,20 +349,20 @@ function CoverBrowser:addToMainMenu(menu_items)
                             self:setupCollectionDisplayMode("list_image_meta")
                         end,
                     },
-                    {
-                        text = _("Detailed list with metadata, no images"),
-                        checked_func = function() return collection_display_mode == "list_only_meta" end,
-                        callback = function()
-                            self:setupCollectionDisplayMode("list_only_meta")
-                        end,
-                    },
-                    {
-                        text = _("Detailed list with cover images and filenames"),
-                        checked_func = function() return collection_display_mode == "list_image_filename" end,
-                        callback = function()
-                            self:setupCollectionDisplayMode("list_image_filename")
-                        end,
-                    },
+                    -- {
+                    --     text = _("Detailed list with metadata, no images"),
+                    --     checked_func = function() return collection_display_mode == "list_only_meta" end,
+                    --     callback = function()
+                    --         self:setupCollectionDisplayMode("list_only_meta")
+                    --     end,
+                    -- },
+                    -- {
+                    --     text = _("Detailed list with cover images and filenames"),
+                    --     checked_func = function() return collection_display_mode == "list_image_filename" end,
+                    --     callback = function()
+                    --         self:setupCollectionDisplayMode("list_image_filename")
+                    --     end,
+                    -- },
                 },
             },
         },
@@ -345,222 +371,222 @@ function CoverBrowser:addToMainMenu(menu_items)
     -- add Mosaic / Detailed list mode settings to File browser Settings submenu
     -- next to Classic mode settings
     if menu_items.filebrowser_settings == nil then return end
-    table.insert (menu_items.filebrowser_settings.sub_item_table, 4, {
-        text = _("Mosaic and detailed list settings"),
-        separator = true,
-        sub_item_table = {
-            {
-                text = _("Items per page"),
-                help_text = _([[This sets the number of files and folders per page in display modes other than classic.]]),
-                -- Best to not "keep_menu_open = true", to see how this apply on the full view
-                callback = function()
-                    local SpinWidget = require("ui/widget/spinwidget")
-                    -- "files_per_page" should have been saved with an adequate value
-                    -- the first time Detailed list was shown. Fallback to a start
-                    -- value of 10 if it hasn't.
-                    local curr_items = BookInfoManager:getSetting("files_per_page") or 10
-                    local items = SpinWidget:new{
-                        width = math.floor(Screen:getWidth() * 0.6),
-                        value = curr_items,
-                        value_min = 4,
-                        value_max = 20,
-                        default_value = 10,
-                        keep_shown_on_apply = true,
-                        title_text =  _("Items per page"),
-                        callback = function(spin)
-                            BookInfoManager:saveSetting("files_per_page", spin.value)
-                            self.ui:onRefresh()
-                        end
-                    }
-                    UIManager:show(items)
-                end,
-            },
-            {
-                text = _("Display hints"),
-                sub_item_table = {
-                    {
-                        text = _("Show hint for books with description"),
-                        checked_func = function() return not BookInfoManager:getSetting("no_hint_description") end,
-                        callback = function()
-                            if BookInfoManager:getSetting("no_hint_description") then
-                                BookInfoManager:saveSetting("no_hint_description", false)
-                            else
-                                BookInfoManager:saveSetting("no_hint_description", true)
-                            end
-                            self:refreshFileManagerInstance()
-                        end,
-                    },
-                    {
-                        text = _("Show hint for opened books in history"),
-                        checked_func = function() return BookInfoManager:getSetting("history_hint_opened") end,
-                        callback = function()
-                            if BookInfoManager:getSetting("history_hint_opened") then
-                                BookInfoManager:saveSetting("history_hint_opened", false)
-                            else
-                                BookInfoManager:saveSetting("history_hint_opened", true)
-                            end
-                            self:refreshFileManagerInstance()
-                        end,
-                    },
-                    {
-                        text = _("Show hint for opened books in favorites"),
-                        checked_func = function() return BookInfoManager:getSetting("collections_hint_opened") end,
-                        callback = function()
-                            if BookInfoManager:getSetting("collections_hint_opened") then
-                                BookInfoManager:saveSetting("collections_hint_opened", false)
-                            else
-                                BookInfoManager:saveSetting("collections_hint_opened", true)
-                            end
-                            self:refreshFileManagerInstance()
-                        end,
-                    }
-                }
-            },
-            {
-                text = _("Series"),
-                sub_item_table = {
-                    {
-                        text = _("Append series metadata to authors"),
-                        checked_func = function() return series_mode == "append_series_to_authors" end,
-                        callback = function()
-                            if series_mode == "append_series_to_authors" then
-                                series_mode = nil
-                            else
-                                series_mode = "append_series_to_authors"
-                            end
-                            BookInfoManager:saveSetting("series_mode", series_mode)
-                            self:refreshFileManagerInstance()
-                        end,
-                    },
-                    {
-                        text = _("Append series metadata to title"),
-                        checked_func = function() return series_mode == "append_series_to_title" end,
-                        callback = function()
-                            if series_mode == "append_series_to_title" then
-                                series_mode = nil
-                            else
-                                series_mode = "append_series_to_title"
-                            end
-                            BookInfoManager:saveSetting("series_mode", series_mode)
-                            self:refreshFileManagerInstance()
-                        end,
-                    },
-                    {
-                        text = _("Show series metadata in separate line"),
-                        checked_func = function() return series_mode == "series_in_separate_line" end,
-                        callback = function()
-                            if series_mode == "series_in_separate_line" then
-                                series_mode = nil
-                            else
-                                series_mode = "series_in_separate_line"
-                            end
-                            BookInfoManager:saveSetting("series_mode", series_mode)
-                            self:refreshFileManagerInstance()
-                        end,
-                    },
-                },
-                separator = true
-            },
-            {
-                text = _("Show number of pages read instead of progress %"),
-                checked_func = function() return BookInfoManager:getSetting("show_pages_read_as_progress") end,
-                callback = function()
-                    if BookInfoManager:getSetting("show_pages_read_as_progress") then
-                        BookInfoManager:saveSetting("show_pages_read_as_progress", false)
-                    else
-                        BookInfoManager:saveSetting("show_pages_read_as_progress", true)
-                    end
-                    self:refreshFileManagerInstance()
-                end,
-            },
-            {
-                text = _("Show number of pages left to read"),
-                checked_func = function() return BookInfoManager:getSetting("show_pages_left_in_progress") end,
-                callback = function()
-                    if BookInfoManager:getSetting("show_pages_left_in_progress") then
-                        BookInfoManager:saveSetting("show_pages_left_in_progress", false)
-                    else
-                        BookInfoManager:saveSetting("show_pages_left_in_progress", true)
-                    end
-                    self:refreshFileManagerInstance()
-                end,
-                separator = true,
-            },
-            {
-                text = _("Book info cache management"),
-                sub_item_table = {
-                    {
-                        text_func = function() -- add current db size to menu text
-                            local sstr = BookInfoManager:getDbSize()
-                            return _("Current cache size: ") .. sstr
-                        end,
-                        keep_menu_open = true,
-                        callback = function() end, -- no callback, only for information
-                    },
-                    {
-                        text = _("Prune cache of removed books"),
-                        keep_menu_open = true,
-                        callback = function()
-                            local ConfirmBox = require("ui/widget/confirmbox")
-                            UIManager:close(self.file_dialog)
-                            UIManager:show(ConfirmBox:new{
-                                -- Checking file existences is quite fast, but deleting entries is slow.
-                                text = _("Are you sure that you want to prune cache of removed books?\n(This may take a while.)"),
-                                ok_text = _("Prune cache"),
-                                ok_callback = function()
-                                    local InfoMessage = require("ui/widget/infomessage")
-                                    local msg = InfoMessage:new{ text = _("Pruning cache of removed books…") }
-                                    UIManager:show(msg)
-                                    UIManager:nextTick(function()
-                                        local summary = BookInfoManager:removeNonExistantEntries()
-                                        UIManager:close(msg)
-                                        UIManager:show( InfoMessage:new{ text = summary } )
-                                    end)
-                                end
-                            })
-                        end,
-                    },
-                    {
-                        text = _("Compact cache database"),
-                        keep_menu_open = true,
-                        callback = function()
-                            local ConfirmBox = require("ui/widget/confirmbox")
-                            UIManager:close(self.file_dialog)
-                            UIManager:show(ConfirmBox:new{
-                                text = _("Are you sure that you want to compact cache database?\n(This may take a while.)"),
-                                ok_text = _("Compact database"),
-                                ok_callback = function()
-                                    local InfoMessage = require("ui/widget/infomessage")
-                                    local msg = InfoMessage:new{ text = _("Compacting cache database…") }
-                                    UIManager:show(msg)
-                                    UIManager:nextTick(function()
-                                        local summary = BookInfoManager:compactDb()
-                                        UIManager:close(msg)
-                                        UIManager:show( InfoMessage:new{ text = summary } )
-                                    end)
-                                end
-                            })
-                        end,
-                    },
-                    {
-                        text = _("Delete cache database"),
-                        keep_menu_open = true,
-                        callback = function()
-                            local ConfirmBox = require("ui/widget/confirmbox")
-                            UIManager:close(self.file_dialog)
-                            UIManager:show(ConfirmBox:new{
-                                text = _("Are you sure that you want to delete cover and metadata cache?\n(This will also reset your display mode settings.)"),
-                                ok_text = _("Purge"),
-                                ok_callback = function()
-                                    BookInfoManager:deleteDb()
-                                end
-                            })
-                        end,
-                    },
-                },
-            },
-        },
-    })
+    -- table.insert (menu_items.filebrowser_settings.sub_item_table, 4, {
+    --     text = _("Mosaic and detailed list settings"),
+    --     separator = true,
+    --     sub_item_table = {
+    --         {
+    --             text = _("Items per page"),
+    --             help_text = _([[This sets the number of files and folders per page in display modes other than classic.]]),
+    --             -- Best to not "keep_menu_open = true", to see how this apply on the full view
+    --             callback = function()
+    --                 local SpinWidget = require("ui/widget/spinwidget")
+    --                 -- "files_per_page" should have been saved with an adequate value
+    --                 -- the first time Detailed list was shown. Fallback to a start
+    --                 -- value of 10 if it hasn't.
+    --                 local curr_items = BookInfoManager:getSetting("files_per_page") or 10
+    --                 local items = SpinWidget:new{
+    --                     width = math.floor(Screen:getWidth() * 0.6),
+    --                     value = curr_items,
+    --                     value_min = 4,
+    --                     value_max = 20,
+    --                     default_value = 10,
+    --                     keep_shown_on_apply = true,
+    --                     title_text =  _("Items per page"),
+    --                     callback = function(spin)
+    --                         BookInfoManager:saveSetting("files_per_page", spin.value)
+    --                         self.ui:onRefresh()
+    --                     end
+    --                 }
+    --                 UIManager:show(items)
+    --             end,
+    --         },
+    --         {
+    --             text = _("Display hints"),
+    --             sub_item_table = {
+    --                 {
+    --                     text = _("Show hint for books with description"),
+    --                     checked_func = function() return not BookInfoManager:getSetting("no_hint_description") end,
+    --                     callback = function()
+    --                         if BookInfoManager:getSetting("no_hint_description") then
+    --                             BookInfoManager:saveSetting("no_hint_description", false)
+    --                         else
+    --                             BookInfoManager:saveSetting("no_hint_description", true)
+    --                         end
+    --                         self:refreshFileManagerInstance()
+    --                     end,
+    --                 },
+    --                 {
+    --                     text = _("Show hint for opened books in history"),
+    --                     checked_func = function() return BookInfoManager:getSetting("history_hint_opened") end,
+    --                     callback = function()
+    --                         if BookInfoManager:getSetting("history_hint_opened") then
+    --                             BookInfoManager:saveSetting("history_hint_opened", false)
+    --                         else
+    --                             BookInfoManager:saveSetting("history_hint_opened", true)
+    --                         end
+    --                         self:refreshFileManagerInstance()
+    --                     end,
+    --                 },
+    --                 {
+    --                     text = _("Show hint for opened books in favorites"),
+    --                     checked_func = function() return BookInfoManager:getSetting("collections_hint_opened") end,
+    --                     callback = function()
+    --                         if BookInfoManager:getSetting("collections_hint_opened") then
+    --                             BookInfoManager:saveSetting("collections_hint_opened", false)
+    --                         else
+    --                             BookInfoManager:saveSetting("collections_hint_opened", true)
+    --                         end
+    --                         self:refreshFileManagerInstance()
+    --                     end,
+    --                 }
+    --             }
+    --         },
+    --         {
+    --             text = _("Series"),
+    --             sub_item_table = {
+    --                 {
+    --                     text = _("Append series metadata to authors"),
+    --                     checked_func = function() return series_mode == "append_series_to_authors" end,
+    --                     callback = function()
+    --                         if series_mode == "append_series_to_authors" then
+    --                             series_mode = nil
+    --                         else
+    --                             series_mode = "append_series_to_authors"
+    --                         end
+    --                         BookInfoManager:saveSetting("series_mode", series_mode)
+    --                         self:refreshFileManagerInstance()
+    --                     end,
+    --                 },
+    --                 {
+    --                     text = _("Append series metadata to title"),
+    --                     checked_func = function() return series_mode == "append_series_to_title" end,
+    --                     callback = function()
+    --                         if series_mode == "append_series_to_title" then
+    --                             series_mode = nil
+    --                         else
+    --                             series_mode = "append_series_to_title"
+    --                         end
+    --                         BookInfoManager:saveSetting("series_mode", series_mode)
+    --                         self:refreshFileManagerInstance()
+    --                     end,
+    --                 },
+    --                 {
+    --                     text = _("Show series metadata in separate line"),
+    --                     checked_func = function() return series_mode == "series_in_separate_line" end,
+    --                     callback = function()
+    --                         if series_mode == "series_in_separate_line" then
+    --                             series_mode = nil
+    --                         else
+    --                             series_mode = "series_in_separate_line"
+    --                         end
+    --                         BookInfoManager:saveSetting("series_mode", series_mode)
+    --                         self:refreshFileManagerInstance()
+    --                     end,
+    --                 },
+    --             },
+    --             separator = true
+    --         },
+    --         {
+    --             text = _("Show number of pages read instead of progress %"),
+    --             checked_func = function() return BookInfoManager:getSetting("show_pages_read_as_progress") end,
+    --             callback = function()
+    --                 if BookInfoManager:getSetting("show_pages_read_as_progress") then
+    --                     BookInfoManager:saveSetting("show_pages_read_as_progress", false)
+    --                 else
+    --                     BookInfoManager:saveSetting("show_pages_read_as_progress", true)
+    --                 end
+    --                 self:refreshFileManagerInstance()
+    --             end,
+    --         },
+    --         {
+    --             text = _("Show number of pages left to read"),
+    --             checked_func = function() return BookInfoManager:getSetting("show_pages_left_in_progress") end,
+    --             callback = function()
+    --                 if BookInfoManager:getSetting("show_pages_left_in_progress") then
+    --                     BookInfoManager:saveSetting("show_pages_left_in_progress", false)
+    --                 else
+    --                     BookInfoManager:saveSetting("show_pages_left_in_progress", true)
+    --                 end
+    --                 self:refreshFileManagerInstance()
+    --             end,
+    --             separator = true,
+    --         },
+    --         {
+    --             text = _("Book info cache management"),
+    --             sub_item_table = {
+    --                 {
+    --                     text_func = function() -- add current db size to menu text
+    --                         local sstr = BookInfoManager:getDbSize()
+    --                         return _("Current cache size: ") .. sstr
+    --                     end,
+    --                     keep_menu_open = true,
+    --                     callback = function() end, -- no callback, only for information
+    --                 },
+    --                 {
+    --                     text = _("Prune cache of removed books"),
+    --                     keep_menu_open = true,
+    --                     callback = function()
+    --                         local ConfirmBox = require("ui/widget/confirmbox")
+    --                         UIManager:close(self.file_dialog)
+    --                         UIManager:show(ConfirmBox:new{
+    --                             -- Checking file existences is quite fast, but deleting entries is slow.
+    --                             text = _("Are you sure that you want to prune cache of removed books?\n(This may take a while.)"),
+    --                             ok_text = _("Prune cache"),
+    --                             ok_callback = function()
+    --                                 local InfoMessage = require("ui/widget/infomessage")
+    --                                 local msg = InfoMessage:new{ text = _("Pruning cache of removed books…") }
+    --                                 UIManager:show(msg)
+    --                                 UIManager:nextTick(function()
+    --                                     local summary = BookInfoManager:removeNonExistantEntries()
+    --                                     UIManager:close(msg)
+    --                                     UIManager:show( InfoMessage:new{ text = summary } )
+    --                                 end)
+    --                             end
+    --                         })
+    --                     end,
+    --                 },
+    --                 {
+    --                     text = _("Compact cache database"),
+    --                     keep_menu_open = true,
+    --                     callback = function()
+    --                         local ConfirmBox = require("ui/widget/confirmbox")
+    --                         UIManager:close(self.file_dialog)
+    --                         UIManager:show(ConfirmBox:new{
+    --                             text = _("Are you sure that you want to compact cache database?\n(This may take a while.)"),
+    --                             ok_text = _("Compact database"),
+    --                             ok_callback = function()
+    --                                 local InfoMessage = require("ui/widget/infomessage")
+    --                                 local msg = InfoMessage:new{ text = _("Compacting cache database…") }
+    --                                 UIManager:show(msg)
+    --                                 UIManager:nextTick(function()
+    --                                     local summary = BookInfoManager:compactDb()
+    --                                     UIManager:close(msg)
+    --                                     UIManager:show( InfoMessage:new{ text = summary } )
+    --                                 end)
+    --                             end
+    --                         })
+    --                     end,
+    --                 },
+    --                 {
+    --                     text = _("Delete cache database"),
+    --                     keep_menu_open = true,
+    --                     callback = function()
+    --                         local ConfirmBox = require("ui/widget/confirmbox")
+    --                         UIManager:close(self.file_dialog)
+    --                         UIManager:show(ConfirmBox:new{
+    --                             text = _("Are you sure that you want to delete cover and metadata cache?\n(This will also reset your display mode settings.)"),
+    --                             ok_text = _("Purge"),
+    --                             ok_callback = function()
+    --                                 BookInfoManager:deleteDb()
+    --                             end
+    --                         })
+    --                     end,
+    --                 },
+    --             },
+    --         },
+    --     },
+    -- })
 end
 
 function CoverBrowser:refreshFileManagerInstance(cleanup, post_init)
@@ -642,8 +668,8 @@ function CoverBrowser:setupFileManagerDisplayMode(display_mode)
         -- Don't have "../" centered in empty directories
         FileChooser._do_center_partial_rows = false
         -- One could override default 3x3 grid here (put that as settings ?)
-        FileChooser.nb_cols_portrait = 3
-        FileChooser.nb_rows_portrait = 4
+        -- FileChooser.nb_cols_portrait = 4
+        -- FileChooser.nb_rows_portrait = 4
         -- FileChooser.nb_cols_landscape = 6
         -- FileChooser.nb_rows_landscape = 3
 

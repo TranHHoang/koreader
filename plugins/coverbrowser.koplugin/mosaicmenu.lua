@@ -450,7 +450,7 @@ function MosaicMenuItem:init()
 
     local file_mode = lfs.attributes(self.filepath, "mode")
     if file_mode == "directory" then
-        pickCovers(self.filepath, 2, false, self.files_to_show_cover)
+        self.files_to_show_cover = FileManager.__files_map[self.filepath]
     end
 
     -- Remaining part of initialization is done in update(), because we may
