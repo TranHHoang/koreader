@@ -34,7 +34,6 @@ local Device = require("device")
 local Event = require("ui/event")
 local Notification = require("ui/widget/notification")
 local ReaderZooming = require("apps/reader/modules/readerzooming")
-local Screen = require("device").screen
 local UIManager = require("ui/uimanager")
 local util = require("util")
 local _ = require("gettext")
@@ -145,7 +144,7 @@ local settingsList = {
     -- the rest of the table elements are built from their counterparts in CreOptions
     rotation_mode = {category="string", device=true},
     visible_pages = {category="string", rolling=true, separator=true},
-    h_page_margins = {category="string", rolling=true},
+    h_page_margins = {category="absolutenumber", rolling=true},
     sync_t_b_page_margins = {category="string", rolling=true},
     t_page_margin = {category="absolutenumber", rolling=true},
     b_page_margin = {category="absolutenumber", rolling=true, separator=true},
@@ -154,8 +153,8 @@ local settingsList = {
     render_dpi = {category="string", rolling=true},
     line_spacing = {category="absolutenumber", rolling=true, separator=true},
     font_size = {category="absolutenumber", title=_("Set font size to %1"), rolling=true, step=0.5},
-    font_base_weight = {category="string", rolling=true},
-    font_gamma = {category="string", rolling=true},
+    font_base_weight = {category="absolutenumber", rolling=true},
+    font_gamma = {category="absolutenumber", rolling=true},
     font_hinting = {category="string", rolling=true},
     font_kerning = {category="string", rolling=true, separator=true},
     status_line = {category="string", rolling=true},
@@ -167,8 +166,8 @@ local settingsList = {
     -- parsed from KoptOptions
     kopt_trim_page = {category="string", paging=true},
     kopt_page_margin = {category="string", paging=true},
-    kopt_zoom_overlap_h = {category="string", paging=true},
-    kopt_zoom_overlap_v = {category="string", paging=true},
+    kopt_zoom_overlap_h = {category="absolutenumber", paging=true},
+    kopt_zoom_overlap_v = {category="absolutenumber", paging=true},
     kopt_zoom_mode_type = {category="string", paging=true},
     kopt_zoom_range_number = {category="string", paging=true},
     kopt_zoom_factor = {category="string", paging=true},
@@ -183,7 +182,7 @@ local settingsList = {
     kopt_font_fine_tune = {category="string", paging=true},
     kopt_word_spacing = {category="configurable", paging=true},
     kopt_text_wrap = {category="string", paging=true},
-    kopt_contrast = {category="string", paging=true},
+    kopt_contrast = {category="absolutenumber", paging=true},
     kopt_page_opt = {category="configurable", paging=true},
     kopt_hw_dithering = {category="configurable", paging=true, condition=Device:hasEinkScreen() and Device:canHWDither()},
     kopt_quality = {category="configurable", paging=true},
@@ -191,7 +190,7 @@ local settingsList = {
     kopt_forced_ocr = {category="configurable", paging=true},
     kopt_writing_direction = {category="configurable", paging=true},
     kopt_defect_size = {category="string", paging=true, condition=false},
-    kopt_auto_straighten = {category="configurable", paging=true, condition=false},
+    kopt_auto_straighten = {category="absolutenumber", paging=true},
     kopt_detect_indent = {category="configurable", paging=true, condition=false},
     kopt_max_columns = {category="configurable", paging=true},
 }
@@ -395,10 +394,10 @@ function Dispatcher:init()
                     end
                 elseif settingsList[name].category == "absolutenumber" then
                     if settingsList[name].min == nil then
-                        settingsList[name].min = option.args[1]
+                        settingsList[name].min = option.args and option.args[1] or option.values[1]
                     end
                     if settingsList[name].max == nil then
-                        settingsList[name].max = option.args[#option.args]
+                        settingsList[name].max = option.args and option.args[#option.args] or option.values[#option.values]
                     end
                     if settingsList[name].default == nil then
                         settingsList[name].default = option.default_value
@@ -512,7 +511,6 @@ function Dispatcher:addItem(caller, menu, location, settings, section)
                             precision = "%0.1f"
                         end
                         local items = SpinWidget:new{
-                            width = math.floor(Screen:getWidth() * 0.6),
                             value = location[settings] ~= nil and location[settings][k] or settingsList[k].default or 0,
                             value_min = settingsList[k].min,
                             value_step = settingsList[k].step or 1,
@@ -559,7 +557,6 @@ function Dispatcher:addItem(caller, menu, location, settings, section)
                         end
                         local SpinWidget = require("ui/widget/spinwidget")
                         local items = SpinWidget:new{
-                            width = math.floor(Screen:getWidth() * 0.6),
                             value = location[settings] ~= nil and location[settings][k] or 0,
                             value_min = settingsList[k].min,
                             value_step = settingsList[k].step or 1,

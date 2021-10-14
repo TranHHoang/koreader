@@ -1,10 +1,10 @@
 local en_popup = require("ui/data/keyboardlayouts/keypopup/en_popup")
 local com = en_popup.com -- comma (,)
-local prd = en_popup.prd -- period (.)
 local _at = en_popup._at
 local _eq = en_popup._eq -- equals sign (=)
 
 local el_popup = require("ui/data/keyboardlayouts/keypopup/el_popup")
+local prd = el_popup.prd -- period (.)
 local _A_el = el_popup._A_el
 local _a_el = el_popup._a_el
 local _B_el = el_popup._B_el
@@ -57,6 +57,7 @@ local _Y_el = el_popup._Y_el
 local _y_el = el_popup._y_el
 local _Z_el = el_popup._Z_el
 local _z_el = el_popup._z_el
+local acu = el_popup.acu
 
 return {
     min_layer = 1,
@@ -77,7 +78,7 @@ return {
             { _U_el,  _u_el,  "‰",    ")",    "Æ",    "ὓ",    "7",    "¾", },
             { _I_el,  _i_el,  "|",    "\\",   "Ί",    "ί",    "8",    "©", },
             { _O_el,  _o_el,  "?",    "/",    "Ό",    "ό",    "9",    "®", },
-            { _P_el,  _p_el,  "~",    "`",    "É",    "é",    "0",    "™", },
+            { _P_el,  _p_el,  "~",    "`",    "É",    "é",    "0",    "™", },
         },
         -- second row
         {  --  1       2       3       4       5       6       7       8
@@ -85,7 +86,7 @@ return {
             { _S_el,  _s_el,  "$",    "4",    "ᾏ",    "ᾆ",    "İ",    "ı", },
             { _D_el,  _d_el,  "%",    "5",    "Ἃ",    "ἃ",    "Ğ",    "ğ", },
             { _F_el,  _f_el,  "^",    "6",    "Ï",    "ï",    "Ć",    "ć", },
-            { _G_el,  _g_el,  ":",    ";",    "Ô",    "ῇ",    "Č",    "č", },
+            { _G_el,  _g_el,  ":",    acu,    "Ô",    "ῇ",    "Č",    "č", },
             { _H_el,  _h_el,  '"',    "'",    "Ή",    "ή",    "Đ",    "đ", },
             { _J_el,  _j_el,  "{",    "[",    "Ί",    "ί",    "Š",    "š", },
             { _K_el,  _k_el,  "}",    "]",    "Û",    "ὖ",    "Ž",    "ž", },
@@ -117,8 +118,8 @@ return {
             { label = "_",
               " ",    " ",    " ",    " ",    " ",    " ",    " ",    " ",
               width = 3.0},
-            { com,    com,    "“",    "←",    "Ũ",   "ũ",    com,    com, },
-            { prd,    prd,    "”",    "→",    "Ĩ",   "ĩ",    prd,    prd, },
+            { com,    com,    "«",    "←",    "Ũ",   "ũ",    "“",    com, },
+            { prd,    prd,    "»",    "→",    "Ĩ",   "ĩ",    "”",    prd, },
             { label = "⮠",
               "\n",   "\n",   "\n",   "\n",   "\n",   "\n",   "\n",   "\n",
               width = 1.5,

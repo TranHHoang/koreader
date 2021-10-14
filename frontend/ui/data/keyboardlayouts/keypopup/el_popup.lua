@@ -1,4 +1,20 @@
 return {
+    prd = {
+        ".",
+        north = ":",
+        alt_label = ":",
+        northeast = ")",
+        northwest = "¡",
+        east = "…",
+        west = "!",
+        "·",
+    },
+    acu = {
+        "´",
+        alt_label = "ʹ",
+        east = "ʹ", -- Greek Numeral Sign
+        west = "͵", -- Greek Lower Numeral Sign
+    },
     _A_el = {
         "Α",
         northeast = "Ά",

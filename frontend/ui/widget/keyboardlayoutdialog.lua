@@ -14,6 +14,7 @@ local Language = require("ui/language")
 local LineWidget = require("ui/widget/linewidget")
 local MovableContainer = require("ui/widget/container/movablecontainer")
 local RadioButtonTable = require("ui/widget/radiobuttontable")
+local ScrollableContainer = require("ui/widget/container/scrollablecontainer")
 local Size = require("ui/size")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
@@ -29,7 +30,7 @@ local KeyboardLayoutDialog = InputContainer:new{
     modal = true,
     stop_events_propagation = true,
     keyboard_state = nil,
-    width = math.floor(Screen:getWidth() * 0.8),
+    width = nil,
     face = Font:getFace("cfont", 22),
     title_face = Font:getFace("x_smalltfont"),
     title_padding = Size.padding.default,
@@ -40,6 +41,7 @@ local KeyboardLayoutDialog = InputContainer:new{
 
 
 function KeyboardLayoutDialog:init()
+    self.width = self.width or math.floor(math.min(Screen:getWidth(), Screen:getHeight()) * 0.8)
     -- Title & description
     self.title_widget = FrameContainer:new{
         padding = self.title_padding,
@@ -99,12 +101,15 @@ function KeyboardLayoutDialog:init()
         },
     })
 
+    -- (RadioButtonTable's width and padding setup is a bit fishy: we get
+    -- this to look ok by using a CenterContainer to ensure some padding)
+    local scroll_container_inner_width = self.title_bar:getSize().w - ScrollableContainer:getScrollbarWidth()
     self.radio_button_table = RadioButtonTable:new{
         radio_buttons = radio_buttons,
-        width = math.floor(self.width * 0.9),
+        width = scroll_container_inner_width - 2*Size.padding.large,
         focused = true,
-        scroll = false,
         parent = self,
+        show_parent = self,
         face = self.face,
     }
 
@@ -118,6 +123,29 @@ function KeyboardLayoutDialog:init()
         show_parent = self,
     }
 
+    local max_radio_button_container_height = math.floor(Screen:getHeight()*0.9
+                    - self.title_widget:getSize().h - self.title_bar:getSize().h
+                    - Size.span.vertical_large*4 - self.button_table:getSize().h)
+    local radio_button_container_height = math.min(self.radio_button_table:getSize().h, max_radio_button_container_height)
+
+    -- Our scrollable container needs to be known as widget.cropping_widget in
+    -- the widget that is passed to UIManager:show() for UIManager to ensure
+    -- proper interception of inner widget self repainting/invert (mostly used
+    -- when flashing for UI feedback that we want to limit to the cropped area).
+    self.cropping_widget = ScrollableContainer:new{
+        dimen = Geom:new{
+            w = self.title_bar:getSize().w,
+            h = radio_button_container_height,
+        },
+        show_parent = self,
+        CenterContainer:new{
+            dimen = Geom:new{
+                w = scroll_container_inner_width,
+                h = self.radio_button_table:getSize().h,
+            },
+            self.radio_button_table,
+        },
+    }
     self.dialog_frame = FrameContainer:new{
         radius = Size.radius.window,
         bordersize = Size.border.window,
@@ -131,13 +159,7 @@ function KeyboardLayoutDialog:init()
             VerticalSpan:new{
                 width = Size.span.vertical_large*2,
             },
-            CenterContainer:new{
-                dimen = Geom:new{
-                    w = self.title_bar:getSize().w,
-                    h = self.radio_button_table:getSize().h,
-                },
-                self.radio_button_table,
-            },
+            self.cropping_widget, -- our ScrollableContainer
             VerticalSpan:new{
                 width = Size.span.vertical_large*2,
             },
@@ -160,6 +182,7 @@ function KeyboardLayoutDialog:init()
             w = Screen:getWidth(),
             h = Screen:getHeight(),
         },
+        ignore_if_over = "height",
         self.movable,
     }
 end

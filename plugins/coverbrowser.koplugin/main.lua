@@ -4,7 +4,6 @@ local UIManager = require("ui/uimanager")
 local logger = require("logger")
 local _ = require("gettext")
 local BookInfoManager = require("bookinfomanager")
-local Screen = require("device").screen
 local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
 

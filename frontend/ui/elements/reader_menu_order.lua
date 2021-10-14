@@ -117,6 +117,7 @@ local order = {
         "----------------------------",
         "screen_dpi",
         "screen_eink_opt",
+        "autowarmth",
         "color_rendering",
         "----------------------------",
         "screen_timeout",
