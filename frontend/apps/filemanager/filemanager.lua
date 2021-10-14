@@ -108,8 +108,8 @@ function FileManager:setupLayout()
     local home_button = IconButton:new{
         icon = "home",
         bordersize = 0,
-        width = Screen:scaleBySize(32),
-        height = Screen:scaleBySize(32),
+        width = Screen:scaleBySize(24),
+        height = Screen:scaleBySize(24),
         padding = Size.padding.default,
         callback = function()
             self:goHome()
@@ -120,8 +120,8 @@ function FileManager:setupLayout()
     local up_button = IconButton:new{
         icon = "up",
         bordersize = 0,
-        width = Screen:scaleBySize(32), -- our icons are square
-        height = Screen:scaleBySize(32),
+        width = Screen:scaleBySize(24), -- our icons are square
+        height = Screen:scaleBySize(24),
         padding = Size.padding.default,
         callback = function()
             self.file_chooser:onFolderUp()

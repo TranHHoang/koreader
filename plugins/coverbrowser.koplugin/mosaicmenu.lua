@@ -360,30 +360,6 @@ local MosaicMenuItem = InputContainer:new{
     has_description = false,
 }
 
-local function pickCovers(path, count, pick_one, result)
-    local function shuffle(arr)
-        for i = 1, #arr - 1 do
-            local j = math.random(i, #arr)
-            arr[i], arr[j] = arr[j], arr[i]
-        end
-    end
-    local files_map = FileManager.__files_map
-
-    if not files_map[path] then return end
-
-    shuffle(files_map[path])
-
-    for _, v in ipairs(files_map[path]) do
-        if #result == count then break end
-        if files_map[v] then
-            pickCovers(v, count, true, result)
-        else
-            table.insert(result, v)
-            if pick_one then break end
-        end
-    end
-end
-
 function MosaicMenuItem:init()
     -- filepath may be provided as 'file' (history) or 'path' (filechooser)
     -- store it as attribute so we can use it elsewhere
@@ -466,13 +442,18 @@ function MosaicMenuItem:bookCoverWidget(path, scale)
         h = (self.height - self.underline_h) * scale
     }
 
+    local dimen_spec = Geom:new{
+        w = self.width,
+        h = self.height - self.underline_h
+    }
+
     local border_size = Size.border.thin
     local max_img_w = dimen.w
     local max_img_h = dimen.h - border_size * 2
     local cover_specs = {
         sizetag = "M",
-        max_cover_w = max_img_w,
-        max_cover_h = max_img_h,
+        max_cover_w = dimen_spec.w,
+        max_cover_h = dimen_spec.h - border_size * 2,
     }
 
     local widget
@@ -640,7 +621,7 @@ function MosaicMenuItem:update()
         -- but using 3* will avoid getting the directory name stuck
         -- to nbitems.
         local available_width = dimen.w - 10
-        local dir_font_size = 14
+        local dir_font_size = 12
         local directory
         while true do
             if directory then
@@ -664,8 +645,10 @@ function MosaicMenuItem:update()
             end
         end
 
-        local img = self.files_to_show_cover[1] and self:bookCoverWidget(self.files_to_show_cover[1], 1) or nil
-        local img2 = self.files_to_show_cover[2] and self:bookCoverWidget(self.files_to_show_cover[2], 0.75) or nil
+        local img = self.files_to_show_cover[1] and self:bookCoverWidget(self.files_to_show_cover[1], 0.58) or nil
+        local img2 = self.files_to_show_cover[2] and self:bookCoverWidget(self.files_to_show_cover[2], 0.58) or nil
+        local img3 = self.files_to_show_cover[3] and self:bookCoverWidget(self.files_to_show_cover[3], 0.58) or nil
+        local img4 = self.files_to_show_cover[4] and self:bookCoverWidget(self.files_to_show_cover[4], 0.58) or nil
 
         border_size = img and Size.border.thin or border_size
 
@@ -678,31 +661,37 @@ function MosaicMenuItem:update()
             color = Blitbuffer.COLOR_LIGHT_GRAY,
             OverlapGroup:new{
                 dimen = dimen,
-                img2 and RightContainer:new{ dimen = dimen, img2 } or WidgetContainer:new{},
+                img2 and RightContainer:new{ dimen = { w = dimen.w, h = dimen.h / (img3 and 2 or 1) }, img2 } or WidgetContainer:new{},
 
                 img and not img2 and CenterContainer:new { dimen = dimen, img }
-                or img and LeftContainer:new{ dimen = dimen, img }
+                or img and LeftContainer:new{ dimen = { w = dimen.w, h = dimen.h / (img3 and 2 or 1) }, img }
                 or WidgetContainer:new{},
 
-                LeftContainer:new {
-                    dimen = dimen,
-                    FrameContainer:new {
-                        bordersize = 0,
-                        background = Blitbuffer.COLOR_DARK_GRAY,
-                        padding = 5,
-                        padding_left = 5 + (#num == 1 and nbitems:getSize().w / 2 or 0),
-                        padding_right = 5 + (#num == 1 and nbitems:getSize().w / 2 or 0),
-                        margin = 0,
-                        nbitems,
-                    }
-                },
+                img4 and RightContainer:new{ dimen = { w = dimen.w, h = dimen.h * 1.5 - Screen:scaleBySize(16) }, img4 } or WidgetContainer:new{},
+
+                img3 and not img4 and CenterContainer:new { dimen = { w = dimen.w, h = dimen.h * 1.5 - Screen:scaleBySize(16) }, img3 }
+                or img3 and LeftContainer:new{ dimen = { w = dimen.w, h = dimen.h * 1.5 - Screen:scaleBySize(16) }, img3 }
+                or WidgetContainer:new{},
+
+                -- LeftContainer:new {
+                --     dimen = { w = dimen.w },
+                --     FrameContainer:new {
+                --         bordersize = 0,
+                --         background = Blitbuffer.COLOR_DARK_GRAY,
+                --         padding = 1,
+                --         padding_left = 3 + (#num == 1 and nbitems:getSize().w / 2 or 0),
+                --         padding_right = 3 + (#num == 1 and nbitems:getSize().w / 2 or 0),
+                --         margin = 0,
+                --         nbitems,
+                --     }
+                -- },
 
                 BottomContainer:new {
                     dimen = dimen,
                     FrameContainer:new {
                         bordersize = 0,
-                        padding_top = (dimen.h / 7 - directory:getSize().h) / 2,
-                        padding_bottom = (dimen.h / 7 - directory:getSize().h) / 2,
+                        padding_top = (dimen.h / 10 - directory:getSize().h) / 2,
+                        padding_bottom = (dimen.h / 10 - directory:getSize().h) / 2,
                         padding_left = (dimen.w - directory:getSize().w + border_size) / 2 - 0.5,
                         padding_right = (dimen.w - directory:getSize().w + border_size) / 2 - 0.5,
                         background = Blitbuffer.COLOR_DARK_GRAY,
@@ -911,9 +900,9 @@ function MosaicMenuItem:paintTo(bb, x, y)
         local target =  self[1][1][1]
         local ix
         if BD.mirroredUILayout() then
-            ix = math.floor((self.width - target.dimen.w)/2)
+            ix = math.floor((self.width - target.dimen.w + Screen:scaleBySize(10))/2)
         else
-            ix = self.width - math.ceil((self.width - target.dimen.w)/2) - corner_mark:getSize().w
+            ix = self.width - math.ceil((self.width - target.dimen.w + Screen:scaleBySize(10))/2) - corner_mark:getSize().w
         end
         local iy = self.height - math.ceil((self.height - target.dimen.h)/2) - corner_mark:getSize().h
         -- math.ceil() makes it looks better than math.floor()

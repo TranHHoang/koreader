@@ -209,10 +209,20 @@ function CoverBrowser:init()
     -- Double score to avoid clashing in the future
     for k, _ in pairs(files_map) do
         local files = {}
-        pickCovers(files_map, k, 2, false, files)
+        pickCovers(files_map, k, 4, false, files)
+        table.sort(files)
         files_map[k] = files
     end
     FileManager.__files_map = files_map
+    
+    -- -- Prune cache
+    -- local InfoMessage = require("ui/widget/infomessage")
+    -- local msg = InfoMessage:new{ text = _("Pruning cache of removed books…") }
+    -- UIManager:show(msg)
+    -- UIManager:nextTick(function()
+    --     BookInfoManager:removeNonExistantEntries()
+    --     UIManager:close(msg)
+    -- end)
 end
 
 function CoverBrowser:addToMainMenu(menu_items)
@@ -371,10 +381,10 @@ function CoverBrowser:addToMainMenu(menu_items)
     -- add Mosaic / Detailed list mode settings to File browser Settings submenu
     -- next to Classic mode settings
     if menu_items.filebrowser_settings == nil then return end
-    -- table.insert (menu_items.filebrowser_settings.sub_item_table, 4, {
-    --     text = _("Mosaic and detailed list settings"),
-    --     separator = true,
-    --     sub_item_table = {
+    table.insert (menu_items.filebrowser_settings.sub_item_table, 4, {
+        text = _("Mosaic and detailed list settings"),
+        separator = true,
+        sub_item_table = {
     --         {
     --             text = _("Items per page"),
     --             help_text = _([[This sets the number of files and folders per page in display modes other than classic.]]),
@@ -512,81 +522,81 @@ function CoverBrowser:addToMainMenu(menu_items)
     --             end,
     --             separator = true,
     --         },
-    --         {
-    --             text = _("Book info cache management"),
-    --             sub_item_table = {
-    --                 {
-    --                     text_func = function() -- add current db size to menu text
-    --                         local sstr = BookInfoManager:getDbSize()
-    --                         return _("Current cache size: ") .. sstr
-    --                     end,
-    --                     keep_menu_open = true,
-    --                     callback = function() end, -- no callback, only for information
-    --                 },
-    --                 {
-    --                     text = _("Prune cache of removed books"),
-    --                     keep_menu_open = true,
-    --                     callback = function()
-    --                         local ConfirmBox = require("ui/widget/confirmbox")
-    --                         UIManager:close(self.file_dialog)
-    --                         UIManager:show(ConfirmBox:new{
-    --                             -- Checking file existences is quite fast, but deleting entries is slow.
-    --                             text = _("Are you sure that you want to prune cache of removed books?\n(This may take a while.)"),
-    --                             ok_text = _("Prune cache"),
-    --                             ok_callback = function()
-    --                                 local InfoMessage = require("ui/widget/infomessage")
-    --                                 local msg = InfoMessage:new{ text = _("Pruning cache of removed books…") }
-    --                                 UIManager:show(msg)
-    --                                 UIManager:nextTick(function()
-    --                                     local summary = BookInfoManager:removeNonExistantEntries()
-    --                                     UIManager:close(msg)
-    --                                     UIManager:show( InfoMessage:new{ text = summary } )
-    --                                 end)
-    --                             end
-    --                         })
-    --                     end,
-    --                 },
-    --                 {
-    --                     text = _("Compact cache database"),
-    --                     keep_menu_open = true,
-    --                     callback = function()
-    --                         local ConfirmBox = require("ui/widget/confirmbox")
-    --                         UIManager:close(self.file_dialog)
-    --                         UIManager:show(ConfirmBox:new{
-    --                             text = _("Are you sure that you want to compact cache database?\n(This may take a while.)"),
-    --                             ok_text = _("Compact database"),
-    --                             ok_callback = function()
-    --                                 local InfoMessage = require("ui/widget/infomessage")
-    --                                 local msg = InfoMessage:new{ text = _("Compacting cache database…") }
-    --                                 UIManager:show(msg)
-    --                                 UIManager:nextTick(function()
-    --                                     local summary = BookInfoManager:compactDb()
-    --                                     UIManager:close(msg)
-    --                                     UIManager:show( InfoMessage:new{ text = summary } )
-    --                                 end)
-    --                             end
-    --                         })
-    --                     end,
-    --                 },
-    --                 {
-    --                     text = _("Delete cache database"),
-    --                     keep_menu_open = true,
-    --                     callback = function()
-    --                         local ConfirmBox = require("ui/widget/confirmbox")
-    --                         UIManager:close(self.file_dialog)
-    --                         UIManager:show(ConfirmBox:new{
-    --                             text = _("Are you sure that you want to delete cover and metadata cache?\n(This will also reset your display mode settings.)"),
-    --                             ok_text = _("Purge"),
-    --                             ok_callback = function()
-    --                                 BookInfoManager:deleteDb()
-    --                             end
-    --                         })
-    --                     end,
-    --                 },
-    --             },
-    --         },
-    --     },
-    -- })
+            {
+                text = _("Book info cache management"),
+                sub_item_table = {
+                    {
+                        text_func = function() -- add current db size to menu text
+                            local sstr = BookInfoManager:getDbSize()
+                            return _("Current cache size: ") .. sstr
+                        end,
+                        keep_menu_open = true,
+                        callback = function() end, -- no callback, only for information
+                    },
+                    {
+                        text = _("Prune cache of removed books"),
+                        keep_menu_open = true,
+                        callback = function()
+                            local ConfirmBox = require("ui/widget/confirmbox")
+                            UIManager:close(self.file_dialog)
+                            UIManager:show(ConfirmBox:new{
+                                -- Checking file existences is quite fast, but deleting entries is slow.
+                                text = _("Are you sure that you want to prune cache of removed books?\n(This may take a while.)"),
+                                ok_text = _("Prune cache"),
+                                ok_callback = function()
+                                    local InfoMessage = require("ui/widget/infomessage")
+                                    local msg = InfoMessage:new{ text = _("Pruning cache of removed books…") }
+                                    UIManager:show(msg)
+                                    UIManager:nextTick(function()
+                                        local summary = BookInfoManager:removeNonExistantEntries()
+                                        UIManager:close(msg)
+                                        UIManager:show( InfoMessage:new{ text = summary } )
+                                    end)
+                                end
+                            })
+                        end,
+                    },
+                    {
+                        text = _("Compact cache database"),
+                        keep_menu_open = true,
+                        callback = function()
+                            local ConfirmBox = require("ui/widget/confirmbox")
+                            UIManager:close(self.file_dialog)
+                            UIManager:show(ConfirmBox:new{
+                                text = _("Are you sure that you want to compact cache database?\n(This may take a while.)"),
+                                ok_text = _("Compact database"),
+                                ok_callback = function()
+                                    local InfoMessage = require("ui/widget/infomessage")
+                                    local msg = InfoMessage:new{ text = _("Compacting cache database…") }
+                                    UIManager:show(msg)
+                                    UIManager:nextTick(function()
+                                        local summary = BookInfoManager:compactDb()
+                                        UIManager:close(msg)
+                                        UIManager:show( InfoMessage:new{ text = summary } )
+                                    end)
+                                end
+                            })
+                        end,
+                    },
+                    {
+                        text = _("Delete cache database"),
+                        keep_menu_open = true,
+                        callback = function()
+                            local ConfirmBox = require("ui/widget/confirmbox")
+                            UIManager:close(self.file_dialog)
+                            UIManager:show(ConfirmBox:new{
+                                text = _("Are you sure that you want to delete cover and metadata cache?\n(This will also reset your display mode settings.)"),
+                                ok_text = _("Purge"),
+                                ok_callback = function()
+                                    BookInfoManager:deleteDb()
+                                end
+                            })
+                        end,
+                    },
+                },
+            },
+        },
+    })
 end
 
 function CoverBrowser:refreshFileManagerInstance(cleanup, post_init)

@@ -57,8 +57,10 @@ local DictQuickLookup = InputContainer:new{
     -- refresh_callback will be called before we trigger full refresh in onSwipe
     refresh_callback = nil,
     html_dictionary_link_tapped_callback = nil,
+
     file = nil,
     word_context = nil,
+    word_exists = false,
 }
 
 local highlight_strings = {
@@ -431,6 +433,8 @@ function DictQuickLookup:init()
             },
         }
     else
+        self.word_exists = VocabBuilder:exists(self.lookupword:lower(), self.file, self.word_context)
+
         local prev_dict_text = ""
         local next_dict_text = ""
         if BD.mirroredUILayout() then
@@ -521,17 +525,19 @@ function DictQuickLookup:init()
                 },
                 {
                     id = "save",
-                    text = VocabBuilder:exists(self.lookupword, self.file, self.word_context) and _("✖") or _(""),
+                    text = self.word_exists and _("✖") or _(""),
                     -- enabled = not VocabBuilder:exists(self.lookupword),
                     callback = function()
                         local this = self.button_table:getButtonById("save")
                         if not this then return end
 
-                        if VocabBuilder:exists(self.lookupword:lower(), self.file, self.word_context) then
+                        if self.word_exists then
                             VocabBuilder:delete(self.lookupword:lower(), self.file, self.word_context)
+                            self.word_exists = false
                             this:setText(_(""), this.width)
                         else
                             VocabBuilder:add(self.lookupword:lower(), self.file, self.word_context)
+                            self.word_exists = true
                             this:setText(_("✖"), this.width)
                         end
                         -- Just update, repaint and refresh *this* button

@@ -574,6 +574,17 @@ You can enable individual tweaks on this book with a tap, or view more details a
 end
 
 function ReaderStyleTweak:addToMainMenu(menu_items)
+    -- insert table to main reader menu
+    menu_items.style_tweaks = {
+        text_func = function()
+            if self.enabled and self.nb_enabled_tweaks > 0 then
+                return T(_("Style tweaks (%1)"), self.nb_enabled_tweaks)
+            else
+                return _("Style tweaks")
+            end
+        end,
+        sub_item_table = self.tweaks_table,
+    }
 end
 
 local BOOK_TWEAK_SAMPLE_CSS = [[

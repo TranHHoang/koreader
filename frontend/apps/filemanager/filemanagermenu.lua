@@ -426,220 +426,220 @@ function FileManagerMenu:setUpdateItemTable()
         sub_item_table = PluginLoader:genPluginManagerSubItem()
     }
 
-    -- self.menu_items.developer_options = {
-    --     text = _("Developer options"),
-    --     sub_item_table = {
-    --     }
-    -- }
-    -- if Device:isKobo() and not Device:isSunxi() then
-    --     table.insert(self.menu_items.developer_options.sub_item_table, {
-    --         text = _("Disable forced 8-bit pixel depth"),
-    --         checked_func = function()
-    --             return G_reader_settings:isTrue("dev_startup_no_fbdepth")
-    --         end,
-    --         callback = function()
-    --             G_reader_settings:flipNilOrFalse("dev_startup_no_fbdepth")
-    --             local InfoMessage = require("ui/widget/infomessage")
-    --             UIManager:show(InfoMessage:new{
-    --                 text = _("This will take effect on next restart."),
-    --             })
-    --         end,
-    --     })
-    -- end
-    -- --- @note Currently, only Kobo, rM & PB have a fancy crash display (#5328)
-    -- if Device:isKobo() or Device:isRemarkable() or Device:isPocketBook() then
-    --     table.insert(self.menu_items.developer_options.sub_item_table, {
-    --         text = _("Always abort on crash"),
-    --         checked_func = function()
-    --             return G_reader_settings:isTrue("dev_abort_on_crash")
-    --         end,
-    --         callback = function()
-    --             G_reader_settings:flipNilOrFalse("dev_abort_on_crash")
-    --             local InfoMessage = require("ui/widget/infomessage")
-    --             UIManager:show(InfoMessage:new{
-    --                 text = _("This will take effect on next restart."),
-    --             })
-    --         end,
-    --     })
-    -- end
-    -- if not Device.should_restrict_JIT then
-    --     local Blitbuffer = require("ffi/blitbuffer")
-    --     table.insert(self.menu_items.developer_options.sub_item_table, {
-    --         text = _("Disable C blitter"),
-    --         enabled_func = function()
-    --             return Blitbuffer.has_cblitbuffer
-    --         end,
-    --         checked_func = function()
-    --             return G_reader_settings:isTrue("dev_no_c_blitter")
-    --         end,
-    --         callback = function()
-    --             G_reader_settings:flipNilOrFalse("dev_no_c_blitter")
-    --             Blitbuffer:enableCBB(G_reader_settings:nilOrFalse("dev_no_c_blitter"))
-    --         end,
-    --     })
-    -- end
-    -- if Device:hasEinkScreen() and Device:canHWDither() then
-    --     table.insert(self.menu_items.developer_options.sub_item_table, {
-    --         text = _("Disable HW dithering"),
-    --         checked_func = function()
-    --             return not Device.screen.hw_dithering
-    --         end,
-    --         callback = function()
-    --             Device.screen:toggleHWDithering()
-    --             G_reader_settings:saveSetting("dev_no_hw_dither", not Device.screen.hw_dithering)
-    --             -- Make sure SW dithering gets disabled when we enable HW dithering
-    --             if Device.screen.hw_dithering and Device.screen.sw_dithering then
-    --                 G_reader_settings:makeTrue("dev_no_sw_dither")
-    --                 Device.screen:toggleSWDithering(false)
-    --             end
-    --             UIManager:setDirty("all", "full")
-    --         end,
-    --     })
-    -- end
-    -- if Device:hasEinkScreen() then
-    --     table.insert(self.menu_items.developer_options.sub_item_table, {
-    --         text = _("Disable SW dithering"),
-    --         enabled_func = function()
-    --             return Device.screen.fb_bpp == 8
-    --         end,
-    --         checked_func = function()
-    --             return not Device.screen.sw_dithering
-    --         end,
-    --         callback = function()
-    --             Device.screen:toggleSWDithering()
-    --             G_reader_settings:saveSetting("dev_no_sw_dither", not Device.screen.sw_dithering)
-    --             -- Make sure HW dithering gets disabled when we enable SW dithering
-    --             if Device.screen.hw_dithering and Device.screen.sw_dithering then
-    --                 G_reader_settings:makeTrue("dev_no_hw_dither")
-    --                 Device.screen:toggleHWDithering(false)
-    --             end
-    --             UIManager:setDirty("all", "full")
-    --         end,
-    --     })
-    -- end
-    -- --- @note: Currently, only Kobo implements this quirk
-    -- if Device:hasEinkScreen() and Device:isKobo() then
-    --     table.insert(self.menu_items.developer_options.sub_item_table, {
-    --         -- @translators Highly technical (ioctl is a Linux API call, the uppercase stuff is a constant). What's translatable is essentially only the action ("bypass") and the article.
-    --         text = _("Bypass the WAIT_FOR ioctls"),
-    --         checked_func = function()
-    --             local mxcfb_bypass_wait_for
-    --             if G_reader_settings:has("mxcfb_bypass_wait_for") then
-    --                 mxcfb_bypass_wait_for = G_reader_settings:isTrue("mxcfb_bypass_wait_for")
-    --             else
-    --                 mxcfb_bypass_wait_for = not Device:hasReliableMxcWaitFor()
-    --             end
-    --             return mxcfb_bypass_wait_for
-    --         end,
-    --         callback = function()
-    --             local mxcfb_bypass_wait_for
-    --             if G_reader_settings:has("mxcfb_bypass_wait_for") then
-    --                 mxcfb_bypass_wait_for = G_reader_settings:isTrue("mxcfb_bypass_wait_for")
-    --             else
-    --                 mxcfb_bypass_wait_for = not Device:hasReliableMxcWaitFor()
-    --             end
-    --             G_reader_settings:saveSetting("mxcfb_bypass_wait_for", not mxcfb_bypass_wait_for)
-    --             local InfoMessage = require("ui/widget/infomessage")
-    --             UIManager:show(InfoMessage:new{
-    --                 text = _("This will take effect on next restart."),
-    --             })
-    --         end,
-    --     })
-    -- end
-    -- --- @note: Intended to debug/investigate B288 quirks on PocketBook devices
-    -- if Device:hasEinkScreen() and Device:isPocketBook() then
-    --     table.insert(self.menu_items.developer_options.sub_item_table, {
-    --         -- @translators B288 is the codename of the CPU/chipset (SoC stands for 'System on Chip').
-    --         text = _("Ignore feature bans on B288 SoCs"),
-    --         enabled_func = function()
-    --             return Device:isB288SoC()
-    --         end,
-    --         checked_func = function()
-    --             return G_reader_settings:isTrue("pb_ignore_b288_quirks")
-    --         end,
-    --         callback = function()
-    --             G_reader_settings:flipNilOrFalse("pb_ignore_b288_quirks")
-    --             local InfoMessage = require("ui/widget/infomessage")
-    --             UIManager:show(InfoMessage:new{
-    --                 text = _("This will take effect on next restart."),
-    --             })
-    --         end,
-    --     })
-    -- end
-    -- if Device:isAndroid() then
-    --     table.insert(self.menu_items.developer_options.sub_item_table, {
-    --         text = _("Start E-ink test"),
-    --         callback = function()
-    --             Device:epdTest()
-    --         end,
-    --     })
-    -- end
+    self.menu_items.developer_options = {
+        text = _("Developer options"),
+        sub_item_table = {
+        }
+    }
+    if Device:isKobo() and not Device:isSunxi() then
+        table.insert(self.menu_items.developer_options.sub_item_table, {
+            text = _("Disable forced 8-bit pixel depth"),
+            checked_func = function()
+                return G_reader_settings:isTrue("dev_startup_no_fbdepth")
+            end,
+            callback = function()
+                G_reader_settings:flipNilOrFalse("dev_startup_no_fbdepth")
+                local InfoMessage = require("ui/widget/infomessage")
+                UIManager:show(InfoMessage:new{
+                    text = _("This will take effect on next restart."),
+                })
+            end,
+        })
+    end
+    --- @note Currently, only Kobo, rM & PB have a fancy crash display (#5328)
+    if Device:isKobo() or Device:isRemarkable() or Device:isPocketBook() then
+        table.insert(self.menu_items.developer_options.sub_item_table, {
+            text = _("Always abort on crash"),
+            checked_func = function()
+                return G_reader_settings:isTrue("dev_abort_on_crash")
+            end,
+            callback = function()
+                G_reader_settings:flipNilOrFalse("dev_abort_on_crash")
+                local InfoMessage = require("ui/widget/infomessage")
+                UIManager:show(InfoMessage:new{
+                    text = _("This will take effect on next restart."),
+                })
+            end,
+        })
+    end
+    if not Device.should_restrict_JIT then
+        local Blitbuffer = require("ffi/blitbuffer")
+        table.insert(self.menu_items.developer_options.sub_item_table, {
+            text = _("Disable C blitter"),
+            enabled_func = function()
+                return Blitbuffer.has_cblitbuffer
+            end,
+            checked_func = function()
+                return G_reader_settings:isTrue("dev_no_c_blitter")
+            end,
+            callback = function()
+                G_reader_settings:flipNilOrFalse("dev_no_c_blitter")
+                Blitbuffer:enableCBB(G_reader_settings:nilOrFalse("dev_no_c_blitter"))
+            end,
+        })
+    end
+    if Device:hasEinkScreen() and Device:canHWDither() then
+        table.insert(self.menu_items.developer_options.sub_item_table, {
+            text = _("Disable HW dithering"),
+            checked_func = function()
+                return not Device.screen.hw_dithering
+            end,
+            callback = function()
+                Device.screen:toggleHWDithering()
+                G_reader_settings:saveSetting("dev_no_hw_dither", not Device.screen.hw_dithering)
+                -- Make sure SW dithering gets disabled when we enable HW dithering
+                if Device.screen.hw_dithering and Device.screen.sw_dithering then
+                    G_reader_settings:makeTrue("dev_no_sw_dither")
+                    Device.screen:toggleSWDithering(false)
+                end
+                UIManager:setDirty("all", "full")
+            end,
+        })
+    end
+    if Device:hasEinkScreen() then
+        table.insert(self.menu_items.developer_options.sub_item_table, {
+            text = _("Disable SW dithering"),
+            enabled_func = function()
+                return Device.screen.fb_bpp == 8
+            end,
+            checked_func = function()
+                return not Device.screen.sw_dithering
+            end,
+            callback = function()
+                Device.screen:toggleSWDithering()
+                G_reader_settings:saveSetting("dev_no_sw_dither", not Device.screen.sw_dithering)
+                -- Make sure HW dithering gets disabled when we enable SW dithering
+                if Device.screen.hw_dithering and Device.screen.sw_dithering then
+                    G_reader_settings:makeTrue("dev_no_hw_dither")
+                    Device.screen:toggleHWDithering(false)
+                end
+                UIManager:setDirty("all", "full")
+            end,
+        })
+    end
+    --- @note: Currently, only Kobo implements this quirk
+    if Device:hasEinkScreen() and Device:isKobo() then
+        table.insert(self.menu_items.developer_options.sub_item_table, {
+            -- @translators Highly technical (ioctl is a Linux API call, the uppercase stuff is a constant). What's translatable is essentially only the action ("bypass") and the article.
+            text = _("Bypass the WAIT_FOR ioctls"),
+            checked_func = function()
+                local mxcfb_bypass_wait_for
+                if G_reader_settings:has("mxcfb_bypass_wait_for") then
+                    mxcfb_bypass_wait_for = G_reader_settings:isTrue("mxcfb_bypass_wait_for")
+                else
+                    mxcfb_bypass_wait_for = not Device:hasReliableMxcWaitFor()
+                end
+                return mxcfb_bypass_wait_for
+            end,
+            callback = function()
+                local mxcfb_bypass_wait_for
+                if G_reader_settings:has("mxcfb_bypass_wait_for") then
+                    mxcfb_bypass_wait_for = G_reader_settings:isTrue("mxcfb_bypass_wait_for")
+                else
+                    mxcfb_bypass_wait_for = not Device:hasReliableMxcWaitFor()
+                end
+                G_reader_settings:saveSetting("mxcfb_bypass_wait_for", not mxcfb_bypass_wait_for)
+                local InfoMessage = require("ui/widget/infomessage")
+                UIManager:show(InfoMessage:new{
+                    text = _("This will take effect on next restart."),
+                })
+            end,
+        })
+    end
+    --- @note: Intended to debug/investigate B288 quirks on PocketBook devices
+    if Device:hasEinkScreen() and Device:isPocketBook() then
+        table.insert(self.menu_items.developer_options.sub_item_table, {
+            -- @translators B288 is the codename of the CPU/chipset (SoC stands for 'System on Chip').
+            text = _("Ignore feature bans on B288 SoCs"),
+            enabled_func = function()
+                return Device:isB288SoC()
+            end,
+            checked_func = function()
+                return G_reader_settings:isTrue("pb_ignore_b288_quirks")
+            end,
+            callback = function()
+                G_reader_settings:flipNilOrFalse("pb_ignore_b288_quirks")
+                local InfoMessage = require("ui/widget/infomessage")
+                UIManager:show(InfoMessage:new{
+                    text = _("This will take effect on next restart."),
+                })
+            end,
+        })
+    end
+    if Device:isAndroid() then
+        table.insert(self.menu_items.developer_options.sub_item_table, {
+            text = _("Start E-ink test"),
+            callback = function()
+                Device:epdTest()
+            end,
+        })
+    end
 
-    -- table.insert(self.menu_items.developer_options.sub_item_table, {
-    --     text = _("Disable enhanced UI text shaping (xtext)"),
-    --     checked_func = function()
-    --         return G_reader_settings:isFalse("use_xtext")
-    --     end,
-    --     callback = function()
-    --         G_reader_settings:flipNilOrTrue("use_xtext")
-    --         local InfoMessage = require("ui/widget/infomessage")
-    --         UIManager:show(InfoMessage:new{
-    --             text = _("This will take effect on next restart."),
-    --         })
-    --     end,
-    -- })
-    -- table.insert(self.menu_items.developer_options.sub_item_table, {
-    --     text = _("UI layout mirroring and text direction"),
-    --     sub_item_table = {
-    --         {
-    --             text = _("Reverse UI layout mirroring"),
-    --             checked_func = function()
-    --                 return G_reader_settings:isTrue("dev_reverse_ui_layout_mirroring")
-    --             end,
-    --             callback = function()
-    --                 G_reader_settings:flipNilOrFalse("dev_reverse_ui_layout_mirroring")
-    --                 local InfoMessage = require("ui/widget/infomessage")
-    --                 UIManager:show(InfoMessage:new{
-    --                     text = _("This will take effect on next restart."),
-    --                 })
-    --             end
-    --         },
-    --         {
-    --             text = _("Reverse UI text direction"),
-    --             checked_func = function()
-    --                 return G_reader_settings:isTrue("dev_reverse_ui_text_direction")
-    --             end,
-    --             callback = function()
-    --                 G_reader_settings:flipNilOrFalse("dev_reverse_ui_text_direction")
-    --                 local InfoMessage = require("ui/widget/infomessage")
-    --                 UIManager:show(InfoMessage:new{
-    --                     text = _("This will take effect on next restart."),
-    --                 })
-    --             end
-    --         }
-    --     }
-    -- })
-    -- table.insert(self.menu_items.developer_options.sub_item_table, {
-    --     text_func = function()
-    --         if G_reader_settings:nilOrTrue("use_cre_call_cache")
-    --                 and G_reader_settings:isTrue("use_cre_call_cache_log_stats") then
-    --             return _("Enable CRE call cache (with stats)")
-    --         end
-    --         return _("Enable CRE call cache")
-    --     end,
-    --     checked_func = function()
-    --         return G_reader_settings:nilOrTrue("use_cre_call_cache")
-    --     end,
-    --     callback = function()
-    --         G_reader_settings:flipNilOrTrue("use_cre_call_cache")
-    --         -- No need to show "This will take effect on next CRE book opening."
-    --         -- as this menu is only accessible from file browser
-    --     end,
-    --     hold_callback = function(touchmenu_instance)
-    --         G_reader_settings:flipNilOrFalse("use_cre_call_cache_log_stats")
-    --         touchmenu_instance:updateItems()
-    --     end,
-    -- })
+    table.insert(self.menu_items.developer_options.sub_item_table, {
+        text = _("Disable enhanced UI text shaping (xtext)"),
+        checked_func = function()
+            return G_reader_settings:isFalse("use_xtext")
+        end,
+        callback = function()
+            G_reader_settings:flipNilOrTrue("use_xtext")
+            local InfoMessage = require("ui/widget/infomessage")
+            UIManager:show(InfoMessage:new{
+                text = _("This will take effect on next restart."),
+            })
+        end,
+    })
+    table.insert(self.menu_items.developer_options.sub_item_table, {
+        text = _("UI layout mirroring and text direction"),
+        sub_item_table = {
+            {
+                text = _("Reverse UI layout mirroring"),
+                checked_func = function()
+                    return G_reader_settings:isTrue("dev_reverse_ui_layout_mirroring")
+                end,
+                callback = function()
+                    G_reader_settings:flipNilOrFalse("dev_reverse_ui_layout_mirroring")
+                    local InfoMessage = require("ui/widget/infomessage")
+                    UIManager:show(InfoMessage:new{
+                        text = _("This will take effect on next restart."),
+                    })
+                end
+            },
+            {
+                text = _("Reverse UI text direction"),
+                checked_func = function()
+                    return G_reader_settings:isTrue("dev_reverse_ui_text_direction")
+                end,
+                callback = function()
+                    G_reader_settings:flipNilOrFalse("dev_reverse_ui_text_direction")
+                    local InfoMessage = require("ui/widget/infomessage")
+                    UIManager:show(InfoMessage:new{
+                        text = _("This will take effect on next restart."),
+                    })
+                end
+            }
+        }
+    })
+    table.insert(self.menu_items.developer_options.sub_item_table, {
+        text_func = function()
+            if G_reader_settings:nilOrTrue("use_cre_call_cache")
+                    and G_reader_settings:isTrue("use_cre_call_cache_log_stats") then
+                return _("Enable CRE call cache (with stats)")
+            end
+            return _("Enable CRE call cache")
+        end,
+        checked_func = function()
+            return G_reader_settings:nilOrTrue("use_cre_call_cache")
+        end,
+        callback = function()
+            G_reader_settings:flipNilOrTrue("use_cre_call_cache")
+            -- No need to show "This will take effect on next CRE book opening."
+            -- as this menu is only accessible from file browser
+        end,
+        hold_callback = function(touchmenu_instance)
+            G_reader_settings:flipNilOrFalse("use_cre_call_cache_log_stats")
+            touchmenu_instance:updateItems()
+        end,
+    })
 
     self.menu_items.cloud_storage = {
         text = _("Cloud storage"),

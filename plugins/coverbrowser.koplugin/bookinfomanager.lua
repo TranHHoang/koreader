@@ -702,7 +702,6 @@ function BookInfoManager:extractInBackground(files)
             local filepath = files[idx].filepath
             local cover_specs = files[idx].cover_specs
             local files_to_show_cover = files[idx].files_to_show_cover
-            logger.dbg("  BG extracting:", filepath, files_to_show_cover)
             self:extractBookInfo(filepath, cover_specs, files_to_show_cover)
         end
         logger.dbg("  BG extraction done")
