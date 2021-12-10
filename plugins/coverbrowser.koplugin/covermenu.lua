@@ -137,7 +137,7 @@ function CoverMenu:updateItems(select_number)
                 filepath = self.items_to_update[i].filepath,
                 cover_specs = self.items_to_update[i].cover_specs,
                 -- Only get exact number of covers
-                files_to_show_cover = self.items_to_update[i].files_to_show_cover
+                files_to_show_cover = self.items_to_update[i] and self.items_to_update[i].files_to_show_cover or {}
             })
         end
         -- Launch it at nextTick, so UIManager can render us smoothly

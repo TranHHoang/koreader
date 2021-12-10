@@ -208,7 +208,7 @@ function CoverBrowser:init()
     -- Double score to avoid clashing in the future
     for k, _ in pairs(files_map) do
         local files = {}
-        pickCovers(files_map, k, 4, false, files)
+        pickCovers(files_map, k, 2, false, files)
         table.sort(files)
         files_map[k] = files
     end
@@ -410,47 +410,47 @@ function CoverBrowser:addToMainMenu(menu_items)
     --                 UIManager:show(items)
     --             end,
     --         },
-    --         {
-    --             text = _("Display hints"),
-    --             sub_item_table = {
-    --                 {
-    --                     text = _("Show hint for books with description"),
-    --                     checked_func = function() return not BookInfoManager:getSetting("no_hint_description") end,
-    --                     callback = function()
-    --                         if BookInfoManager:getSetting("no_hint_description") then
-    --                             BookInfoManager:saveSetting("no_hint_description", false)
-    --                         else
-    --                             BookInfoManager:saveSetting("no_hint_description", true)
-    --                         end
-    --                         self:refreshFileManagerInstance()
-    --                     end,
-    --                 },
-    --                 {
-    --                     text = _("Show hint for opened books in history"),
-    --                     checked_func = function() return BookInfoManager:getSetting("history_hint_opened") end,
-    --                     callback = function()
-    --                         if BookInfoManager:getSetting("history_hint_opened") then
-    --                             BookInfoManager:saveSetting("history_hint_opened", false)
-    --                         else
-    --                             BookInfoManager:saveSetting("history_hint_opened", true)
-    --                         end
-    --                         self:refreshFileManagerInstance()
-    --                     end,
-    --                 },
-    --                 {
-    --                     text = _("Show hint for opened books in favorites"),
-    --                     checked_func = function() return BookInfoManager:getSetting("collections_hint_opened") end,
-    --                     callback = function()
-    --                         if BookInfoManager:getSetting("collections_hint_opened") then
-    --                             BookInfoManager:saveSetting("collections_hint_opened", false)
-    --                         else
-    --                             BookInfoManager:saveSetting("collections_hint_opened", true)
-    --                         end
-    --                         self:refreshFileManagerInstance()
-    --                     end,
-    --                 }
-    --             }
-    --         },
+            {
+                text = _("Display hints"),
+                sub_item_table = {
+                    {
+                        text = _("Show hint for books with description"),
+                        checked_func = function() return not BookInfoManager:getSetting("no_hint_description") end,
+                        callback = function()
+                            if BookInfoManager:getSetting("no_hint_description") then
+                                BookInfoManager:saveSetting("no_hint_description", false)
+                            else
+                                BookInfoManager:saveSetting("no_hint_description", true)
+                            end
+                            self:refreshFileManagerInstance()
+                        end,
+                    },
+                    {
+                        text = _("Show hint for opened books in history"),
+                        checked_func = function() return BookInfoManager:getSetting("history_hint_opened") end,
+                        callback = function()
+                            if BookInfoManager:getSetting("history_hint_opened") then
+                                BookInfoManager:saveSetting("history_hint_opened", false)
+                            else
+                                BookInfoManager:saveSetting("history_hint_opened", true)
+                            end
+                            self:refreshFileManagerInstance()
+                        end,
+                    },
+                    {
+                        text = _("Show hint for opened books in favorites"),
+                        checked_func = function() return BookInfoManager:getSetting("collections_hint_opened") end,
+                        callback = function()
+                            if BookInfoManager:getSetting("collections_hint_opened") then
+                                BookInfoManager:saveSetting("collections_hint_opened", false)
+                            else
+                                BookInfoManager:saveSetting("collections_hint_opened", true)
+                            end
+                            self:refreshFileManagerInstance()
+                        end,
+                    }
+                }
+            },
     --         {
     --             text = _("Series"),
     --             sub_item_table = {
@@ -677,7 +677,7 @@ function CoverBrowser:setupFileManagerDisplayMode(display_mode)
         -- Don't have "../" centered in empty directories
         FileChooser._do_center_partial_rows = false
         -- One could override default 3x3 grid here (put that as settings ?)
-        -- FileChooser.nb_cols_portrait = 4
+        FileChooser.nb_cols_portrait = 4
         -- FileChooser.nb_rows_portrait = 4
         -- FileChooser.nb_cols_landscape = 6
         -- FileChooser.nb_rows_landscape = 3

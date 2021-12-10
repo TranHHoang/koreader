@@ -575,7 +575,7 @@ function MosaicMenuItem:update()
     local widget
 
     local dimen = Geom:new{
-        w = self.width - Screen:scaleBySize(10),
+        w = self.width - Screen:scaleBySize(5),
         h = self.height - self.underline_h
     }
 
@@ -633,7 +633,7 @@ function MosaicMenuItem:update()
                 width = dimen.w - 10,
                 alignment = "center",
                 bold = true,
-                fgcolor = Blitbuffer.COLOR_WHITE,
+                fgcolor = Blitbuffer.COLOR_DARK_GRAY,
             }
             if directory:getSize().w <= available_width then
                 break
@@ -645,10 +645,10 @@ function MosaicMenuItem:update()
             end
         end
 
-        local img = self.files_to_show_cover[1] and self:bookCoverWidget(self.files_to_show_cover[1], 0.58) or nil
-        local img2 = self.files_to_show_cover[2] and self:bookCoverWidget(self.files_to_show_cover[2], 0.58) or nil
-        local img3 = self.files_to_show_cover[3] and self:bookCoverWidget(self.files_to_show_cover[3], 0.58) or nil
-        local img4 = self.files_to_show_cover[4] and self:bookCoverWidget(self.files_to_show_cover[4], 0.58) or nil
+        local img = self.files_to_show_cover and self.files_to_show_cover[1] and self:bookCoverWidget(self.files_to_show_cover[1], 0.7) or nil
+        local img2 = self.files_to_show_cover and self.files_to_show_cover[2] and self:bookCoverWidget(self.files_to_show_cover[2], 0.6) or nil
+        -- local img3 = self.files_to_show_cover[3] and self:bookCoverWidget(self.files_to_show_cover[3], 0.58) or nil
+        -- local img4 = self.files_to_show_cover[4] and self:bookCoverWidget(self.files_to_show_cover[4], 0.58) or nil
 
         border_size = img and Size.border.thin or border_size
 
@@ -661,17 +661,17 @@ function MosaicMenuItem:update()
             color = Blitbuffer.COLOR_LIGHT_GRAY,
             OverlapGroup:new{
                 dimen = dimen,
-                img2 and RightContainer:new{ dimen = { w = dimen.w, h = dimen.h / (img3 and 2 or 1) }, img2 } or WidgetContainer:new{},
+                img2 and RightContainer:new{ dimen = { w = dimen.w, h = dimen.h + Screen:scaleBySize(15) }, img2 } or WidgetContainer:new{},
 
-                img and not img2 and CenterContainer:new { dimen = dimen, img }
-                or img and LeftContainer:new{ dimen = { w = dimen.w, h = dimen.h / (img3 and 2 or 1) }, img }
+                img and not img2 and CenterContainer:new { dimen = { w = dimen.w, h = dimen.h + Screen:scaleBySize(15) }, img }
+                or img and LeftContainer:new{ dimen = { w = dimen.w, h = dimen.h + Screen:scaleBySize(15) }, img }
                 or WidgetContainer:new{},
 
-                img4 and RightContainer:new{ dimen = { w = dimen.w, h = dimen.h * 1.5 - Screen:scaleBySize(16) }, img4 } or WidgetContainer:new{},
+                -- img4 and RightContainer:new{ dimen = { w = dimen.w, h = dimen.h * 1.5 - Screen:scaleBySize(16) }, img4 } or WidgetContainer:new{},
 
-                img3 and not img4 and CenterContainer:new { dimen = { w = dimen.w, h = dimen.h * 1.5 - Screen:scaleBySize(16) }, img3 }
-                or img3 and LeftContainer:new{ dimen = { w = dimen.w, h = dimen.h * 1.5 - Screen:scaleBySize(16) }, img3 }
-                or WidgetContainer:new{},
+                -- img3 and not img4 and CenterContainer:new { dimen = { w = dimen.w, h = dimen.h * 1.5 - Screen:scaleBySize(16) }, img3 }
+                -- or img3 and LeftContainer:new{ dimen = { w = dimen.w, h = dimen.h * 1.5 - Screen:scaleBySize(16) }, img3 }
+                -- or WidgetContainer:new{},
 
                 -- LeftContainer:new {
                 --     dimen = { w = dimen.w },
@@ -686,15 +686,15 @@ function MosaicMenuItem:update()
                 --     }
                 -- },
 
-                BottomContainer:new {
+                WidgetContainer:new {
                     dimen = dimen,
                     FrameContainer:new {
                         bordersize = 0,
-                        padding_top = (dimen.h / 10 - directory:getSize().h) / 2,
-                        padding_bottom = (dimen.h / 10 - directory:getSize().h) / 2,
+                        padding_top = (dimen.h / 9.5 - directory:getSize().h) / 2,
+                        padding_bottom = (dimen.h / 9.5 - directory:getSize().h) / 2,
                         padding_left = (dimen.w - directory:getSize().w + border_size) / 2 - 0.5,
-                        padding_right = (dimen.w - directory:getSize().w + border_size) / 2 - 0.5,
-                        background = Blitbuffer.COLOR_DARK_GRAY,
+                        padding_right = (dimen.w - directory:getSize().w + border_size) / 2 - 2,
+                        background = Blitbuffer.COLOR_LIGHT_GRAY,
                         directory,
                     }
                 }
@@ -900,9 +900,9 @@ function MosaicMenuItem:paintTo(bb, x, y)
         local target =  self[1][1][1]
         local ix
         if BD.mirroredUILayout() then
-            ix = math.floor((self.width - target.dimen.w + Screen:scaleBySize(10))/2)
+            ix = math.floor((self.width - target.dimen.w + Screen:scaleBySize(5))/2)
         else
-            ix = self.width - math.ceil((self.width - target.dimen.w + Screen:scaleBySize(10))/2) - corner_mark:getSize().w
+            ix = self.width - math.ceil((self.width - target.dimen.w + Screen:scaleBySize(5))/2) - corner_mark:getSize().w
         end
         local iy = self.height - math.ceil((self.height - target.dimen.h)/2) - corner_mark:getSize().h
         -- math.ceil() makes it looks better than math.floor()
@@ -1006,9 +1006,9 @@ function MosaicMenu:_recalculateDimen()
     end
 
     -- Set our items target size
-    self.item_margin = Screen:scaleBySize(10)
+    self.item_margin = Screen:scaleBySize(5)
     self.item_height = math.floor((self.inner_dimen.h - self.others_height - (1+self.nb_rows)*self.item_margin) / self.nb_rows)
-    self.item_width = math.floor((self.inner_dimen.w - (1+self.nb_cols)*self.item_margin) / self.nb_cols)
+    self.item_width = math.floor((self.inner_dimen.w - (1+self.nb_cols)*self.item_margin) / self.nb_cols) + Screen:scaleBySize(3.3)
     self.item_dimen = Geom:new{
         w = self.item_width,
         h = self.item_height
@@ -1040,7 +1040,7 @@ function MosaicMenu:_updateItemsBuildUI()
         if entry == nil then break end
 
         if idx % self.nb_cols == 1 then -- new row
-            table.insert(self.item_group, VerticalSpan:new{ width = self.item_margin })
+            -- table.insert(self.item_group, VerticalSpan:new{ width = self.item_margin })
             cur_row = HorizontalGroup:new{}
             -- Have items on the possibly non-fully filled last row aligned to the left
             local container = self._do_center_partial_rows and CenterContainer or LeftContainer
@@ -1081,7 +1081,7 @@ function MosaicMenu:_updateItemsBuildUI()
                 do_hint_opened = self._do_hint_opened,
             }
         table.insert(cur_row, item_tmp)
-        table.insert(cur_row, HorizontalSpan:new({ width = self.item_margin }))
+        -- table.insert(cur_row, HorizontalSpan:new({ width = self.item_margin }))
 
         -- this is for focus manager
         table.insert(self.layout, {item_tmp})
