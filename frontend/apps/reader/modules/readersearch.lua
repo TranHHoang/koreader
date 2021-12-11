@@ -36,7 +36,8 @@ function ReaderSearch:init()
     self.ui.menu:registerToMainMenu(self)
 end
 
-local help_text = _([[Regular expressions allow you to search for a matching pattern in a text. The simplest pattern is a simple sequence of characters, such as `James Bond`. There are many different varieties of regular expressions, but we support the ECMAScript syntax. The basics will be explained below.
+local help_text = _([[
+Regular expressions allow you to search for a matching pattern in a text. The simplest pattern is a simple sequence of characters, such as `James Bond`. There are many different varieties of regular expressions, but we support the ECMAScript syntax. The basics will be explained below.
 
 If you want to search for all occurrences of 'Mister Moore', 'Sir Moore' or 'Alfons Moore' but not for 'Lady Moore'.
 Enter 'Mister Moore|Sir Moore|Alfons Moore'.
@@ -53,8 +54,7 @@ Not a space -> '[^ ]'
 A word -> '[^ ]*[^ ]'
 Last word in a sentence -> '[^ ]*\.'
 
-Complex expressions may lead to an extremely long search time, in which case not all matches will be shown.
-]])
+Complex expressions may lead to an extremely long search time, in which case not all matches will be shown.]])
 
 local SRELL_ERROR_CODES = {}
 SRELL_ERROR_CODES[102] = _("Wrong escape '\\'")
@@ -79,11 +79,12 @@ end
 
 -- if reverse ~= 0 search backwards
 function ReaderSearch:searchCallback(reverse)
-    if self.input_dialog:getInputText() == "" then return end
-    self.last_search_text = self.input_dialog:getInputText()
+    local search_text = self.input_dialog:getInputText()
+    if search_text == "" then return end
+    self.last_search_text = search_text
     self.use_regex = self.check_button_regex.checked
     self.case_insensitive = not self.check_button_case.checked
-    local regex_error = self.use_regex and self.ui.document:checkRegex(self.input_dialog:getInputText())
+    local regex_error = self.use_regex and self.ui.document:checkRegex(search_text)
     if self.use_regex and regex_error ~= 0 then
         logger.dbg("ReaderSearch: regex error", regex_error, SRELL_ERROR_CODES[regex_error])
         local error_message
@@ -95,7 +96,7 @@ function ReaderSearch:searchCallback(reverse)
         UIManager:show(InfoMessage:new{ text = error_message })
     else
         UIManager:close(self.input_dialog)
-        self:onShowSearchDialog(self.input_dialog:getInputText(), reverse, self.use_regex, self.case_insensitive)
+        self:onShowSearchDialog(search_text, reverse, self.use_regex, self.case_insensitive)
     end
 end
 
@@ -159,7 +160,9 @@ function ReaderSearch:onShowFulltextSearchInput()
             })
         end,
     }
-    self.input_dialog:addWidget(self.check_button_regex)
+    if self.ui.rolling then
+        self.input_dialog:addWidget(self.check_button_regex)
+    end
 
     UIManager:show(self.input_dialog)
     self.input_dialog:onShowKeyboard()

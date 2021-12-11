@@ -521,11 +521,16 @@ function util.lastIndexOf(string, ch)
     if i == nil then return -1 else return i - 1 end
 end
 
+--- Pattern which matches a single well-formed UTF-8 character, including
+--- theoretical >4-byte extensions.
+-- Taken from <https://www.lua.org/manual/5.4/manual.html#pdf-utf8.charpattern>
+util.UTF8_CHAR_PATTERN = '[%z\1-\127\194-\253][\128-\191]*'
+
 --- Reverse the individual greater-than-single-byte characters
 -- @string string to reverse
 -- Taken from <https://github.com/blitmap/lua-utf8-simple#utf8reverses>
 function util.utf8Reverse(text)
-    text = text:gsub('[%z\1-\127\194-\244][\128-\191]*', function (c) return #c > 1 and c:reverse() end)
+    text = text:gsub(util.UTF8_CHAR_PATTERN, function (c) return #c > 1 and c:reverse() end)
     return text:reverse()
 end
 
@@ -554,7 +559,7 @@ function util.splitToChars(text)
         --   characters directly, but only as a pair.
         local hi_surrogate
         local hi_surrogate_uchar
-        for uchar in string.gmatch(text, "([%z\1-\127\194-\244][\128-\191]*)") do
+        for uchar in text:gmatch(util.UTF8_CHAR_PATTERN) do
             charcode = BaseUtil.utf8charcode(uchar)
             -- (not sure why we need this prevcharcode check; we could get
             -- charcode=nil with invalid UTF-8, but should we then really
@@ -589,14 +594,47 @@ end
 ---- @string c
 ---- @treturn boolean true if CJK
 function util.isCJKChar(c)
-    return string.match(c, "[\228-\234][\128-\191].") == c
+    -- Smallest CJK codepoint is 0x1100 which requires at least 3 utf8 bytes to
+    -- encode (U+07FF is the largest codepoint that can be represented in 2
+    -- bytes with utf8). So if the character is shorter than 3 bytes it's
+    -- definitely not CJK and no need to decode it.
+    if #c < 3 then
+        return false
+    end
+    local code = BaseUtil.utf8charcode(c)
+    -- The weird bracketing is intentional -- we use the lowest possible
+    -- codepoint as a shortcut so if the codepoint is below U+1100 we
+    -- immediately return false.
+    return -- BMP (Plane 0)
+            code >=  0x1100 and (code <=  0x11FF  or -- Hangul Jamo
+           (code >=  0x2E80 and  code <=  0x9FFF) or -- Numerous CJK Blocks (NB: has some gaps)
+           (code >=  0xA960 and  code <=  0xA97F) or -- Hangul Jamo Extended-A
+           (code >=  0xAC00 and  code <=  0xD7AF) or -- Hangul Syllables
+           (code >=  0xD7B0 and  code <=  0xD7FF) or -- Hangul Jame Extended-B
+           (code >=  0xF900 and  code <=  0xFAFF) or -- CJK Compatibility Ideographs
+           (code >=  0xFE30 and  code <=  0xFE4F) or -- CJK Compatibility Forms
+           (code >=  0xFF00 and  code <=  0xFFEF) or -- Halfwidth and Fullwidth Forms
+           -- SIP (Plane 2)
+           (code >= 0x20000 and  code <= 0x2A6DF) or -- CJK Unified Ideographs Extension B
+           (code >= 0x2A700 and  code <= 0x2B73F) or -- CJK Unified Ideographs Extension C
+           (code >= 0x2B740 and  code <= 0x2B81F) or -- CJK Unified Ideographs Extension D
+           (code >= 0x2B820 and  code <= 0x2CEAF) or -- CJK Unified Ideographs Extension E
+           (code >= 0x2CEB0 and  code <= 0x2EBEF) or -- CJK Unified Ideographs Extension F
+           (code >= 0x2F800 and  code <= 0x2FA1F) or -- CJK Compatibility Ideographs Supplement
+           -- TIP (Plane 3)
+           (code >= 0x30000 and  code <= 0x3134F))   -- CJK Unified Ideographs Extension G
 end
 
 --- Tests whether str contains CJK characters
 ---- @string str
 ---- @treturn boolean true if CJK
 function util.hasCJKChar(str)
-    return string.match(str, "[\228-\234][\128-\191].") ~= nil
+    for c in str:gmatch(util.UTF8_CHAR_PATTERN) do
+        if util.isCJKChar(c) then
+            return true
+        end
+    end
+    return false
 end
 
 --- Split texts into a list of words, spaces and punctuation marks.
@@ -607,8 +645,10 @@ function util.splitToWords(text)
     for word in util.gsplit(text, "[%s%p]+", true) do
         -- if space split word contains CJK characters
         if util.hasCJKChar(word) then
-            -- split with CJK characters
-            for char in util.gsplit(word, "[\228-\234\192-\255][\128-\191]+", true) do
+            -- split all non-ASCII characters separately (FIXME ideally we
+            -- would split only the CJK characters, but you cannot define CJK
+            -- characters trivially with a byte-only Lua pattern).
+            for char in util.gsplit(word, "[\192-\255][\128-\191]+", true) do
                 table.insert(wlist, char)
             end
         else
@@ -1302,6 +1342,90 @@ end
 -- @treturn bool true on success
 function util.stringEndsWith(str, ending)
    return ending == "" or str:sub(-#ending) == ending
+end
+
+local WrappedFunction_mt = {
+    __call = function(self, ...)
+        if self.before_callback then
+            self.before_callback(self.target_table, ...)
+        end
+        if self.func then
+            return self.func(...)
+        end
+    end,
+}
+
+--- Wrap (or replace) a table method with a custom method, in a revertable way.
+-- This allows you extend the features of an existing module by modifying its
+-- internal methods, and then revert them back to normal later if necessary.
+--
+-- The most notable use-case for this is VirtualKeyboard's inputbox method
+-- wrapping to allow keyboards to add more complicated state-machines to modify
+-- how characters are input.
+--
+-- The returned table is the same table `target_table[target_field_name]` is
+-- set to. In addition to being callable, the new method has two sub-methods:
+--
+--  * `:revert()` will un-wrap the method and revert it to the original state.
+--
+--    Note that if a method is wrapped multiple times, reverting it will revert
+--    it to the state of the method when util.wrapMethod was called (and if
+--    called on the table returned from util.wrapMethod, that is the state when
+--    that particular util.wrapMethod was called).
+--
+--  * `:raw_call(...)` will call the original method with the given arguments
+--    and return whatever it returns.
+--
+--    This makes it more ergonomic to use the wrapped table methods in the case
+--    where you've replaced the regular function with your own implementation
+--    but you need to call the original functions inside your implementation.
+--
+--  * `:raw_method_call(...)` will call the original method with the arguments
+--    `(target_table, ...)` and return whatever it returns. Note that the
+--    target_table used is the one associated with the util.wrapMethod call.
+--
+--    This makes it more ergonomic to use the wrapped table methods in the case
+--    where you've replaced the regular function with your own implementation
+--    but you need to call the original functions inside your implementation.
+--
+--    This is effectively short-hand for `:raw_call(target_table, ...)`.
+--
+-- This is loosely based on busted/luassert's spies implementation (MIT).
+--   <https://github.com/Olivine-Labs/luassert/blob/v1.7.11/src/spy.lua>
+--
+-- @tparam table target_table The table whose method will be wrapped.
+-- @tparam string target_field_name The name of the field to wrap.
+-- @tparam nil|func new_func If non-nil, this function will be called instead of the original function after wrapping.
+-- @tparam nil|func before_callback If non-nil, this function will be called (with the arguments (target_table, ...)) before the function is called.
+function util.wrapMethod(target_table, target_field_name, new_func, before_callback)
+    local old_func = target_table[target_field_name]
+    local wrapped = setmetatable({
+        target_table = target_table,
+        target_field_name = target_field_name,
+        old_func = old_func,
+
+        before_callback = before_callback,
+        func = new_func or old_func,
+
+        revert = function(self)
+            if not self.reverted then
+                self.target_table[self.target_field_name] = self.old_func
+                self.reverted = true
+            end
+        end,
+
+        raw_call = function(self, ...)
+            if self.old_func then
+                return self.old_func(...)
+            end
+        end,
+
+        raw_method_call = function(self, ...)
+            return self:raw_call(self.target_table, ...)
+        end,
+    }, WrappedFunction_mt)
+    target_table[target_field_name] = wrapped
+    return wrapped
 end
 
 return util

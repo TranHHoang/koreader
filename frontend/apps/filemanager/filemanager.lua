@@ -24,6 +24,7 @@ local IconButton = require("ui/widget/iconbutton")
 local InfoMessage = require("ui/widget/infomessage")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local InputDialog = require("ui/widget/inputdialog")
+local LanguageSupport = require("languagesupport")
 local MultiConfirmBox = require("ui/widget/multiconfirmbox")
 local PluginLoader = require("pluginloader")
 local ReadCollection = require("readcollection")
@@ -221,10 +222,6 @@ function FileManager:setupLayout()
                     callback = function()
                         copyFile(file)
                         UIManager:close(self.file_dialog)
-                        UIManager:show(InfoMessage:new{
-                            text = T(_("Copied to clipboard:\n%1"), BD.filepath(file)),
-                            timeout = 2,
-                        })
                     end,
                 },
                 {
@@ -236,12 +233,12 @@ function FileManager:setupLayout()
                     end,
                 },
                 {
-                    text = _("Purge .sdr"),
-                    enabled = DocSettings:hasSidecarFile(BaseUtil.realpath(file)),
+                    text = _("Reset settings"),
+                    enabled = is_file and DocSettings:hasSidecarFile(BaseUtil.realpath(file)),
                     callback = function()
                         UIManager:show(ConfirmBox:new{
-                            text = T(_("Purge .sdr to reset settings for this document?\n\n%1"), BD.filename(self.file_dialog.title)),
-                            ok_text = _("Purge"),
+                            text = T(_("Reset settings for this document?\n\n%1\n\nAny highlights or bookmarks will be permanently lost."), BD.filepath(file)),
+                            ok_text = _("Reset"),
                             ok_callback = function()
                                 filemanagerutil.purgeSettings(file)
                                 require("readhistory"):fileSettingsPurged(file)
@@ -259,10 +256,6 @@ function FileManager:setupLayout()
                     callback = function()
                         cutFile(file)
                         UIManager:close(self.file_dialog)
-                        UIManager:show(InfoMessage:new{
-                            text = T(_("Cut to clipboard:\n%1"), BD.filepath(file)),
-                            timeout = 2,
-                        })
                     end,
                 },
                 {
@@ -271,8 +264,8 @@ function FileManager:setupLayout()
                     callback = function()
                         UIManager:close(self.file_dialog)
                         UIManager:show(ConfirmBox:new{
-                            text = is_file and T(_("Delete file?\n%1\nIf you delete a file, it is permanently lost."), BD.filepath(file)) or
-                                T(_("Delete folder?\n%1\nIf you delete a folder, its content is permanently lost."), BD.filepath(file)),
+                            text = is_file and T(_("Delete file?\n\n%1\n\nIf you delete a file, it is permanently lost."), BD.filepath(file)) or
+                                T(_("Delete folder?\n\n%1\n\nIf you delete a folder, its content is permanently lost."), BD.filepath(file)),
                             ok_text = _("Delete"),
                             ok_callback = function()
                                 deleteFile(file)
@@ -480,23 +473,38 @@ function FileManager:setupLayout()
     end
 end
 
+function FileManager:registerModule(name, ui_module, always_active)
+    if name then
+        self[name] = ui_module
+        ui_module.name = "filemanager" .. name
+    end
+    table.insert(self, ui_module)
+    if always_active then
+        -- to get events even when hidden
+        table.insert(self.active_widgets, ui_module)
+    end
+end
+
 -- NOTE: The only thing that will *ever* instantiate a new FileManager object is our very own showFiles below!
 function FileManager:init()
     self:setupLayout()
+    self.active_widgets = {}
 
-    local screenshoter = Screenshoter:new{ prefix = 'FileManager' }
-    table.insert(self, screenshoter) -- for regular events
-    self.active_widgets = { screenshoter } -- to get events even when hidden
+    self:registerModule("screenshot", Screenshoter:new{
+        prefix = 'FileManager',
+        ui = self,
+    }, true)
 
-    table.insert(self, self.menu)
-    table.insert(self, FileManagerHistory:new{ ui = self })
-    table.insert(self, FileManagerCollection:new{ ui = self })
-    table.insert(self, FileManagerFileSearcher:new{ ui = self })
-    table.insert(self, FileManagerShortcuts:new{ ui = self })
-    table.insert(self, ReaderDictionary:new{ ui = self })
-    table.insert(self, ReaderWikipedia:new{ ui = self })
-    table.insert(self, ReaderDeviceStatus:new{ ui = self })
-    table.insert(self, DeviceListener:new{ ui = self })
+    self:registerModule("menu", self.menu)
+    self:registerModule("history", FileManagerHistory:new{ ui = self })
+    self:registerModule("collections", FileManagerCollection:new{ ui = self })
+    self:registerModule("filesearcher", FileManagerFileSearcher:new{ ui = self })
+    self:registerModule("folder_shortcuts", FileManagerShortcuts:new{ ui = self })
+    self:registerModule("languagesupport", LanguageSupport:new{ ui = self })
+    self:registerModule("dictionary", ReaderDictionary:new{ ui = self })
+    self:registerModule("wikipedia", ReaderWikipedia:new{ ui = self })
+    self:registerModule("devicestatus", ReaderDeviceStatus:new{ ui = self })
+    self:registerModule("devicelistener", DeviceListener:new{ ui = self })
 
     -- koreader plugins
     for _, plugin_module in ipairs(PluginLoader:loadPlugins()) do
@@ -505,10 +513,8 @@ function FileManager:init()
                 plugin_module, { ui = self, })
             -- Keep references to the modules which do not register into menu.
             if ok then
-                local name = plugin_module.name
-                if name then self[name] = plugin_or_err end
-                table.insert(self, plugin_or_err)
-                logger.dbg("FM loaded plugin", name,
+                self:registerModule(plugin_module.name, plugin_or_err)
+                logger.dbg("FM loaded plugin", plugin_module.name,
                             "at", plugin_module.path)
             end
         end
@@ -843,12 +849,7 @@ function FileManager:pasteHere(file)
             if DocSettings:hasSidecarFile(orig) then
                 BaseUtil.execute(self.cp_bin, "-r", DocSettings:getSidecarDir(orig), dest)
             end
-            if BaseUtil.execute(self.cp_bin, "-r", orig, dest) == 0 then
-                UIManager:show(InfoMessage:new {
-                    text = T(_("Copied:\n%1\nto:\n%2"), BD.filepath(orig_basename), BD.dirpath(dest)),
-                    timeout = 2,
-                })
-            else
+            if BaseUtil.execute(self.cp_bin, "-r", orig, dest) ~= 0 then
                 UIManager:show(InfoMessage:new {
                     text = T(_("Failed to copy:\n%1\nto:\n%2"), BD.filepath(orig_basename), BD.dirpath(dest)),
                     icon = "notice-warning",
@@ -866,10 +867,6 @@ function FileManager:pasteHere(file)
                 local dest_file = string.format("%s/%s", dest, BaseUtil.basename(orig))
                 require("readhistory"):updateItemByPath(orig, dest_file) -- (will update "lastfile" if needed)
                 ReadCollection:updateItemByPath(orig, dest_file)
-                UIManager:show(InfoMessage:new {
-                    text = T(_("Moved:\n%1\nto:\n%2"), BD.filepath(orig_basename), BD.dirpath(dest)),
-                    timeout = 2,
-                })
             else
                 UIManager:show(InfoMessage:new {
                     text = T(_("Failed to move:\n%1\nto:\n%2"), BD.filepath(orig_basename), BD.dirpath(dest)),
@@ -916,10 +913,6 @@ function FileManager:createFolder(curr_folder, new_folder)
     local code = BaseUtil.execute(self.mkdir_bin, folder)
     if code == 0 then
         self:onRefresh()
-        UIManager:show(InfoMessage:new{
-            text = T(_("Created folder:\n%1"), BD.directory(new_folder)),
-            timeout = 2,
-        })
     else
         UIManager:show(InfoMessage:new{
             text = T(_("Failed to create folder:\n%1"), BD.directory(new_folder)),
@@ -957,11 +950,6 @@ function FileManager:deleteFile(file)
             doc_settings:purge()
         end
         ReadCollection:removeItemByPath(file, is_dir)
-        UIManager:show(InfoMessage:new{
-            text = is_dir and T(_("Deleted folder:\n%1"), BD.filepath(file)) or
-                T(_("Deleted file:\n%1"), BD.filepath(file)),
-            timeout = 2,
-        })
     else
         UIManager:show(InfoMessage:new{
             text = T(_("Failed to delete:\n%1"), BD.filepath(file)),
@@ -989,23 +977,13 @@ function FileManager:renameFile(file)
                        not self:moveFile(doc:getSidecarDir(file), doc:getSidecarDir(dest)) then
                        move_history = false
                     end
-                    if move_history then
-                        UIManager:show(InfoMessage:new{
-                            text = T(_("Renamed file:\n%1\nto:\n%2"), BD.filepath(file), BD.filepath(dest)),
-                            timeout = 2,
-                        })
-                    else
+                    if not move_history then
                         UIManager:show(InfoMessage:new{
                             text = T(_("Renamed file:\n%1\nto:\n%2\n\nFailed to move history data.\nThe reading history may be lost."),
                                 BD.filepath(file), BD.filepath(dest)),
                             icon = "notice-warning",
                         })
                     end
-                else
-                    UIManager:show(InfoMessage:new{
-                        text = T(_("Renamed folder:\n%1\nto:\n%2"), BD.filepath(file), BD.filepath(dest)),
-                        timeout = 2,
-                    })
                 end
             else
                 UIManager:show(InfoMessage:new{
@@ -1196,10 +1174,6 @@ end
 
 function FileManager:onRefreshContent()
     self:onRefresh()
-    UIManager:show(InfoMessage:new{
-        text = _("Content refreshed."),
-        timeout = 2,
-    })
 end
 
 return FileManager

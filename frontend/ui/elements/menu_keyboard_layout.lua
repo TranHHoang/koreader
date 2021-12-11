@@ -1,5 +1,8 @@
 local CheckButton = require("ui/widget/checkbutton")
 local UIManager = require("ui/uimanager")
+local VirtualKeyboard = require("ui/widget/virtualkeyboard")
+local dbg = require("dbg")
+local util = require("util")
 local _ = require("gettext")
 
 local input_dialog, check_button_bold, check_button_border, check_button_compact
@@ -76,6 +79,57 @@ local sub_item_table = {
             input_dialog:onShowKeyboard()
         end,
     },
+    {
+        text = _("Layout-specific keyboard settings"),
+        sub_item_table = {},
+    }
 }
+
+-- for lang, keyboard_layout in FFIUtil.orderedPairs(VirtualKeyboard.lang_to_keyboard_layout) do
+--     table.insert(sub_item_table[1].sub_item_table, {
+--         text_func = function()
+--             local text = Language:getLanguageName(lang)
+--             if G_reader_settings:readSetting("keyboard_layout_default") == lang then
+--                 text = text .. "   ★"
+--             end
+--             return text
+--         end,
+--         checked_func = function()
+--             local keyboard_layouts = G_reader_settings:readSetting("keyboard_layouts") or {}
+--             return util.arrayContains(keyboard_layouts, lang)
+--         end,
+--         callback = function()
+--             local keyboard_layouts = G_reader_settings:readSetting("keyboard_layouts") or {}
+--             local layout_index = util.arrayContains(keyboard_layouts, lang)
+--             if layout_index then
+--                 table.remove(keyboard_layouts, layout_index)
+--             else
+--                 if #keyboard_layouts < 4 then
+--                     table.insert(keyboard_layouts, lang)
+--                 else -- no more space in the 'globe' popup
+--                     UIManager:show(require("ui/widget/infomessage"):new{
+--                         text = _("Up to four layouts can be enabled."),
+--                         timeout = 2,
+--                     })
+--                     return
+--                 end
+--             end
+--             G_reader_settings:saveSetting("keyboard_layouts", keyboard_layouts)
+--         end,
+--         hold_callback = function(touchmenu_instance)
+--             G_reader_settings:saveSetting("keyboard_layout_default", lang)
+--             if touchmenu_instance then touchmenu_instance:updateItems() end
+--         end,
+--     })
+--     if VirtualKeyboard.lang_has_submenu[lang] then
+--         local keyboard = require("ui/data/keyboardlayouts/" .. keyboard_layout)
+--         if dbg.dassert(keyboard.genMenuItems ~= nil) then
+--             table.insert(sub_item_table[4].sub_item_table, {
+--                 text = Language:getLanguageName(lang),
+--                 sub_item_table = keyboard:genMenuItems(),
+--             })
+--         end
+--     end
+-- end
 
 return sub_item_table

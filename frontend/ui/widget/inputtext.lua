@@ -13,6 +13,7 @@ local TextBoxWidget = require("ui/widget/textboxwidget")
 local UIManager = require("ui/uimanager")
 local Utf8Proc = require("ffi/utf8proc")
 local VerticalGroup = require("ui/widget/verticalgroup")
+local dbg = require("dbg")
 local util = require("util")
 local _ = require("gettext")
 local Screen = Device.screen
@@ -706,6 +707,20 @@ function InputText:searchString(str, case_sensitive, start_pos)
     return char_pos
 end
 
+--- Return the character at the given offset. If is_absolute is truthy then the
+-- offset is the absolute position, otherwise the offset is added to the current
+-- cursor position (negative offsets are allowed).
+function InputText:getChar(offset, is_absolute)
+    local idx
+    if is_absolute then
+        idx = offset
+    else
+        idx = self.charpos + offset
+    end
+    if idx < 1 or idx > #self.charlist then return end
+    return self.charlist[idx]
+end
+
 function InputText:addChars(chars)
     if not chars then
         -- VirtualKeyboard:addChar(key) gave us 'nil' once (?!)
@@ -728,6 +743,11 @@ function InputText:addChars(chars)
     self.charpos = self.charpos + #util.splitToChars(chars)
     self:initTextBox(table.concat(self.charlist), true)
 end
+dbg:guard(InputText, "addChars",
+    function(self, chars)
+        assert(type(chars) == "string",
+            "Wrong chars value type (expected string)!")
+    end)
 
 function InputText:delChar()
     if self.readonly or not self:isTextEditable(true) then

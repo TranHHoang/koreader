@@ -1,8 +1,8 @@
 --[[--
-@module koplugin.autowarmth
-
 Plugin for setting screen warmth based on the sun position and/or a time schedule
-]]
+
+@module koplugin.autowarmth
+--]]--
 
 local Device = require("device")
 
@@ -28,7 +28,7 @@ local util = require("util")
 local activate_sun = 1
 local activate_schedule = 2
 local activate_closer_noon = 3
-local activate_closer_midnight =4
+local activate_closer_midnight = 4
 
 local midnight_index = 11
 
@@ -149,9 +149,8 @@ function AutoWarmth:scheduleMidnightUpdate()
     -- first unschedule all old functions
     UIManager:unschedule(self.scheduleMidnightUpdate) -- when called from menu or resume
 
-    local toRad = math.pi / 180
-    SunTime:setPosition(self.location, self.latitude * toRad, self.longitude * toRad,
-        self.timezone, self.altitude)
+    SunTime:setPosition(self.location, self.latitude, self.longitude,
+        self.timezone, self.altitude, true)
     SunTime:setAdvanced()
     SunTime:setDate() -- today
     SunTime:calculateTimes()
@@ -256,19 +255,42 @@ function AutoWarmth:scheduleWarmthChanges(time)
         end
     end
 
-    if self.activate == 0 then return end
+    UIManager:unschedule(AutoWarmth.setWarmth) -- to be safe, if there are no scheduled entries
 
-    local actual_warmth
+    if self.activate == 0 then return end
+    if #self.sched_funcs == 0 then return end
+
+    -- `actual_warmth` is the value which should be applied now.
+    -- `next_warmth` is valid `delay_time` seconds after now for resume on some devices (KA1)
+    -- Most of the times this will be the same as `actual_warmth`.
+    -- We need both, as we could have a very rapid change in warmth (depending on user settings)
+    -- or by chance a change in warmth very shortly after (a few ms) resume time.
+    local delay_time = 1.5
+    -- Use the last warmth value, so that we have a valid value when resuming after 24:00 but
+    -- before true midnight. OK, this value is actually not quite the right one, as it is calculated
+    -- for the current day (and not the previous one), but this is for a corner case
+    -- and the error is small.
+    local actual_warmth = self.sched_funcs[#self.sched_funcs][2]
+    local next_warmth = actual_warmth
     for i = 1, #self.sched_funcs do
-        if self.sched_times[i] > time then
-            UIManager:scheduleIn( self.sched_times[i] - time,
-                self.sched_funcs[i][1], self.sched_funcs[i][2])
-        else
+        if self.sched_times[i] <= time then
             actual_warmth = self.sched_funcs[i][2] or actual_warmth
+        else
+            UIManager:scheduleIn(self.sched_times[i] - time,
+                self.sched_funcs[i][1], self.sched_funcs[i][2])
+        end
+        if self.sched_times[i] <= time + delay_time then
+            next_warmth = self.sched_funcs[i][2] or next_warmth
         end
     end
-    -- update current warmth directly
+    -- update current warmth immediately
     self.setWarmth(actual_warmth)
+
+    -- On some strange devices like KA1 the above doesn't work right after a resume so
+    -- schedule setting of another valid warmth (=`next_warmth`) again (one time).
+    -- On sane devices this schedule does no harm.
+    -- see https://github.com/koreader/koreader/issues/8363
+    UIManager:scheduleIn(delay_time, self.setWarmth, next_warmth)
 end
 
 function AutoWarmth:hoursToClock(hours)
@@ -329,6 +351,13 @@ function AutoWarmth:getSubMenuItems()
             separator = true,
         },
         {
+            text = _("Activate"),
+            checked_func = function()
+                return self.activate ~= 0
+            end,
+            sub_item_table = self:getActivateMenu(),
+        },
+        {
             text = _("Expert mode"),
             checked_func = function()
                 return not self.easy_mode
@@ -344,38 +373,36 @@ function AutoWarmth:getSubMenuItems()
             keep_menu_open = true,
         },
         {
-            text = _("Activate"),
-            checked_func = function()
-                return self.activate ~= 0
-            end,
-            sub_item_table = self:getActivateMenu(),
-        },
-        {
             text = _("Location settings"),
-            enabled_func = function() return self.activate ~= activate_schedule end,
             sub_item_table = self:getLocationMenu(),
         },
         {
-            text = _("Schedule settings"),
-            enabled_func = function() return self.activate ~= activate_sun end,
+            text = _("Fixed schedule settings"),
+            enabled_func = function()
+                return self.activate ~= activate_sun and self.activate ~=0
+            end,
             sub_item_table = self:getScheduleMenu(),
         },
         {
+            enabled_func = function()
+                return self.activate ~=0
+            end,
             text = Device:hasNaturalLight() and _("Warmth and night mode settings")
                 or _("Night mode settings"),
             sub_item_table = self:getWarmthMenu(),
             separator = true,
         },
-        self:getTimesMenu(_("Active parameters")),
-        self:getTimesMenu(_("Information about the sun in"), true, activate_sun),
-        self:getTimesMenu(_("Information about the schedule"), false, activate_schedule),
+        self:getTimesMenu(_("Currently active parameters")),
+        self:getTimesMenu(_("Sun position information for"), true, activate_sun),
+        self:getTimesMenu(_("Fixed schedule information"), false, activate_schedule),
     }
 end
 
 function AutoWarmth:getActivateMenu()
-    local function getActivateMenuEntry(text, activator)
+    local function getActivateMenuEntry(text, help_text, activator)
         return {
             text = text,
+            help_text = help_text,
             checked_func = function() return self.activate == activator end,
             callback = function()
                 if self.activate ~= activator then
@@ -390,10 +417,18 @@ function AutoWarmth:getActivateMenu()
     end
 
     return {
-        getActivateMenuEntry(_("Sun position"), activate_sun),
-        getActivateMenuEntry(_("Time schedule"), activate_schedule),
-        getActivateMenuEntry(_("Whatever is closer to noon"), activate_closer_noon),
-        getActivateMenuEntry(_("Whatever is closer to midnight"), activate_closer_midnight),
+        getActivateMenuEntry(_("According to the sun's position"),
+            _("Only use the times calculated from the position of the sun."),
+            activate_sun),
+        getActivateMenuEntry(_("According to the fixed schedule"),
+            _("Only use the times from the fixed schedule."),
+            activate_schedule),
+        getActivateMenuEntry(_("Whatever is closer to noon"),
+            _("Use the times from the sun position or schedule that are closer to noon."),
+            activate_closer_noon),
+        getActivateMenuEntry(_("Whatever is closer to midnight"),
+            _("Use the times from the sun position or schedule that are closer to midnight."),
+            activate_closer_midnight),
     }
 end
 
@@ -722,7 +757,7 @@ function AutoWarmth:getWarmthMenu()
             enabled_func = function() return false end,
         },
         getWarmthMenuEntry(_("Solar noon"), 6, false),
-        getWarmthMenuEntry(_("Daytime"), 5),
+        getWarmthMenuEntry(_("Sunset and sunrise"), 5),
         getWarmthMenuEntry(_("Darkest time of civil twilight"), 4),
         getWarmthMenuEntry(_("Darkest time of nautical twilight"), 3, false),
         getWarmthMenuEntry(_("Darkest time of astronomical twilight"), 2, false),
@@ -851,6 +886,11 @@ end
 --            activate_schedule .. scheduler times
 function AutoWarmth:getTimesMenu(title, location, activator)
     return {
+        enabled_func = function()
+            -- always show sun position times so you can see ephemeris
+            return self.activate ~= 0 and (self.activate ~= activate_sun or activator == nil)
+                or activator == activate_sun
+        end,
         text_func = function()
             if location then
                 return title .. " " .. self:getLocationString()
