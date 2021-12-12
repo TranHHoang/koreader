@@ -104,19 +104,40 @@ function FileManager:onSetDimensions(dimen)
     end
 end
 
+local function split(inputstr, sep)
+    if sep == nil then
+            sep = "%s"
+    end
+    local t={}
+    for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
+            table.insert(t, str)
+    end
+    return t
+end
+
+function table.slice(tbl, first, last, step)
+  local sliced = {}
+
+  for i = first or 1, last or #tbl, step or 1 do
+    sliced[#sliced+1] = tbl[i]
+  end
+
+  return sliced
+end
+
 function FileManager:setupLayout()
     self.show_parent = self.show_parent or self
-    local home_button = IconButton:new{
-        icon = "home",
-        bordersize = 0,
-        width = Screen:scaleBySize(24),
-        height = Screen:scaleBySize(24),
-        padding = Size.padding.default,
-        callback = function()
-            self:goHome()
-        end,
-        hold_callback = function() self:onShowPlusMenu() end,
-    }
+    -- local home_button = IconButton:new{
+    --     icon = "home",
+    --     bordersize = 0,
+    --     width = Screen:scaleBySize(24),
+    --     height = Screen:scaleBySize(24),
+    --     padding = Size.padding.default,
+    --     callback = function()
+    --         self:goHome()
+    --     end,
+    --     hold_callback = function() self:onShowPlusMenu() end,
+    -- }
 
     local up_button = IconButton:new{
         icon = "up",
@@ -127,17 +148,39 @@ function FileManager:setupLayout()
         callback = function()
             self.file_chooser:onFolderUp()
         end,
-    }
-
-    self.path_text = TextWidget:new{
-        face = Font:getFace("smallinfofont", 18),
-        text = BD.directory(filemanagerutil.abbreviate(self.root_path)):gsub("/", " ᐅ "),
-        max_width = Screen:getWidth() - 2*Size.padding.large,
-        truncate_left = true,
+        hold_callback = function() self:goHome() end,
     }
 
     local WidgetContainer = require("ui/widget/container/widgetcontainer")
     local HorizontalSpan = require("ui/widget/horizontalspan")
+
+    self.path_group = HorizontalGroup:new {}
+
+    local home_dir = G_reader_settings:readSetting("home_dir") or filemanagerutil.getDefaultDir() or ""
+    local paths = split(self.root_path:gsub(home_dir, "Home"), "/")
+
+    for k, v in pairs(paths) do
+        table.insert(self.path_group, Button:new {
+            text = v,
+            bordersize = 0,
+            text_font_bold = false,
+            callback = function()
+                local path = table.concat({unpack(paths, 1, k)}, "/"):gsub("Home", home_dir)
+                self.file_chooser:changeToPath("/" .. path)
+            end,
+        })
+        table.insert(self.path_group, TextWidget:new {
+            face = Font:getFace("smallinfofont", 20),
+            text = " › ",
+        })
+    end
+
+    -- self.path_text = TextWidget:new{
+    --     face = Font:getFace("smallinfofont", 18),
+    --     text = BD.directory(filemanagerutil.abbreviate(self.root_path)):gsub("/", " ᐅ "),
+    --     max_width = Screen:getWidth() - 2*Size.padding.large,
+    --     truncate_left = true,
+    -- }
 
     self.banner = FrameContainer:new{
         padding = Size.padding.default,
@@ -145,10 +188,11 @@ function FileManager:setupLayout()
         WidgetContainer:new {
             dimen = { w = Screen:getWidth(), h = nil },
             HorizontalGroup:new {
-                home_button,
+                -- home_button,
                 up_button,
                 HorizontalSpan:new { width = Screen:scaleBySize(5) },
-                self.path_text,
+                -- self.path_text,
+                self.path_group,
             }
         },
     }
@@ -189,9 +233,28 @@ function FileManager:setupLayout()
     self.focused_file = nil -- use it only once
 
     function file_chooser:onPathChanged(path)  -- luacheck: ignore
-        FileManager.instance.path_text:setText(BD.directory(filemanagerutil.abbreviate(path)):gsub("/", " ᐅ "))
-        UIManager:setDirty(FileManager.instance, function()
-            return "ui", FileManager.instance.path_text.dimen, FileManager.instance.dithered
+        -- FileManager.instance.path_text:setText(BD.directory(filemanagerutil.abbreviate(path)):gsub("/", " ᐅ "))
+        -- FileManager.instance.banner = {}
+        -- local paths = split(BD.directory(filemanagerutil.abbreviate(path)), "/")
+        -- FileManager.instance.path_group = HorizontalGroup:new{}
+        -- for k, v in ipairs(paths) do
+        --     table.insert(FileManager.instance.path_group, Button:new {
+        --         text = v,
+        --         callback = function()
+        --             local p = table.concat({unpack(paths, 1, k)}, "/")
+        --             logger.dbg("======================>", p)
+        --             -- self:changeToPath(p)
+        --         end,
+        --     })
+        --     table.insert(FileManager.instance.path_group, TextWidget:new {
+        --         face = Font:getFace("smallinfofont", 18),
+        --         text = " ᐅ ",
+        --     })
+        -- end
+
+        FileManager.instance:reinit(path, nil)
+        UIManager:setDirty(FileManager.instance.banner, function()
+            return "ui", FileManager.instance.banner.dimen, FileManager.instance.dithered
         end)
         return true
     end

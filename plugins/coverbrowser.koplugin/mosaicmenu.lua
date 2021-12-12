@@ -558,17 +558,6 @@ function MosaicMenuItem:bookCoverWidget(path, scale)
     return widget
 end
 
-local function split(inputstr, sep)
-    if sep == nil then
-            sep = "%s"
-    end
-    local t={}
-    for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
-            table.insert(t, str)
-    end
-    return t
-end
-
 function MosaicMenuItem:update()
     -- We will be a disctinctive widget whether we are a directory,
     -- a known file with image / without image, or a not yet known file
@@ -608,14 +597,16 @@ function MosaicMenuItem:update()
             text = text:sub(1, -2)
         end
         text = BD.directory(text)
-        local num = split(self.mandatory, " ")[1]
-        local nbitems = TextWidget:new{
-            text = num,
-            face = Font:getFace("infont", 14),
-            alignment = "center",
-            fgcolor = Blitbuffer.COLOR_WHITE,
-            bold = true,
-        }
+        
+        -- logger.dbg(self.entry)
+        -- local num = split(self.mandatory, " ")[1]
+        -- local nbitems = TextWidget:new{
+        --     text = num,
+        --     face = Font:getFace("infont", 14),
+        --     alignment = "center",
+        --     fgcolor = Blitbuffer.COLOR_WHITE,
+        --     bold = true,
+        -- }
         -- The directory name will be centered, with nbitems at bottom.
         -- We could use 2*nbitems:getSize().h to keep that centering,
         -- but using 3* will avoid getting the directory name stuck
@@ -1088,7 +1079,7 @@ function MosaicMenu:_updateItemsBuildUI()
 
         if (not item_tmp.bookinfo_found and not item_tmp.is_directory and not item_tmp.file_deleted)
             -- Special case: a directory which contains books
-            or (#item_tmp.files_to_show_cover > 0 and item_tmp.total_cover_found < #item_tmp.files_to_show_cover) then
+            or (item_tmp.files_to_show_cover and #item_tmp.files_to_show_cover > 0 and item_tmp.total_cover_found < #item_tmp.files_to_show_cover) then
             -- Register this item for update
             table.insert(self.items_to_update, item_tmp)
         end
