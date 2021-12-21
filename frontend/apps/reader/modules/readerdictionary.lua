@@ -704,7 +704,6 @@ function ReaderDictionary:onShowDictionaryLookup()
 end
 
 function ReaderDictionary:rawSdcv(words, dict_names, fuzzy_search, lookup_progress_msg)
-    local all_results = {}
     -- Allow for two sdcv calls : one in the classic data/dict, and
     -- another one in data/dict_ext if it exists
     -- We could put in data/dict_ext dictionaries with a great number of words
@@ -720,6 +719,7 @@ function ReaderDictionary:rawSdcv(words, dict_names, fuzzy_search, lookup_progre
     if dictDirsEmpty(dict_dirs) then
         return false, nil
     end
+    local all_results = {}
     local lookup_cancelled = false
     for _, dict_dir in ipairs(dict_dirs) do
         if lookup_cancelled then
@@ -768,24 +768,29 @@ function ReaderDictionary:rawSdcv(words, dict_names, fuzzy_search, lookup_progre
             -- so it's safe to split. Ideally luajson would support jsonl but
             -- unfortunately it doesn't and it also seems to decode the last
             -- object rather than the first one if there are multiple.
+            local result_word_idx = 0
             for _, entry_str in ipairs(util.splitToArray(results_str, "\n")) do
+                result_word_idx = result_word_idx + 1
                 local ok, results = pcall(JSON.decode, entry_str)
-                if ok and results then
-                    table.insert(all_results, results)
-                else
+                if not ok or not results then
                     logger.warn("JSON data cannot be decoded", results)
                     -- Need to insert an empty table so that the word entries
                     -- match up to the result entries (so that callers can
                     -- batch lookups to reduce the cost of bulk lookups while
                     -- still being able to figure out which lookup came from
                     -- which word).
-                    table.insert(all_results, {})
+                    results = {}
+                end
+                if all_results[result_word_idx] then
+                    util.arrayAppend(all_results[result_word_idx], results)
+                else
+                    table.insert(all_results, results)
                 end
             end
+            if result_word_idx ~= #words then
+                logger.warn("sdcv returned a different number of results than the number of words")
+            end
         end
-    end
-    if #all_results ~= #words then
-        logger.warn("sdcv returned a different number of results than the number of words")
     end
     return lookup_cancelled, all_results
 end
@@ -801,6 +806,22 @@ function ReaderDictionary:startSdcv(word, dict_names, fuzzy_search)
         if candidates then
             util.arrayAppend(words, candidates)
         end
+    end
+
+    -- If every word contains a CJK character, every word candidate is
+    -- (probably) a CJK word. We don't want fuzzy searching in this case
+    -- because sdcv cannot handle CJK text properly when fuzzy searching (with
+    -- Japanese, it returns hundreds of useless results).
+    local shouldnt_fuzzy_search = true
+    for _, w in ipairs(words) do
+        if not util.hasCJKChar(w) then
+            shouldnt_fuzzy_search = false
+            break
+        end
+    end
+    if shouldnt_fuzzy_search then
+        logger.dbg("disabling fuzzy searching for all-CJK word search:", words)
+        fuzzy_search = false
     end
 
     local lookup_cancelled, results = self:rawSdcv(words, dict_names, fuzzy_search, self.lookup_progress_msg or false)

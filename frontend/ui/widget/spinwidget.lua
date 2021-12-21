@@ -19,6 +19,7 @@ local VerticalGroup = require("ui/widget/verticalgroup")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 local Screen = Device.screen
+local T = require("ffi/util").template
 
 local SpinWidget = InputContainer:new{
     title_text = "",
@@ -30,25 +31,31 @@ local SpinWidget = InputContainer:new{
     value_table = nil,
     value_index = nil,
     value = 1,
-    value_max = 20,
     value_min = 0,
+    value_max = 20,
     value_step = 1,
     value_hold_step = 4,
+    precision = nil, -- default "%02d" in NumberPickerWidget
+    wrap = false,
     cancel_text = _("Close"),
     ok_text = _("Apply"),
+    ok_always_enabled = false, -- set to true to enable OK button for unchanged value
     cancel_callback = nil,
     callback = nil,
     close_callback = nil,
     keep_shown_on_apply = false,
-    -- Set this to add default button that restores number to its default value
+    -- Set this to add upper default button that restores number to its default value
     default_value = nil,
-    default_text = _("Use default"),
-    -- Optional extra button on bottom
+    default_text = nil,
+    -- Optional extra button above ok/cancel buttons row
     extra_text = nil,
     extra_callback = nil,
 }
 
 function SpinWidget:init()
+    -- used to enable ok_button, self.value may be changed in extra callback
+    self.original_value = self.value_table and self.value_table[self.value_index or 1] or self.value
+
     self.screen_width = Screen:getWidth()
     self.screen_height = Screen:getHeight()
     if not self.width then
@@ -80,18 +87,21 @@ function SpinWidget:init()
     self:update()
 end
 
-function SpinWidget:update()
+function SpinWidget:update(numberpicker_value, numberpicker_value_index)
     local value_widget = NumberPickerWidget:new{
         show_parent = self,
-        value = self.value,
+        value = numberpicker_value or self.value,
         value_table = self.value_table,
-        value_index = self.value_index,
+        value_index = numberpicker_value_index or self.value_index,
         value_min = self.value_min,
         value_max = self.value_max,
         value_step = self.value_step,
         value_hold_step = self.value_hold_step,
         precision = self.precision,
-        wrap = self.wrap or false,
+        wrap = self.wrap,
+        picker_updated_callback = function(value, value_index)
+            self:update(value, value_index)
+        end,
     }
     local value_group = HorizontalGroup:new{
         align = "center",
@@ -114,36 +124,13 @@ function SpinWidget:update()
             h = Size.line.thick,
         }
     }
-    local buttons = {
-        {
-            {
-                text = self.cancel_text,
-                callback = function()
-                    if self.cancel_callback then
-                        self.cancel_callback()
-                    end
-                    self:onClose()
-                end,
-            },
-            {
-                text = self.ok_text,
-                callback = function()
-                    if self.callback then
-                        self.value, self.value_index = value_widget:getValue()
-                        self.callback(self)
-                    end
-                    if not self.keep_shown_on_apply then
-                        self:onClose()
-                    end
-                end,
-            },
-        }
-    }
 
+    local buttons = {}
     if self.default_value then
-        table.insert(buttons,{
+        table.insert(buttons, {
             {
-                text = self.default_text,
+                text = self.default_text or T(_("Default value: %1"),
+                    self.precision and string.format(self.precision, self.default_value) or self.default_value),
                 callback = function()
                     value_widget.value = self.default_value
                     value_widget:update()
@@ -152,7 +139,7 @@ function SpinWidget:update()
         })
     end
     if self.extra_text then
-        table.insert(buttons,{
+        table.insert(buttons, {
             {
                 text = self.extra_text,
                 callback = function()
@@ -167,6 +154,33 @@ function SpinWidget:update()
             },
         })
     end
+    table.insert(buttons, {
+        {
+            text = self.cancel_text,
+            callback = function()
+                if self.cancel_callback then
+                    self.cancel_callback()
+                end
+                self:onClose()
+            end,
+        },
+        {
+            text = self.ok_text,
+            enabled = self.ok_always_enabled or self.original_value ~= value_widget:getValue(),
+            callback = function()
+                self.value, self.value_index = value_widget:getValue()
+                self.original_value = self.value
+                if self.callback then
+                    self.callback(self)
+                end
+                if self.keep_shown_on_apply then
+                    self:update()
+                else
+                    self:onClose()
+                end
+            end,
+        },
+    })
 
     local ok_cancel_buttons = ButtonTable:new{
         width = self.width - 2*Size.padding.default,

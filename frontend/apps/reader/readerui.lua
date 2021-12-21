@@ -107,6 +107,8 @@ function ReaderUI:init()
     -- cap screen refresh on pan to 2 refreshes per second
     local pan_rate = Screen.low_pan_rate and 2.0 or 30.0
 
+    Device:setIgnoreInput(true) -- Avoid ANRs on Android with unprocessed events.
+
     self.postInitCallback = {}
     self.postReaderCallback = {}
     -- if we are not the top level dialog ourselves, it must be given in the table
@@ -456,6 +458,8 @@ function ReaderUI:init()
     end
     self.postReaderCallback = nil
 
+    Device:setIgnoreInput(false) -- Allow processing of events (on Android).
+
     -- print("Ordered registered gestures:")
     -- for _, tzone in ipairs(self._ordered_touch_zones) do
     --     print("  "..tzone.def.id)
@@ -551,30 +555,9 @@ function ReaderUI:showReader(file, provider)
 
     -- We can now signal the existing ReaderUI/FileManager instances that it's time to go bye-bye...
     UIManager:broadcastEvent(Event:new("ShowingReader"))
-
-    -- prevent crash due to incompatible bookmarks
-    --- @todo Split bookmarks from metadata and do per-engine in conversion.
     provider = provider or DocumentRegistry:getProvider(file)
     if provider.provider then
-        local doc_settings = DocSettings:open(file)
-        local bookmarks = doc_settings:readSetting("bookmarks") or {}
-        if #bookmarks >= 1 and
-           ((provider.provider == "crengine" and type(bookmarks[1].page) == "number") or
-            (provider.provider == "mupdf" and type(bookmarks[1].page) == "string")) then
-                UIManager:show(ConfirmBox:new{
-                    text = T(_("The document '%1' with bookmarks or highlights was previously opened with a different engine. To prevent issues, bookmarks need to be deleted before continuing."),
-                        BD.filepath(file)),
-                    ok_text = _("Delete"),
-                    ok_callback = function()
-                        doc_settings:delSetting("bookmarks")
-                        doc_settings:close()
-                        self:showReaderCoroutine(file, provider)
-                    end,
-                    cancel_callback = function() self:showFileManager() end,
-                })
-        else
-            self:showReaderCoroutine(file, provider)
-        end
+        self:showReaderCoroutine(file, provider)
     end
 end
 

@@ -77,7 +77,7 @@ function ReaderFont:init()
                 end
             end,
             callback = function()
-                self:setFont(v)
+                self:onSetFont(v)
             end,
             hold_callback = function(touchmenu_instance)
                 self:makeDefault(v, touchmenu_instance)
@@ -278,7 +278,7 @@ function ReaderFont:onSaveSettings()
     self.ui.doc_settings:saveSetting("gamma_index", self.gamma_index)
 end
 
-function ReaderFont:setFont(face)
+function ReaderFont:onSetFont(face)
     if face and self.font_face ~= face then
         self.font_face = face
         self.ui.document:setFontFace(face)

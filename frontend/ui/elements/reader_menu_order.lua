@@ -184,6 +184,7 @@ local order = {
         "----------------------------",
         "find_book_in_calibre_catalog",
         "fulltext_search",
+        "bookmark_search",
     },
     filemanager = {},
     main = {
