@@ -164,6 +164,7 @@ function FileManager:setupLayout()
             text = v,
             bordersize = 0,
             text_font_bold = false,
+            text_font_size = 18, 
             callback = function()
                 local path = table.concat({unpack(paths, 1, k)}, "/"):gsub("Home", home_dir)
                 self.file_chooser:changeToPath("/" .. path)
@@ -190,7 +191,7 @@ function FileManager:setupLayout()
             HorizontalGroup:new {
                 -- home_button,
                 up_button,
-                HorizontalSpan:new { width = Screen:scaleBySize(5) },
+                -- HorizontalSpan:new { width = Screen:scaleBySize(5) },
                 -- self.path_text,
                 self.path_group,
             }
