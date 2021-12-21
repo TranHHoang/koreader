@@ -34,6 +34,7 @@ local getMenuText = require("ui/widget/menu").getMenuText
 local RightContainer = require("ui/widget/container/rightcontainer")
 local FileManager = require("apps/filemanager/filemanager")
 local BookInfoManager = require("bookinfomanager")
+local AlphaContainer = require("ui/widget/container/alphacontainer")
 
 -- Here is the specific UI implementation for "mosaic" display modes
 -- (see covermenu.lua for the generic code)
@@ -676,18 +677,21 @@ function MosaicMenuItem:update()
                 --         nbitems,
                 --     }
                 -- },
-
-                WidgetContainer:new {
-                    dimen = dimen,
-                    FrameContainer:new {
-                        bordersize = 0,
-                        padding_top = (dimen.h / 9.5 - directory:getSize().h) / 2,
-                        padding_bottom = (dimen.h / 9.5 - directory:getSize().h) / 2,
-                        padding_left = (dimen.w - directory:getSize().w + border_size) / 2 - 0.5,
-                        padding_right = (dimen.w - directory:getSize().w + border_size) / 2 - 2,
-                        background = Blitbuffer.COLOR_LIGHT_GRAY,
-                        directory,
-                    }
+                
+                CenterContainer:new {
+                    dimen = Geom:new { w = dimen.w, h = dimen.h + Screen:scaleBySize(50) },
+                    AlphaContainer:new {
+                        alpha = 0.75,
+                        FrameContainer:new {
+                            bordersize = 0,
+                            padding_top = (dimen.h / 9.5 - directory:getSize().h) / 2,
+                            padding_bottom = (dimen.h / 9.5 - directory:getSize().h) / 2,
+                            padding_left = (dimen.w - directory:getSize().w + border_size) / 2,
+                            padding_right = (dimen.w - directory:getSize().w + border_size) / 2,
+                            -- background = Blitbuffer.COLOR_LIGHT_GRAY,
+                            directory,
+                        }
+                    },
                 }
             },
         }
