@@ -1,7 +1,7 @@
-local DateTimeWidget = require("ui/widget/datetimewidget")
+-- local DateTimeWidget = require("ui/widget/datetimewidget")
 local Device = require("device")
 local Event = require("ui/event")
-local InfoMessage = require("ui/widget/infomessage")
+-- local InfoMessage = require("ui/widget/infomessage")
 local NetworkMgr = require("ui/network/manager")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
@@ -237,17 +237,20 @@ common_settings.screen_rotation = require("ui/elements/screen_rotation_menu_tabl
 -- common_settings.screen_dpi = require("ui/elements/screen_dpi_menu_table")
 common_settings.screen_eink_opt = require("ui/elements/screen_eink_opt_menu_table")
 -- common_settings.screen_notification = require("ui/elements/screen_notification_menu_table")
-common_settings.menu_activate = require("ui/elements/menu_activate")
-common_settings.screen_disable_double_tab = require("ui/elements/screen_disable_double_tap_table")
-common_settings.ignore_hold_corners = {
-    text = _("Ignore long-press on corners"),
-    checked_func = function()
-        return G_reader_settings:isTrue("ignore_hold_corners")
-    end,
-    callback = function()
-        UIManager:broadcastEvent(Event:new("IgnoreHoldCorners"))
-    end,
-}
+
+if Device:isTouchDevice() then
+    common_settings.menu_activate = require("ui/elements/menu_activate")
+    common_settings.screen_disable_double_tab = require("ui/elements/screen_disable_double_tap_table")
+    common_settings.ignore_hold_corners = {
+        text = _("Ignore long-press on corners"),
+        checked_func = function()
+            return G_reader_settings:isTrue("ignore_hold_corners")
+        end,
+        callback = function()
+            UIManager:broadcastEvent(Event:new("IgnoreHoldCorners"))
+        end,
+    }
+end
 
 -- NOTE: Allow disabling color if it's mistakenly enabled on a Grayscale screen (after a settings import?)
 if Screen:isColorEnabled() or Screen:isColorScreen() then
@@ -346,12 +349,13 @@ end
 --     always = {_("Always"), _("always")},
 --     disable ={_("Disable"), _("disable")},
 -- }
--- local function genGenericMenuEntry(title, setting, value, default)
+-- local function genGenericMenuEntry(title, setting, value, default, radiomark)
 --     return {
 --         text = title,
 --         checked_func = function()
 --             return G_reader_settings:readSetting(setting, default) == value
 --         end,
+--         radio = radiomark,
 --         callback = function()
 --             G_reader_settings:saveSetting(setting, value)
 --         end,
@@ -430,6 +434,21 @@ end
 --         genGenericMenuEntry(_("Go to previous read page"), "back_in_reader", "previous_read_page"),
 --     },
 -- }
+-- if Device:hasKeyboard() then
+--     common_settings.backspace_as_back = {
+--         text = _("Backspace works as back button"),
+--         checked_func = function()
+--             return G_reader_settings:isTrue("backspace_as_back")
+--         end,
+--         callback = function()
+--             G_reader_settings:flipNilOrFalse("backspace_as_back")
+--             UIManager:show(InfoMessage:new{
+--                 text = _("This will take effect on next restart."),
+--             })
+--         end,
+--     }
+-- end
+
 -- common_settings.opening_page_location_stack = {
 --         text = _("Add opening page to location history"),
 --         checked_func = function()
@@ -536,10 +555,10 @@ end
 --             end,
 --             separator = true,
 --         },
---         genGenericMenuEntry(_("Ask with popup dialog"), "end_document_action", "pop-up", "pop-up"),
---         genGenericMenuEntry(_("Do nothing"), "end_document_action", "nothing"),
---         genGenericMenuEntry(_("Book status"), "end_document_action", "book_status"),
---         genGenericMenuEntry(_("Delete file"), "end_document_action", "delete_file"),
+--         genGenericMenuEntry(_("Ask with popup dialog"), "end_document_action", "pop-up", "pop-up", true),
+--         genGenericMenuEntry(_("Do nothing"), "end_document_action", "nothing", nil, true),
+--         genGenericMenuEntry(_("Book status"), "end_document_action", "book_status", nil, true),
+--         genGenericMenuEntry(_("Delete file"), "end_document_action", "delete_file", nil, true),
 --         {
 --             text = _("Open next file"),
 --             enabled_func = function()
@@ -548,18 +567,21 @@ end
 --             checked_func = function()
 --                 return G_reader_settings:readSetting("end_document_action") == "next_file"
 --             end,
+--             radio = true,
 --             callback = function()
 --                 G_reader_settings:saveSetting("end_document_action", "next_file")
 --             end,
 --         },
---         genGenericMenuEntry(_("Go to beginning"), "end_document_action", "goto_beginning"),
---         genGenericMenuEntry(_("Return to file browser"), "end_document_action", "file_browser"),
---         genGenericMenuEntry(_("Mark book as read"), "end_document_action", "mark_read"),
---         genGenericMenuEntry(_("Book status and return to file browser"), "end_document_action", "book_status_file_browser"),
+--         genGenericMenuEntry(_("Go to beginning"), "end_document_action", "goto_beginning", nil, true),
+--         genGenericMenuEntry(_("Return to file browser"), "end_document_action", "file_browser", nil, true),
+--         genGenericMenuEntry(_("Mark book as read"), "end_document_action", "mark_read", nil, true),
+--         genGenericMenuEntry(_("Book status and return to file browser"), "end_document_action", "book_status_file_browser", nil, true),
 --     }
 -- }
 
 -- common_settings.language = Language:getLangMenuTable()
+
+-- common_settings.font_ui_fallbacks = require("ui/elements/font_ui_fallbacks")
 
 -- common_settings.screenshot = {
 --     text = _("Screenshot folder"),

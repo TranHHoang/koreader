@@ -46,6 +46,7 @@ local ReaderRolling = require("apps/reader/modules/readerrolling")
 local ReaderSearch = require("apps/reader/modules/readersearch")
 local ReaderStatus = require("apps/reader/modules/readerstatus")
 local ReaderStyleTweak = require("apps/reader/modules/readerstyletweak")
+local ReaderThumbnail = require("apps/reader/modules/readerthumbnail")
 local ReaderToc = require("apps/reader/modules/readertoc")
 local ReaderTypeset = require("apps/reader/modules/readertypeset")
 local ReaderTypography = require("apps/reader/modules/readertypography")
@@ -374,6 +375,11 @@ function ReaderUI:init()
         document = self.document,
         view = self.view,
     })
+    -- thumbnails service (book map, page browser)
+    self:registerModule("thumbnail", ReaderThumbnail:new{
+        ui = self,
+        document = self.document,
+    })
     -- file searcher
     self:registerModule("filesearcher", FileManagerFileSearcher:new{
         dialog = self.dialog,
@@ -505,8 +511,9 @@ function ReaderUI:showFileManager(file)
 
     local last_dir, last_file
     if file then
-        last_dir, last_file = util.splitFilePathName(file)
+        last_dir = util.splitFilePathName(file)
         last_dir = last_dir:match("(.*)/")
+        last_file = file
     else
         last_dir, last_file = self:getLastDirFile(true)
     end
@@ -657,6 +664,7 @@ function ReaderUI:unlockDocumentWithPassword(document, try_again)
             {
                 {
                     text = _("Cancel"),
+                    id = "close",
                     enabled = true,
                     callback = function()
                         self:closeDialog()

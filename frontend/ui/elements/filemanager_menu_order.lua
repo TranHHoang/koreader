@@ -41,6 +41,8 @@ local order = {
     },
     device = {
         "keyboard_layout",
+        "font_ui_fallbacks",
+        "----------------------------",
         "time",
         "device_status_alarm",
         "charging_led", -- if Device:canToggleChargingLED()
@@ -58,6 +60,8 @@ local order = {
         "back_to_exit",
         "back_in_filemanager",
         "back_in_reader",
+        "backspace_as_back",
+        "----------------------------",
         "android_volume_keys",
         "android_camera_key",
         "android_haptic_feedback",

@@ -118,6 +118,8 @@ local settingsList = {
     follow_nearest_internal_link = {category="arg", event="GoToInternalPageLink", arg={pos={x=0,y=0}}, title=_("Follow nearest internal link"), reader=true},
     clear_location_history = {category="none", event="ClearLocationStack", arg=true, title=_("Clear location history"), reader=true, separator=true},
     toc = {category="none", event="ShowToc", title=_("Table of contents"), reader=true},
+    book_map = {category="none", event="ShowBookMap", title=_("Book map"), reader=true, condition=Device:isTouchDevice()},
+    page_browser = {category="none", event="ShowPageBrowser", title=_("Page browser"), reader=true, condition=Device:isTouchDevice()},
     bookmarks = {category="none", event="ShowBookmark", title=_("Bookmarks"), reader=true},
     bookmark_search = {category="none", event="SearchBookmark", title=_("Bookmark search"), reader=true},
     book_status = {category="none", event="ShowBookStatus", title=_("Book status"), reader=true},
@@ -188,6 +190,7 @@ local settingsList = {
     kopt_contrast = {category="absolutenumber", paging=true},
     kopt_page_opt = {category="configurable", paging=true},
     kopt_hw_dithering = {category="configurable", paging=true, condition=Device:hasEinkScreen() and Device:canHWDither()},
+    kopt_sw_dithering = {category="configurable", paging=true, condition=Device:hasEinkScreen() and not Device:canHWDither() and Device.screen.fb_bpp == 8},
     kopt_quality = {category="configurable", paging=true},
     kopt_doc_language = {category="string", paging=true},
     kopt_forced_ocr = {category="configurable", paging=true},
@@ -281,6 +284,8 @@ local dispatcher_menu_order = {
     "clear_location_history",
 
     "toc",
+    "book_map",
+    "page_browser",
     "bookmarks",
     "bookmark_search",
 
@@ -351,6 +356,7 @@ local dispatcher_menu_order = {
     "kopt_contrast",
     "kopt_page_opt",
     "kopt_hw_dithering",
+    "kopt_sw_dithering",
     "kopt_quality",
 
     "kopt_doc_language",

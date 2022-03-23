@@ -1,7 +1,3 @@
---[[--
-Widget that displays a shortcut icon for menu item.
---]]
-
 local BD = require("ui/bidi")
 local Blitbuffer = require("ffi/blitbuffer")
 local BottomContainer = require("ui/widget/container/bottomcontainer")
@@ -26,12 +22,14 @@ local RightContainer = require("ui/widget/container/rightcontainer")
 local Size = require("ui/size")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextWidget = require("ui/widget/textwidget")
+local TitleBar = require("ui/widget/titlebar")
 local UIManager = require("ui/uimanager")
 local UnderlineContainer = require("ui/widget/container/underlinecontainer")
 local Utf8Proc = require("ffi/utf8proc")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
+local filemanagerutil = require("apps/filemanager/filemanagerutil")
 local logger = require("logger")
 local util = require("util")
 local _ = require("gettext")
@@ -39,6 +37,9 @@ local Input = Device.input
 local Screen = Device.screen
 local T = FFIUtil.template
 
+--[[--
+Widget that displays a shortcut icon for menu item.
+--]]
 local ItemShortCutIcon = WidgetContainer:new{
     dimen = Geom:new{ w = Screen:scaleBySize(22), h = Screen:scaleBySize(22) },
     key = nil,
@@ -85,56 +86,6 @@ function ItemShortCutIcon:init()
 end
 
 --[[
-NOTICE:
-@menu entry must be provided in order to close the menu
---]]
-local MenuCloseButton = InputContainer:new{
-    overlap_align = "right",
-    padding_right = 0,
-    menu = nil,
-    dimen = nil,
-}
-
-function MenuCloseButton:init()
-    local text_widget = TextWidget:new{
-        text = "×",
-        face = Font:getFace("cfont", 30), -- this font size align nicely with title
-    }
-    -- The text box height is greater than its width, and we want this × to be
-    -- diagonally aligned with the top right corner (assuming padding_right=0,
-    -- or padding_right = padding_top so the diagonal aligment is preserved).
-    local text_size = text_widget:getSize()
-    local text_width_pad = math.floor((text_size.h - text_size.w) / 2)
-
-    self[1] = FrameContainer:new{
-        bordersize = 0,
-        padding = 0,
-        padding_top = self.padding_top,
-        padding_bottom = self.padding_bottom,
-        padding_left = self.padding_left,
-        padding_right = self.padding_right + text_width_pad,
-        text_widget,
-    }
-
-    self.dimen = Geom:new{
-        w = text_size.w + text_width_pad + self.padding_right,
-        h = text_size.h,
-    }
-    self.ges_events.Close = {
-        GestureRange:new{
-            ges = "tap",
-            range = self.dimen,
-        },
-        doc = "Close menu",
-    }
-end
-
-function MenuCloseButton:onClose()
-    self.menu:onClose()
-    return true
-end
-
---[[
 Widget that displays an item for menu
 --]]
 local MenuItem = InputContainer:new{
@@ -171,24 +122,22 @@ function MenuItem:init()
     self.detail = self.text
 
     -- we need this table per-instance, so we declare it here
-    if Device:isTouchDevice() then
-        self.ges_events = {
-            TapSelect = {
-                GestureRange:new{
-                    ges = "tap",
-                    range = self.dimen,
-                },
-                doc = "Select Menu Item",
+    self.ges_events = {
+        TapSelect = {
+            GestureRange:new{
+                ges = "tap",
+                range = self.dimen,
             },
-            HoldSelect = {
-                GestureRange:new{
-                    ges = "hold",
-                    range = self.dimen,
-                },
-                doc = "Hold Menu Item",
+            doc = "Select Menu Item",
+        },
+        HoldSelect = {
+            GestureRange:new{
+                ges = "hold",
+                range = self.dimen,
             },
-        }
-    end
+            doc = "Hold Menu Item",
+        },
+    }
 
     local max_item_height = self.dimen.h - 2 * self.linesize
 
@@ -216,17 +165,14 @@ function MenuItem:init()
     end
 
     -- State button and indentation for tree expand/collapse (for TOC)
-    local state_button_width = self.state_size.w or 0
-    local state_button = self.state or HorizontalSpan:new{
-        width = state_button_width,
-    }
-    local state_indent = self.state and self.state.indent or ""
+    local state_button = self.state or HorizontalSpan:new{}
+    local state_indent = self.table.indent or 0
+    local state_width = state_indent + self.state_w
     local state_container = LeftContainer:new{
         dimen = Geom:new{w = math.floor(self.content_width / 2), h = self.dimen.h},
         HorizontalGroup:new{
-            TextWidget:new{
-                text = state_indent,
-                face = Font:getFace(self.font, self.font_size),
+            HorizontalSpan:new{
+                width = state_indent,
             },
             state_button,
         }
@@ -256,7 +202,7 @@ function MenuItem:init()
     }
     local mandatory_w = mandatory_widget:getWidth()
 
-    local available_width = self.content_width - state_button_width - text_mandatory_padding - mandatory_w
+    local available_width = self.content_width - state_width - text_mandatory_padding - mandatory_w
     local item_name
 
     -- Whether we show text on a single or multiple lines, we don't want it shortened
@@ -419,7 +365,7 @@ function MenuItem:init()
         dimen = Geom:new{w = self.content_width, h = self.dimen.h},
         HorizontalGroup:new{
             HorizontalSpan:new{
-                width = self.state_size.w,
+                width = state_width,
             },
             item_name,
         }
@@ -627,7 +573,7 @@ local Menu = FocusManager:new{
     width = nil,
     -- height will be calculated according to item number if not given
     height = nil,
-    header_padding = Size.padding.large,
+    header_padding = Size.padding.default,
     dimen = nil,
     item_table = nil, -- NOT mandatory (will be empty)
     item_shortcuts = {
@@ -657,6 +603,8 @@ local Menu = FocusManager:new{
     -- if you want to embed the menu widget into another widget, set
     -- this to false
     is_popout = true,
+    -- set icon to add title bar left button
+    title_bar_left_icon = nil,
     -- set this to true to add close button
     has_close_button = true,
     -- close_callback is a function, which is executed when menu is closed
@@ -676,8 +624,8 @@ function Menu:_recalculateDimen()
         bottom_height = math.max(self.page_return_arrow:getSize().h, self.page_info_text:getSize().h)
             + 2 * Size.padding.button
     end
-    if self.menu_title and not self.no_title then
-        top_height = self.menu_title_group:getSize().h + self.header_padding
+    if self.title_bar and not self.no_title then
+        top_height = self.title_bar:getHeight() + self.header_padding
     end
     height_dim = self.inner_dimen.h - bottom_height - top_height
     local item_height = math.floor(height_dim / self.perpage)
@@ -713,50 +661,27 @@ function Menu:init()
     -----------------------------------
     -- start to set up widget layout --
     -----------------------------------
-    self.menu_title = TextWidget:new{
-        overlap_align = "center",
-        text = self.title,
-        face = Font:getFace("tfont"),
+    self.title_bar = TitleBar:new{
+        width = self.dimen.w,
+        fullscreen = "true",
+        align = "center",
+        with_bottom_line = self.with_bottom_line,
+        bottom_line_color = self.bottom_line_color,
+        bottom_line_h_padding = self.bottom_line_h_padding,
+        title = self.title,
+        title_face = self.title_face,
+        title_multilines = self.title_multilines,
+        title_shrink_font_to_fit = self.title_shrink_font_to_fit,
+        subtitle = self.show_path and BD.directory(filemanagerutil.abbreviate(self.path)),
+        subtitle_truncate_left = self.show_path,
+        subtitle_fullwidth = self.show_path,
+        left_icon = self.title_bar_left_icon,
+        left_icon_tap_callback = function() self:onLeftButtonTap() end,
+        left_icon_hold_callback = function() self:onLeftButtonHold() end,
+        close_callback = self.has_close_button and function() self:onClose() end,
+        show_parent = self.show_parent or self,
     }
-    local menu_title_container = CenterContainer:new{
-        dimen = Geom:new{
-            w = self.inner_dimen.w,
-            h = self.menu_title:getSize().h,
-        },
-        self.menu_title,
-    }
-    local path_text_container
 
-    if self.show_path then
-        self.path_text = TextWidget:new{
-            face = Font:getFace("xx_smallinfofont"),
-            text = BD.directory(self.path),
-            max_width = self.inner_dimen.w - 2*Size.padding.large,
-            truncate_left = true,
-        }
-        path_text_container = CenterContainer:new{
-            dimen = Geom:new{
-                w = self.inner_dimen.w,
-                h = self.path_text:getSize().h,
-            },
-            self.path_text,
-        }
-        self.menu_title_group = VerticalGroup:new{
-            align = "center",
-            menu_title_container,
-            path_text_container,
-        }
-    else
-        self.menu_title_group = VerticalGroup:new{
-            align = "center",
-            menu_title_container
-        }
-    end
-    -- group for title bar
-    self.title_bar = OverlapGroup:new{
-        dimen = {w = self.inner_dimen.w, h = self.menu_title_group:getSize().h},
-        self.menu_title_group,
-    }
     -- group for items
     self.item_group = VerticalGroup:new{}
     -- group for page info
@@ -912,10 +837,7 @@ function Menu:init()
         self.page_return_arrow,
     }
 
-    local header = VerticalGroup:new{
-        VerticalSpan:new{width = self.header_padding},
-        self.title_bar,
-    }
+    local header = self.no_title and VerticalSpan:new{ width = 0 } or self.title_bar
     local body = self.item_group
     local footer = BottomContainer:new{
         dimen = self.inner_dimen:copy(),
@@ -936,20 +858,12 @@ function Menu:init()
     self.vertical_span = HorizontalGroup:new{
         VerticalSpan:new{ width = self.span_width }
     }
-    if self.no_title then
-        self.content_group = VerticalGroup:new{
-            align = "left",
-            self.vertical_span,
-            body,
-        }
-    else
-        self.content_group = VerticalGroup:new{
-            align = "left",
-            header,
-            self.vertical_span,
-            body,
-        }
-    end
+    self.content_group = VerticalGroup:new{
+        align = "left",
+        header,
+        self.vertical_span,
+        body,
+    }
     local content = OverlapGroup:new{
         -- This unique allow_mirroring=false looks like it's enough
         -- to have this complex Menu, and all widgets based on it,
@@ -973,37 +887,35 @@ function Menu:init()
     ------------------------------------------
     -- start to set up input event callback --
     ------------------------------------------
-    if Device:isTouchDevice() then
-        if self.has_close_button then
-            table.insert(self.title_bar, MenuCloseButton:new{
-                menu = self,
-                padding_right = self.header_padding,
-            })
-        end
-        -- watch for outer region if it's a self contained widget
-        if self.is_popout then
-            self.ges_events.TapCloseAllMenus = {
-                GestureRange:new{
-                    ges = "tap",
-                    range = Geom:new{
-                        x = 0, y = 0,
-                        w = Screen:getWidth(),
-                        h = Screen:getHeight(),
-                    }
+    -- watch for outer region if it's a self contained widget
+    if self.is_popout then
+        self.ges_events.TapCloseAllMenus = {
+            GestureRange:new{
+                ges = "tap",
+                range = Geom:new{
+                    x = 0, y = 0,
+                    w = Screen:getWidth(),
+                    h = Screen:getHeight(),
                 }
             }
-        end
-        -- delegate swipe gesture to GestureManager in filemanager
-        if not self.filemanager then
-            self.ges_events.Swipe = {
-                GestureRange:new{
-                    ges = "swipe",
-                    range = self.dimen,
-                }
-            }
-        end
-        self.ges_events.Close = self.on_close_ges
+        }
     end
+    -- delegate swipe gesture to GestureManager in filemanager
+    if not self.filemanager then
+        self.ges_events.Swipe = {
+            GestureRange:new{
+                ges = "swipe",
+                range = self.dimen,
+            }
+        }
+        self.ges_events.MultiSwipe = {
+            GestureRange:new{
+                ges = "multiswipe",
+                range = self.dimen,
+            }
+        }
+    end
+    self.ges_events.Close = self.on_close_ges
 
     if not Device:hasKeyboard() then
         -- remove menu item shortcut for K4
@@ -1012,7 +924,7 @@ function Menu:init()
 
     if Device:hasKeys() then
         -- set up keyboard events
-        self.key_events.Close = { {"Back"}, doc = "close menu" }
+        self.key_events.Close = { {Input.group.Back}, doc = "close menu" }
         if Device:hasFewKeys() then
             self.key_events.Close = { {"Left"}, doc = "close menu" }
         end
@@ -1031,9 +943,6 @@ function Menu:init()
         if self.is_enable_shortcut then
             self.key_events.SelectByShortCut = { {self.item_shortcuts} }
         end
-        self.key_events.Select = {
-            {"Press"}, doc = "select current menu item"
-        }
         self.key_events.Right = {
             {"Right"}, doc = "hold  menu item"
         }
@@ -1078,10 +987,10 @@ function Menu:onCloseWidget()
 end
 
 function Menu:updatePageInfo(select_number)
-    if self.item_group[1] then
+    if #self.item_table > 0 then
         if Device:hasDPad() then
             -- reset focus manager accordingly
-            self.selected = { x = 1, y = select_number }
+            self:moveFocusTo(1, select_number)
         end
         -- update page information
         self.page_info_text:setText(FFIUtil.template(_("Page %1 of %2"), self.page, self.page_num))
@@ -1155,7 +1064,7 @@ function Menu:updateItems(select_number)
             local item_tmp = MenuItem:new{
                 show_parent = self.show_parent,
                 state = self.item_table[i].state,
-                state_size = self.state_size or {},
+                state_w = self.state_w or 0,
                 text = Menu.getMenuText(self.item_table[i]),
                 bidi_wrap_func = self.item_table[i].bidi_wrap_func,
                 mandatory = self.item_table[i].mandatory,
@@ -1187,7 +1096,7 @@ function Menu:updateItems(select_number)
 
     self:updatePageInfo(select_number)
     if self.show_path then
-        self.path_text:setText(BD.directory(self.path))
+        self.title_bar:setSubTitle(BD.directory(filemanagerutil.abbreviate(self.path)))
     end
 
     UIManager:setDirty(self.show_parent, function()
@@ -1213,8 +1122,8 @@ end
     which item.key = value
 --]]
 function Menu:switchItemTable(new_title, new_item_table, itemnumber, itemmatch)
-    if self.menu_title and new_title then
-        self.menu_title:setText(new_title)
+    if self.title_bar and new_title then
+        self.title_bar:setTitle(new_title)
     end
 
     if itemnumber == nil then
@@ -1383,20 +1292,8 @@ function Menu:onGotoPage(page)
     return true
 end
 
-function Menu:onSelect()
-    local item = self.item_table[(self.page-1)*self.perpage+self.selected.y]
-    if item then
-        self:onMenuSelect(item)
-    end
-    return true
-end
-
 function Menu:onRight()
-    local item = self.item_table[(self.page-1)*self.perpage+self.selected.y]
-    if item then
-        self:onMenuHold(item)
-    end
-    return true
+    return self:sendHoldEventToFocusedWidget()
 end
 
 function Menu:onClose()
@@ -1435,7 +1332,7 @@ function Menu:onSwipe(arg, ges_ev)
     elseif direction == "south" then
         if self.has_close_button and not self.no_title then
             -- If there is a close button displayed (so, this Menu can be
-            -- closed), allow easier closing with swipe up/down
+            -- closed), allow easier closing with swipe south.
             self:onClose()
         end
         -- If there is no close button, it's a top level Menu and swipe
@@ -1447,6 +1344,28 @@ function Menu:onSwipe(arg, ges_ev)
         -- trigger full refresh
         UIManager:setDirty(nil, "full")
     end
+end
+
+function Menu:onMultiSwipe(arg, ges_ev)
+    -- For consistency with other fullscreen widgets where swipe south can't be
+    -- used to close and where we then allow any multiswipe to close, allow any
+    -- multiswipe to close this widget too.
+    if self.has_close_button and not self.no_title then
+        -- If there is a close button displayed (so, this Menu can be
+        -- closed), allow easier closing with swipe south.
+        self:onClose()
+    end
+    return true
+end
+
+function Menu:setTitleBarLeftIcon(icon)
+    self.title_bar:setLeftIcon(icon)
+end
+
+function Menu:onLeftButtonTap() -- to be overriden and implemented by the caller
+end
+
+function Menu:onLeftButtonHold() -- to be overriden and implemented by the caller
 end
 
 --- Adds > to touch menu items with a submenu

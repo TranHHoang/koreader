@@ -135,24 +135,22 @@ function ListMenuItem:init()
     self.detail = self.text
 
     -- we need this table per-instance, so we declare it here
-    if Device:isTouchDevice() then
-        self.ges_events = {
-            TapSelect = {
-                GestureRange:new{
-                    ges = "tap",
-                    range = self.dimen,
-                },
-                doc = "Select Menu Item",
+    self.ges_events = {
+        TapSelect = {
+            GestureRange:new{
+                ges = "tap",
+                range = self.dimen,
             },
-            HoldSelect = {
-                GestureRange:new{
-                    ges = "hold",
-                    range = self.dimen,
-                },
-                doc = "Hold Menu Item",
+            doc = "Select Menu Item",
+        },
+        HoldSelect = {
+            GestureRange:new{
+                ges = "hold",
+                range = self.dimen,
             },
-        }
-    end
+            doc = "Hold Menu Item",
+        },
+    }
 
     -- We now build the minimal widget container that won't change after udpate()
 
@@ -229,7 +227,7 @@ function ListMenuItem:update()
         self.is_directory = true
         -- nb items on the right, directory name on the left
         local wright = TextWidget:new{
-            text = self.mandatory_func and self.mandatory_func() or self.mandatory,
+            text = self.mandatory_func and self.mandatory_func() or (self.mandatory and self.mandatory or ""),
             face = Font:getFace("cfont", _fontSize(14, 18)),
         }
         local pad_width = Screen:scaleBySize(10) -- on the left, in between, and on the right
@@ -588,17 +586,17 @@ function ListMenuItem:update()
             end
             if bookinfo.unsupported then
                 -- Let's show this fact in place of the anyway empty authors slot
-                authors = T(_("(no book information: %1)"), bookinfo.unsupported)
+                authors = T(_("(no book information: %1)"), _(bookinfo.unsupported))
             end
             -- Build title and authors texts with decreasing font size
             -- till it fits in the space available
             while true do
                 -- Free previously made widgets to avoid memory leaks
                 if wtitle then
-                    wtitle:free()
+                    wtitle:free(true)
                 end
                 if wauthors then
-                    wauthors:free()
+                    wauthors:free(true)
                     wauthors = nil
                 end
                 -- BookInfoManager:extractBookInfo() made sure
@@ -744,7 +742,7 @@ function ListMenuItem:update()
             local fontsize_no_bookinfo = _fontSize(18, 22)
             repeat
                 if text_widget then
-                    text_widget:free()
+                    text_widget:free(true)
                 end
                 text_widget = TextBoxWidget:new{
                     text = text .. hint,

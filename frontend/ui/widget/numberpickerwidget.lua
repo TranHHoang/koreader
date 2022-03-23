@@ -18,11 +18,11 @@ Example:
 local Button = require("ui/widget/button")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
+local FocusManager = require("ui/widget/focusmanager")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
 local Font = require("ui/font")
 local InfoMessage = require("ui/widget/infomessage")
-local InputContainer = require("ui/widget/container/inputcontainer")
 local InputDialog = require("ui/widget/inputdialog")
 local Size = require("ui/size")
 local UIManager = require("ui/uimanager")
@@ -32,7 +32,7 @@ local _ = require("gettext")
 local T = require("ffi/util").template
 local Screen = Device.screen
 
-local NumberPickerWidget = InputContainer:new{
+local NumberPickerWidget = FocusManager:new{
     spinner_face = Font:getFace("smalltfont"),
     precision = "%02d",
     width = nil,
@@ -60,6 +60,7 @@ function NumberPickerWidget:init()
         self.value_index = self.value_index or 1
         self.value = self.value_table[self.value_index]
     end
+    self.layout = {}
 
     -- Widget layout
     local bordersize = Size.border.default
@@ -87,6 +88,7 @@ function NumberPickerWidget:init()
             self:update()
         end
     }
+    table.insert(self.layout, {button_up})
     local button_down = Button:new{
         text = "▼",
         bordersize = bordersize,
@@ -110,6 +112,7 @@ function NumberPickerWidget:init()
             self:update()
         end
     }
+    table.insert(self.layout, {button_down})
 
     local empty_space = VerticalSpan:new{ width = Size.padding.large }
 
@@ -133,6 +136,7 @@ function NumberPickerWidget:init()
                     {
                         {
                             text = _("Cancel"),
+                            id = "close",
                             callback = function()
                                 UIManager:close(input_dialog)
                             end,
@@ -183,6 +187,9 @@ function NumberPickerWidget:init()
         show_parent = self.show_parent,
         callback = callback_input,
     }
+    if callback_input then
+        table.insert(self.layout, 2, {self.text_value})
+    end
 
     local widget_spinner = VerticalGroup:new{
         align = "center",
@@ -207,6 +214,7 @@ function NumberPickerWidget:init()
     }
     self.dimen = self.frame:getSize()
     self[1] = self.frame
+    self:refocusWidget()
     UIManager:setDirty(self.show_parent, function()
         return "ui", self.dimen
     end)
@@ -223,6 +231,7 @@ function NumberPickerWidget:update()
 
     self.text_value:setText(tostring(self.formatted_value), self.width)
 
+    self:refocusWidget()
     UIManager:setDirty(self.show_parent, function()
         return "ui", self.dimen
     end)

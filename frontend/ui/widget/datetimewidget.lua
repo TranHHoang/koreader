@@ -39,26 +39,24 @@ local Blitbuffer = require("ffi/blitbuffer")
 local ButtonTable = require("ui/widget/buttontable")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
+local FocusManager = require("ui/widget/focusmanager")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
 local Font = require("ui/font")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
-local InputContainer = require("ui/widget/container/inputcontainer")
-local LineWidget = require("ui/widget/linewidget")
 local NumberPickerWidget = require("ui/widget/numberpickerwidget")
 local Size = require("ui/size")
 local TextBoxWidget = require("ui/widget/textboxwidget")
-local TextWidget = require("ui/widget/textwidget")
+local TitleBar = require("ui/widget/titlebar")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
-local VerticalSpan = require("ui/widget/verticalspan")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 local Screen = Device.screen
 local T = require("ffi/util").template
 
-local DateTimeWidget = InputContainer:new{
+local DateTimeWidget = FocusManager:new{
     title_face = Font:getFace("x_smalltfont"),
     info_text = nil,
     width = nil,
@@ -68,7 +66,6 @@ local DateTimeWidget = InputContainer:new{
     month = 1,
     year = 2021,
     hour = 12,
-    hour_max = 23,
     min = 0,
     ok_text = _("Apply"),
     cancel_text = _("Close"),
@@ -78,14 +75,13 @@ local DateTimeWidget = InputContainer:new{
 }
 
 function DateTimeWidget:init()
+    self.layout = {}
     self.screen_width = Screen:getWidth()
     self.screen_height = Screen:getHeight()
     self.width = self.width or math.floor(math.min(self.screen_width, self.screen_height) *
         (self.is_date and 0.8 or 0.6))
     if Device:hasKeys() then
-        self.key_events = {
-            Close = { {"Back"}, doc = "close date widget" }
-        }
+        self.key_events.Close = { {Device.input.group.Back}, doc = "close date widget" }
     end
     if Device:isTouchDevice() then
         self.ges_events = {
@@ -102,11 +98,11 @@ function DateTimeWidget:init()
     end
 
     -- Actually the widget layout
-    self:layout()
+    self:createLayout()
 end
 
 local year_widget, month_hour_widget, day_min_widget
-function DateTimeWidget:layout()
+function DateTimeWidget:createLayout()
     year_widget = NumberPickerWidget:new{
         show_parent = self,
         value = self.year,
@@ -115,14 +111,18 @@ function DateTimeWidget:layout()
         value_step = 1,
         value_hold_step = self.year_hold_step or 4,
     }
+    if self.is_date then
+        self:mergeLayoutInHorizontal(year_widget)
+    end
     month_hour_widget = NumberPickerWidget:new{
         show_parent = self,
         value = self.is_date and self.month or self.hour,
         value_min = self.hour_min or self.month_min or (self.is_date and 1 or 0),
-        value_max = self.hour_max or self.month_max or (self.is_date and 12 or 24),
+        value_max = self.hour_max or self.month_max or (self.is_date and 12 or 23),
         value_step = 1,
         value_hold_step = self.hour_hold_step or self.month_hold_step or 3,
     }
+    self:mergeLayoutInHorizontal(month_hour_widget)
     day_min_widget = NumberPickerWidget:new{
         show_parent = self,
         value = self.is_date and self.day or self.min,
@@ -133,6 +133,7 @@ function DateTimeWidget:layout()
         date_month_hour = month_hour_widget,
         date_year = year_widget,
     }
+    self:mergeLayoutInHorizontal(day_min_widget)
     local separator_space = TextBoxWidget:new{
         text = self.is_date and "–" or ":",
         alignment = "center",
@@ -154,37 +155,15 @@ function DateTimeWidget:layout()
         table.remove(date_group, 1)
     end
 
-    local date_title = FrameContainer:new{
-        padding = Size.padding.default,
-        margin = Size.margin.title,
-        bordersize = 0,
-        TextWidget:new{
-            text = self.title_text,
-            face = self.title_face,
-            max_width = self.width - 2 * (Size.padding.default + Size.margin.title),
-        },
+    local title_bar = TitleBar:new{
+        width = self.width,
+        align = "left",
+        with_bottom_line = true,
+        title = self.title_text,
+        title_shrink_font_to_fit = true,
+        info_text = self.info_text,
+        show_parent = self,
     }
-    local date_line = LineWidget:new{
-        dimen = Geom:new{
-            w = self.width,
-            h = Size.line.thick,
-        }
-    }
-    local date_info
-    if self.info_text then
-        date_info = FrameContainer:new{
-            padding = Size.padding.default,
-            margin = Size.margin.small,
-            bordersize = 0,
-            TextBoxWidget:new{
-                text = self.info_text,
-                face = Font:getFace("x_smallinfofont"),
-                width = math.floor(self.width * 0.9),
-            }
-        }
-    else
-        date_info = VerticalSpan:new{ width = 0 }
-    end
 
     local buttons = {}
     if self.default_value then
@@ -245,6 +224,7 @@ function DateTimeWidget:layout()
         zero_sep = true,
         show_parent = self,
     }
+    self:mergeLayoutInVertical(ok_cancel_buttons)
 
     self.date_frame = FrameContainer:new{
         radius = Size.radius.window,
@@ -254,9 +234,7 @@ function DateTimeWidget:layout()
         background = Blitbuffer.COLOR_WHITE,
         VerticalGroup:new{
             align = "left",
-            date_title,
-            date_line,
-            date_info,
+            title_bar,
             CenterContainer:new{
                 dimen = Geom:new{
                     w = self.width,
@@ -286,6 +264,7 @@ function DateTimeWidget:layout()
             self.date_frame,
         }
     }
+    self:refocusWidget()
     UIManager:setDirty(self, function()
         return "ui", self.date_frame.dimen
     end)

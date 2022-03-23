@@ -32,6 +32,7 @@ Example for input of two strings and a number:
             {
                 {
                     text = _("Cancel"),
+                    id = "close",
                     callback = function()
                         UIManager:close(sample_input)
                     end
@@ -96,6 +97,7 @@ local MultiInputDialog = InputDialog:extend{
     fields = {},
     description_padding = Size.padding.default,
     description_margin = Size.margin.small,
+    bottom_v_padding = Size.padding.default,
 }
 
 function MultiInputDialog:init()
@@ -103,7 +105,6 @@ function MultiInputDialog:init()
     InputDialog.init(self)
     local VerticalGroupData = VerticalGroup:new{
         align = "left",
-        self.title_widget,
         self.title_bar,
     }
 
@@ -132,10 +133,7 @@ function MultiInputDialog:init()
             auto_para_direction = field.auto_para_direction or self.auto_para_direction,
             alignment_strict = field.alignment_strict or self.alignment_strict,
         }
-        if Device:hasDPad() then
-            -- little hack to piggyback on the layout of the button_table to handle the new InputText
-            table.insert(self.button_table.layout, #self.button_table.layout, {input_field[k]})
-        end
+        table.insert(self.layout, #self.layout, {input_field[k]})
         if field.description then
             input_description[k] = FrameContainer:new{
                 padding = self.description_padding,
@@ -164,10 +162,6 @@ function MultiInputDialog:init()
         })
     end
 
-    if Device:hasDPad() then
-        -- remove the not needed hack in inputdialog
-        table.remove(self.button_table.layout, 1)
-    end
     -- Add same vertical space after than before InputText
     table.insert(VerticalGroupData,CenterContainer:new{
         dimen = Geom:new{
@@ -204,7 +198,10 @@ function MultiInputDialog:init()
         ignore_if_over = "height",
         self.dialog_frame,
     }
-    UIManager:setDirty(self, "ui")
+    UIManager:setDirty(self, function()
+        return "ui", self.dialog_frame.dimen
+    end)
+
 end
 
 function MultiInputDialog:getFields()

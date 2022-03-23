@@ -3,26 +3,22 @@ local ButtonTable = require("ui/widget/buttontable")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
 local FrameContainer = require("ui/widget/container/framecontainer")
+local FocusManager = require("ui/widget/focusmanager")
 local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
-local Font = require("ui/font")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
-local InputContainer = require("ui/widget/container/inputcontainer")
-local LineWidget = require("ui/widget/linewidget")
 local MovableContainer = require("ui/widget/container/movablecontainer")
 local RadioButtonTable = require("ui/widget/radiobuttontable")
 local Size = require("ui/size")
-local TextBoxWidget = require("ui/widget/textboxwidget")
-local TextWidget = require("ui/widget/textwidget")
+local TitleBar = require("ui/widget/titlebar")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 local Screen = Device.screen
 
-local RadioButtonWidget = InputContainer:new{
+local RadioButtonWidget = FocusManager:new{
     title_text = "",
-    title_face = Font:getFace("x_smalltfont"),
     info_text = nil,
     width = nil,
     width_factor = nil,
@@ -53,27 +49,24 @@ function RadioButtonWidget:init()
         self.width = math.floor(math.min(self.screen_width, self.screen_height) * self.width_factor)
     end
     if Device:hasKeys() then
-        self.key_events = {
-            Close = { {"Back"}, doc = "close widget" }
-        }
+        self.key_events.Close = { {Device.input.group.Back}, doc = "close widget" }
     end
-    if Device:isTouchDevice() then
-        self.ges_events = {
-            TapClose = {
-                GestureRange:new{
-                    ges = "tap",
-                    range = Geom:new{
-                        w = self.screen_width,
-                        h = self.screen_height,
-                    }
-                },
+    self.ges_events = {
+        TapClose = {
+            GestureRange:new{
+                ges = "tap",
+                range = Geom:new{
+                    w = self.screen_width,
+                    h = self.screen_height,
+                }
             },
-         }
-    end
+        },
+        }
     self:update()
 end
 
 function RadioButtonWidget:update()
+    self.layout = {}
     if self.default_provider then
         local row, col = self:getButtonIndex(self.default_provider)
         self.radio_buttons[row][col].text = self.radio_buttons[row][col].text .. "\u{A0}\u{A0}★"
@@ -87,27 +80,22 @@ function RadioButtonWidget:update()
         parent = self,
         face = self.face,
     }
+    self:mergeLayoutInVertical(value_widget)
     local value_group = HorizontalGroup:new{
         align = "center",
         value_widget,
     }
 
-    local value_title = FrameContainer:new{
-        padding = Size.padding.default,
-        margin = Size.margin.title,
-        bordersize = 0,
-        TextWidget:new{
-            text = self.title_text,
-            max_width = self.width - 2 * (Size.padding.default + Size.margin.title),
-            face = self.title_face,
-        },
+    local title_bar = TitleBar:new{
+        width = self.width,
+        align = "left",
+        with_bottom_line = true,
+        title = self.title_text,
+        title_shrink_font_to_fit = true,
+        info_text = self.info_text,
+        show_parent = self,
     }
-    local value_line = LineWidget:new{
-        dimen = Geom:new{
-            w = self.width,
-            h = Size.line.thick,
-        }
-    }
+
     local buttons = {
         {
             {
@@ -159,24 +147,11 @@ function RadioButtonWidget:update()
         zero_sep = true,
         show_parent = self,
     }
-
+    self:mergeLayoutInVertical(ok_cancel_buttons)
     local vgroup = VerticalGroup:new{
         align = "left",
-        value_title,
-        value_line,
+        title_bar,
     }
-    if self.info_text then
-        table.insert(vgroup, FrameContainer:new{
-            padding = Size.padding.default,
-            margin = Size.margin.small,
-            bordersize = 0,
-            TextBoxWidget:new{
-                text = self.info_text,
-                face = Font:getFace("x_smallinfofont"),
-                width = math.floor(self.width * 0.9),
-            }
-        })
-    end
     table.insert(vgroup, CenterContainer:new{
         dimen = Geom:new{
             w = self.width,

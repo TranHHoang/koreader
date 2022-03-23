@@ -55,6 +55,10 @@ function Usage:percentageRate()
     end
 end
 
+function Usage:percentageRatePerHour()
+    return self:percentageRate() * 3600
+end
+
 function Usage:remainingTime()
     if self:percentageRate() == 0 then return "N/A" end
     local curr = State:new()
@@ -82,7 +86,7 @@ function Usage:dump(kv_pairs, id)
     local name = id or _("Consumed:")
     table.insert(kv_pairs, {INDENTATION .. _("Total time:"), duration(self.time) })
     table.insert(kv_pairs, {INDENTATION .. name, shorten(self.percentage), "%"})
-    table.insert(kv_pairs, {INDENTATION .. _("Change per hour:"), shorten(self:percentageRate())})
+    table.insert(kv_pairs, {INDENTATION .. _("Change per hour:"), shorten(self:percentageRatePerHour())})
 end
 
 function Usage:dumpRemaining(kv_pairs)

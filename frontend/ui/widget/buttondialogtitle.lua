@@ -34,7 +34,7 @@ local ButtonDialogTitle = InputContainer:new{
 function ButtonDialogTitle:init()
     if self.dismissable then
         if Device:hasKeys() then
-            local close_keys = Device:hasFewKeys() and { "Back", "Left" } or "Back"
+            local close_keys = Device:hasFewKeys() and { "Back", "Left" } or Device.input.group.Back
             self.key_events = {
                 Close = { { close_keys }, doc = "close button dialog" }
             }
@@ -85,6 +85,13 @@ function ButtonDialogTitle:init()
             }
         }
     }
+end
+
+function ButtonDialogTitle:setTitle(title)
+    self.title = title
+    self:free()
+    self:init()
+    UIManager:setDirty("all", "ui")
 end
 
 function ButtonDialogTitle:onShow()

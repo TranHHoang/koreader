@@ -2,7 +2,6 @@ local Blitbuffer = require("ffi/blitbuffer")
 local BottomContainer = require("ui/widget/container/bottomcontainer")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
-local Event = require("ui/event")
 local FocusManager = require("ui/widget/focusmanager")
 local Font = require("ui/font")
 local FrameContainer = require("ui/widget/container/framecontainer")
@@ -131,8 +130,16 @@ function VirtualKey:init()
         end
     elseif self.label == "↑" then
         self.callback = function() self.keyboard:upLine() end
+        self.hold_callback = function()
+            self.ignore_key_release = true
+            self.keyboard:scrollUp()
+        end
     elseif self.label == "↓" then
         self.callback = function() self.keyboard:downLine() end
+        self.hold_callback = function()
+            self.ignore_key_release = true
+            self.keyboard:scrollDown()
+        end
     else
         self.callback = function () self.keyboard:addChar(self.key) end
         self.hold_callback = function()
@@ -237,40 +244,38 @@ function VirtualKey:init()
         h = self.height,
     }
     --self.dimen = self[1]:getSize()
-    if Device:isTouchDevice() then
-        self.ges_events = {
-            TapSelect = {
-                GestureRange:new{
-                    ges = "tap",
-                    range = self.dimen,
-                },
+    self.ges_events = {
+        TapSelect = {
+            GestureRange:new{
+                ges = "tap",
+                range = self.dimen,
             },
-            HoldSelect = {
-                GestureRange:new{
-                    ges = "hold",
-                    range = self.dimen,
-                },
+        },
+        HoldSelect = {
+            GestureRange:new{
+                ges = "hold",
+                range = self.dimen,
             },
-            HoldReleaseKey = {
-                GestureRange:new{
-                    ges = "hold_release",
-                    range = self.dimen,
-                },
+        },
+        HoldReleaseKey = {
+            GestureRange:new{
+                ges = "hold_release",
+                range = self.dimen,
             },
-            PanReleaseKey = {
-                GestureRange:new{
-                    ges = "pan_release",
-                    range = self.dimen,
-                },
+        },
+        PanReleaseKey = {
+            GestureRange:new{
+                ges = "pan_release",
+                range = self.dimen,
             },
-            SwipeKey = {
-                GestureRange:new{
-                    ges = "swipe",
-                    range = self.dimen,
-                },
+        },
+        SwipeKey = {
+            GestureRange:new{
+                ges = "swipe",
+                range = self.dimen,
             },
-        }
-    end
+        },
+    }
     if (self.keyboard.shiftmode_keys[self.label] ~= nil  and self.keyboard.shiftmode) or
         (self.keyboard.umlautmode_keys[self.label] ~= nil and self.keyboard.umlautmode) or
         (self.keyboard.symbolmode_keys[self.label] ~= nil and self.keyboard.symbolmode) then
@@ -471,11 +476,6 @@ function VirtualKeyPopup:onCloseWidget()
     end)
 end
 
-function VirtualKeyPopup:onPressKey()
-    self:getFocusItem():handleEvent(Event:new("TapSelect"))
-    return true
-end
-
 function VirtualKeyPopup:init()
     local parent_key = self.parent_key
     local key_chars = parent_key.key_chars
@@ -668,11 +668,8 @@ function VirtualKeyPopup:init()
     self.tap_interval_override = G_reader_settings:readSetting("ges_tap_interval_on_keyboard", 0)
     self.tap_interval_override = TimeVal:new{ usec = self.tap_interval_override }
 
-    if Device:hasDPad() then
-        self.key_events.PressKey = { {"Press"}, doc = "select key" }
-    end
     if Device:hasKeys() then
-        self.key_events.Close = { {"Back"}, doc = "close keyboard" }
+        self.key_events.Close = { {Device.input.group.Back}, doc = "close keyboard" }
     end
 
     local offset_x = 2*keyboard_frame.bordersize + keyboard_frame.padding + parent_key.keyboard.key_padding
@@ -748,6 +745,7 @@ local VirtualKeyboard = FocusManager:new{
     lang_to_keyboard_layout = {
         ar_AA = "ar_AA_keyboard",
         bg_BG = "bg_keyboard",
+        bn = "bn_keyboard",
         de = "de_keyboard",
         el = "el_keyboard",
         en = "en_keyboard",
@@ -791,15 +789,51 @@ function VirtualKeyboard:init()
     self:initLayer(self.keyboard_layer)
     self.tap_interval_override = G_reader_settings:readSetting("ges_tap_interval_on_keyboard", 0)
     self.tap_interval_override = TimeVal:new{ usec = self.tap_interval_override }
-    if Device:hasDPad() then
-        self.key_events.PressKey = { {"Press"}, doc = "select key" }
-    end
     if Device:hasKeys() then
         self.key_events.Close = { {"Back"}, doc = "close keyboard" }
     end
     if keyboard.wrapInputBox then
         self.uwrap_func = keyboard.wrapInputBox(self.inputbox) or self.uwrap_func
     end
+    if Device:hasDPad() then
+        -- hadDPad() would have FocusManager handle arrow keys strokes to navigate
+        -- and activate this VirtualKeyboard's touch keys (needed on non-touch Kindle).
+        -- If we have a keyboard, we'd prefer arrow keys (and Enter, and Del) to be
+        -- handled by InputText to navigate the cursor inside the text box, and to
+        -- add newline and delete chars. And if we are a touch device, we don't
+        -- need focus manager to help us navigate keys and fields.
+        -- So, disable all key_event handled by FocusManager
+        if Device:isTouchDevice() then
+            -- Remove all FocusManager key event handlers.
+            for k, _ in pairs(self.builtin_key_events) do
+                self.key_events[k] = nil
+            end
+            for k, _ in pairs(self.extra_key_events) do
+                self.key_events[k] = nil
+            end
+        elseif Device:hasKeyboard() then
+            -- Use physical keyboard for most characters
+            -- For special characters not available in physical keyboard
+            -- Use arrow and Press keys to select in VirtualKeyboard
+            for k, seq in pairs(self.extra_key_events) do
+                if self:_isTextKeyWithoutModifier(seq) then
+                    self.key_events[k] = nil
+                end
+            end
+        end
+    end
+end
+
+function VirtualKeyboard:_isTextKeyWithoutModifier(seq)
+    for _, oneseq in ipairs(seq) do
+        if #oneseq ~= 1 then -- has modifier key combination
+            return false
+        end
+        if #oneseq[1] ~= 1 then -- not simple text key, like Home, End
+            return false
+        end
+    end
+    return true
 end
 
 function VirtualKeyboard:getKeyboardLayout()
@@ -830,11 +864,11 @@ end
 
 function VirtualKeyboard:onClose()
     UIManager:close(self)
-    return true
-end
-
-function VirtualKeyboard:onPressKey()
-    self:getFocusItem():handleEvent(Event:new("TapSelect"))
+    if self.inputbox and Device:hasDPad() then
+        -- let input text handle Back event to unfocus
+        -- otherwise, another extra Back event needed
+        return false
+    end
     return true
 end
 
@@ -1011,8 +1045,16 @@ function VirtualKeyboard:upLine()
     self.inputbox:upLine()
 end
 
+function VirtualKeyboard:scrollUp()
+    self.inputbox:scrollUp()
+end
+
 function VirtualKeyboard:downLine()
     self.inputbox:downLine()
+end
+
+function VirtualKeyboard:scrollDown()
+    self.inputbox:scrollDown()
 end
 
 function VirtualKeyboard:clear()

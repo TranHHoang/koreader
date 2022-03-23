@@ -52,24 +52,22 @@ function OptionTextItem:init()
     }
     self.dimen = self[1]:getSize()
     -- we need this table per-instance, so we declare it here
-    if Device:isTouchDevice() then
-        self.ges_events = {
-            TapSelect = {
-                GestureRange:new{
-                    ges = "tap",
-                    range = self.dimen,
-                },
-                doc = "Select Option Item",
+    self.ges_events = {
+        TapSelect = {
+            GestureRange:new{
+                ges = "tap",
+                range = self.dimen,
             },
-            HoldSelect = {
-                GestureRange:new{
-                    ges = "hold",
-                    range = self.dimen,
-                },
-                doc = "Hold Option Item",
+            doc = "Select Option Item",
+        },
+        HoldSelect = {
+            GestureRange:new{
+                ges = "hold",
+                range = self.dimen,
             },
-        }
-    end
+            doc = "Hold Option Item",
+        },
+    }
 end
 
 function OptionTextItem:onFocus()
@@ -128,25 +126,23 @@ function OptionIconItem:init()
     }
     self.dimen = self[1]:getSize()
     -- we need this table per-instance, so we declare it here
-    if Device:isTouchDevice() then
-        self.ges_events = {
-            TapSelect = {
-                GestureRange:new{
-                    ges = "tap",
-                    range = self.dimen,
-                },
-                doc = "Select Option Item",
+    self.ges_events = {
+        TapSelect = {
+            GestureRange:new{
+                ges = "tap",
+                range = self.dimen,
             },
-            HoldSelect = {
-                GestureRange:new{
-                    ges = "hold",
-                    range = self.dimen,
-                },
-                doc = "Hold Option Item",
+            doc = "Select Option Item",
+        },
+        HoldSelect = {
+            GestureRange:new{
+                ges = "hold",
+                range = self.dimen,
             },
+            doc = "Hold Option Item",
+        },
 
-        }
-    end
+    }
 end
 
 function OptionIconItem:onFocus()
@@ -641,7 +637,7 @@ function ConfigOption:init()
                                 self.options[c].labels or self.options[c].args, arg)
                         end
                     end,
-                    show_parrent = self.config,
+                    show_parent = self.config,
                     enabled = enabled,
                     fine_tune = self.options[c].fine_tune,
                     fine_tune_param = self.options[c].fine_tune_param,
@@ -669,13 +665,24 @@ end
 function ConfigOption:_itemGroupToLayoutLine(option_items_group)
     local layout_line  = {}
     -- Insert items (skpping item_spacing without a .name attribute),
-    -- skipping indices at the beginning of the line in the layout
-    -- to align it with the current selected tab
-    local j = self.config.panel_index
+    local j = 1 -- no nil in row head
     for i, v in ipairs(option_items_group) do
         if v.name then
-            layout_line[j] = v
-            j = j + 1
+            if v.layout and v.disableFocusManagement then -- it is a FocusManager
+                -- merge child layout to one row layout
+                -- currently child widgets are all one row
+                -- need improved if two or more rows widget existed
+                for _, row in ipairs(v.layout) do
+                    for _, widget in ipairs(row) do
+                        layout_line[j] = widget
+                        j = j + 1
+                    end
+                end
+                v:disableFocusManagement(self.config)
+            else
+                layout_line[j] = v
+                j = j + 1
+            end
         end
     end
     return layout_line
@@ -849,35 +856,30 @@ function ConfigDialog:init()
     ------------------------------------------
     -- start to set up input event callback --
     ------------------------------------------
-    if Device:isTouchDevice() then
-        self.ges_events.TapCloseMenu = {
-            GestureRange:new{
-                ges = "tap",
-                range = Geom:new{
-                    x = 0, y = 0,
-                    w = Screen:getWidth(),
-                    h = Screen:getHeight(),
-                }
+    self.ges_events.TapCloseMenu = {
+        GestureRange:new{
+            ges = "tap",
+            range = Geom:new{
+                x = 0, y = 0,
+                w = Screen:getWidth(),
+                h = Screen:getHeight(),
             }
         }
-        self.ges_events.SwipeCloseMenu = {
-            GestureRange:new{
-                ges = "swipe",
-                range = Geom:new{
-                    x = 0, y = 0,
-                    w = Screen:getWidth(),
-                    h = Screen:getHeight(),
-                }
+    }
+    self.ges_events.SwipeCloseMenu = {
+        GestureRange:new{
+            ges = "swipe",
+            range = Geom:new{
+                x = 0, y = 0,
+                w = Screen:getWidth(),
+                h = Screen:getHeight(),
             }
         }
-    end
+    }
     if Device:hasKeys() then
         -- set up keyboard events
-        local close_keys = Device:hasFewKeys() and { "Back", "Left" } or "Back"
+        local close_keys = Device:hasFewKeys() and { "Back", "Left" } or Device.input.group.Back
         self.key_events.Close = { { close_keys }, doc = "close config menu" }
-    end
-    if Device:hasDPad() then
-        self.key_events.Select = { {"Press"}, doc = "select current menu item" }
     end
 end
 
@@ -886,6 +888,7 @@ function ConfigDialog:updateConfigPanel(index)
 end
 
 function ConfigDialog:update()
+    self:moveFocusTo(1, 1) -- reset selected for re-created layout
     self.layout = {}
 
     if self.config_menubar then
@@ -920,8 +923,7 @@ function ConfigDialog:update()
     self.dialog_frame.dimen = old_dimen
 
     -- Reset the focusmanager cursor
-    self.selected.y=#self.layout
-    self.selected.x=self.panel_index
+    self:moveFocusTo(self.panel_index, #self.layout, FocusManager.NOT_FOCUS)
 
     self[1] = BottomContainer:new{
         dimen = Screen:getSize(),
@@ -1453,11 +1455,6 @@ end
 
 function ConfigDialog:onClose()
     self:closeDialog()
-    return true
-end
-
-function ConfigDialog:onSelect()
-    self:getFocusItem():handleEvent(Event:new("TapSelect"))
     return true
 end
 

@@ -16,12 +16,12 @@ Example:
 
 local Blitbuffer = require("ffi/blitbuffer")
 local CheckMark = require("ui/widget/checkmark")
-local Device = require("device")
 local Font = require("ui/font")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local GestureRange = require("ui/gesturerange")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local InputContainer = require("ui/widget/container/inputcontainer")
+local RadioMark = require("ui/widget/radiomark")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
@@ -30,8 +30,10 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local CheckButton = InputContainer:new{
     callback = nil,
     hold_callback = nil,
+    checkable = true, -- empty space when false
     checked = false,
     enabled = true,
+    radio = false, -- radio mark when true
     face = Font:getFace("smallinfofont"),
     background = Blitbuffer.COLOR_WHITE,
     text = nil,
@@ -46,13 +48,25 @@ end
 
 function CheckButton:initCheckButton(checked)
     self.checked = checked
-    self._checkmark = CheckMark:new{
-        checked = self.checked,
-        enabled = self.enabled,
-        face = self.face,
-        parent = self.parent or self,
-        show_parent = self.show_parent or self,
-    }
+    if self.radio then
+        self._checkmark = RadioMark:new{
+            checkable = self.checkable,
+            checked = self.checked,
+            enabled = self.enabled,
+            face = self.face,
+            parent = self.parent or self,
+            show_parent = self.show_parent or self,
+        }
+    else
+        self._checkmark = CheckMark:new{
+            checkable = self.checkable,
+            checked = self.checked,
+            enabled = self.enabled,
+            face = self.face,
+            parent = self.parent or self,
+            show_parent = self.show_parent or self,
+        }
+    end
     self._textwidget = TextBoxWidget:new{
         text = self.text,
         face = self.face,
@@ -82,32 +96,30 @@ function CheckButton:initCheckButton(checked)
     self.dimen = self._frame:getSize()
     self[1] = self._frame
 
-    if Device:isTouchDevice() then
-        self.ges_events = {
-            TapCheckButton = {
-                GestureRange:new{
-                    ges = "tap",
-                    range = self.dimen,
-                },
-                doc = "Tap Button",
+    self.ges_events = {
+        TapCheckButton = {
+            GestureRange:new{
+                ges = "tap",
+                range = self.dimen,
             },
-            HoldCheckButton = {
-                GestureRange:new{
-                    ges = "hold",
-                    range = self.dimen,
-                },
-                doc = "Hold Button",
+            doc = "Tap Button",
+        },
+        HoldCheckButton = {
+            GestureRange:new{
+                ges = "hold",
+                range = self.dimen,
             },
-            -- Safe-guard for when used inside a MovableContainer
-            HoldReleaseCheckButton = {
-                GestureRange:new{
-                    ges = "hold_release",
-                    range = self.dimen,
-                },
-                doc = "Hold Release Button",
-            }
+            doc = "Hold Button",
+        },
+        -- Safe-guard for when used inside a MovableContainer
+        HoldReleaseCheckButton = {
+            GestureRange:new{
+                ges = "hold_release",
+                range = self.dimen,
+            },
+            doc = "Hold Release Button",
         }
-    end
+    }
 end
 
 function CheckButton:onTapCheckButton()
@@ -118,7 +130,9 @@ function CheckButton:onTapCheckButton()
         self:onInput(self.tap_input_func())
     else
         if G_reader_settings:isFalse("flash_ui") then
-            self:toggleCheck()
+            if not self.radio then
+                self:toggleCheck()
+            end
             if self.callback then
                 self.callback()
             end
@@ -144,7 +158,9 @@ function CheckButton:onTapCheckButton()
 
             -- Callback
             --
-            self:toggleCheck()
+            if not self.radio then
+                self:toggleCheck()
+            end
             if self.callback then
                 self.callback()
             end
@@ -204,6 +220,22 @@ function CheckButton:disable()
     UIManager:setDirty(self.parent, function()
         return "ui", self.dimen
     end)
+end
+
+function CheckButton:onFocus()
+    if not self.enabled then
+        return false
+    end
+    self._frame.invert = true
+    return true
+end
+
+function CheckButton:onUnfocus()
+    if not self.enabled then
+        return false
+    end
+    self._frame.invert = false
+    return true
 end
 
 return CheckButton

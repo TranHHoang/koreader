@@ -122,6 +122,21 @@ local PageTurns = {
                     end,
                 })
             end,
+        },
+        {
+            text = _("Also invert document-related dialogs"),
+            checked_func = function()
+                return G_reader_settings:isTrue("invert_ui_layout_mirroring")
+            end,
+            enabled_func = function()
+                return ReaderUI.instance.view.inverse_reading_order
+            end,
+            callback = function()
+                G_reader_settings:flipNilOrFalse("invert_ui_layout_mirroring")
+            end,
+            help_text = _([[
+When enabled the UI direction for the Table of Contents, Book Map, and Page Browser dialogs will follow the page turn direction instead of the default UI direction.]]),
+            separator = true,
         }
     }
 }
@@ -137,6 +152,15 @@ if Device:hasKeys() then
             Device:invertButtons()
         end,
     })
+end
+
+if not Device:isTouchDevice() then
+    if Device:hasKeys() then
+        -- We just need the last item added above.
+        PageTurns = PageTurns.sub_item_table[#PageTurns.sub_item_table]
+    else
+        PageTurns = {} -- no menu item
+    end
 end
 
 return PageTurns

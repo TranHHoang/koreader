@@ -4,18 +4,20 @@ local BottomContainer = require("ui/widget/container/bottomcontainer")
 local Button = require("ui/widget/button")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local CheckMark = require("ui/widget/checkmark")
-local CloseButton = require("ui/widget/closebutton")
 local Device = require("device")
 local Font = require("ui/font")
+local FocusManager = require("ui/widget/focusmanager")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local InputContainer = require("ui/widget/container/inputcontainer")
+local LeftContainer = require("ui/widget/container/leftcontainer")
 local LineWidget = require("ui/widget/linewidget")
 local OverlapGroup = require("ui/widget/overlapgroup")
 local Size = require("ui/size")
 local TextWidget = require("ui/widget/textwidget")
+local TitleBar = require("ui/widget/titlebar")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
@@ -23,43 +25,6 @@ local Screen = Device.screen
 local util = require("util")
 local T = require("ffi/util").template
 local _ = require("gettext")
-
-local SortTitleWidget = VerticalGroup:new{
-    sort_page = nil,
-    title = "",
-    tface = Font:getFace("tfont"),
-    align = "left",
-}
-
-function SortTitleWidget:init()
-    self.close_button = CloseButton:new{ window = self }
-    local btn_width = self.close_button:getSize().w
-    -- title, close button, separation line
-    table.insert(self, OverlapGroup:new{
-        dimen = { w = self.width },
-        TextWidget:new{
-            text = self.title,
-            max_width = self.width - btn_width,
-            face = self.tface,
-        },
-        self.close_button,
-    })
-    self.title_bottom = OverlapGroup:new{
-        dimen = { w = self.width, h = Size.line.thick },
-        LineWidget:new{
-            dimen = Geom:new{ w = self.width, h = Size.line.thick },
-            background = Blitbuffer.COLOR_DARK_GRAY,
-            style = "solid",
-        },
-    }
-    table.insert(self, self.title_bottom)
-    table.insert(self, VerticalSpan:new{ width = Size.span.vertical_large })
-end
-
-function SortTitleWidget:onClose()
-    self.sort_page:onClose()
-    return true
-end
 
 local SortItemWidget = InputContainer:new{
     item = nil,
@@ -70,20 +35,18 @@ local SortItemWidget = InputContainer:new{
 
 function SortItemWidget:init()
     self.dimen = Geom:new{w = self.width, h = self.height}
-    if Device:isTouchDevice() then
-        self.ges_events.Tap = {
-            GestureRange:new{
-                ges = "tap",
-                range = self.dimen,
-            }
+    self.ges_events.Tap = {
+        GestureRange:new{
+            ges = "tap",
+            range = self.dimen,
         }
-        self.ges_events.Hold = {
-            GestureRange:new{
-                ges = "hold",
-                range = self.dimen,
-            }
+    }
+    self.ges_events.Hold = {
+        GestureRange:new{
+            ges = "hold",
+            range = self.dimen,
         }
-    end
+    }
 
     local item_checkable = false
     local item_checked = self.item.checked
@@ -105,16 +68,24 @@ function SortItemWidget:init()
     self[1] = FrameContainer:new{
         padding = 0,
         bordersize = 0,
-        HorizontalGroup:new {
-            align = "center",
-            CenterContainer:new{
-                dimen = Geom:new{ w = checked_widget:getSize().w },
-                self.checkmark_widget,
+        focusable = true,
+        focus_border_size = Size.border.thin,
+        LeftContainer:new{ -- needed only for auto UI mirroring
+            dimen = Geom:new{
+                w = self.width,
+                h = self.height,
             },
-            TextWidget:new{
-                text = self.item.text,
-                max_width = text_max_width,
-                face = self.face,
+            HorizontalGroup:new {
+                align = "center",
+                CenterContainer:new{
+                    dimen = Geom:new{ w = checked_widget:getSize().w },
+                    self.checkmark_widget,
+                },
+                TextWidget:new{
+                    text = self.item.text,
+                    max_width = text_max_width,
+                    face = self.face,
+                },
             },
         },
     }
@@ -143,7 +114,7 @@ function SortItemWidget:onHold()
     return true
 end
 
-local SortWidget = InputContainer:new{
+local SortWidget = FocusManager:new{
     title = "",
     width = nil,
     height = nil,
@@ -155,6 +126,7 @@ local SortWidget = InputContainer:new{
 }
 
 function SortWidget:init()
+    self.layout = {}
     -- no item is selected on start
     self.marked = 0
     self.orig_item_table = nil
@@ -164,11 +136,9 @@ function SortWidget:init()
         h = self.height or Screen:getHeight(),
     }
     if Device:hasKeys() then
-        self.key_events = {
-            --don't get locked in on non touch devices
-            AnyKeyPressed = { { Device.input.group.Any },
-                seqtext = "any key", doc = "close dialog" }
-        }
+        self.key_events.Close = { { Device.input.group.Back }, doc = "close dialog" }
+        self.key_events.NextPage = { { Device.input.group.PgFwd}, doc = "next page"}
+        self.key_events.PrevPage = { { Device.input.group.PgBack}, doc = "prev page"}
     end
     if Device:isTouchDevice() then
         self.ges_events.Swipe = {
@@ -287,10 +257,13 @@ function SortWidget:init()
         self.footer_last_down,
         self.footer_ok,
     }
+    table.insert(self.layout, {
+        self.footer_cancel,
+        self.footer_ok,
+    })
     local bottom_line = LineWidget:new{
         dimen = Geom:new{ w = self.item_width, h = Size.line.thick },
         background = Blitbuffer.COLOR_DARK_GRAY,
-        style = "solid",
     }
     local vertical_footer = VerticalGroup:new{
         bottom_line,
@@ -301,30 +274,38 @@ function SortWidget:init()
         vertical_footer,
     }
     -- setup title bar
-    self.title_bar = SortTitleWidget:new{
+    self.title_bar = TitleBar:new{
+        width = self.dimen.w,
+        align = "left",
+        with_bottom_line = true,
+        bottom_line_color = Blitbuffer.COLOR_DARK_GRAY,
+        bottom_line_h_padding = padding,
         title = self.title,
-        width = self.item_width,
-        height = self.item_height,
-        sort_page = self,
+        close_callback = function() self:onClose() end,
+        show_parent = self,
     }
     -- setup main content
     self.item_margin = math.floor(self.item_height / 8)
     local line_height = self.item_height + self.item_margin
-    local content_height = self.dimen.h - self.title_bar:getSize().h - vertical_footer:getSize().h - padding
+    local content_height = self.dimen.h - self.title_bar:getHeight() - vertical_footer:getSize().h - padding
     self.items_per_page = math.floor(content_height / line_height)
     self.pages = math.ceil(#self.item_table / self.items_per_page)
     self.main_content = VerticalGroup:new{}
 
     self:_populateItems()
 
+    local padding_below_title = 0
+    if self.pages > 1 then -- center content vertically
+        padding_below_title = (content_height - self.items_per_page * line_height) / 2
+    end
     local frame_content = FrameContainer:new{
         height = self.dimen.h,
-        padding = padding,
+        padding = 0,
         bordersize = 0,
         background = Blitbuffer.COLOR_WHITE,
         VerticalGroup:new{
-            align = "left",
             self.title_bar,
+            VerticalSpan:new{ width = padding_below_title },
             self.main_content,
         },
     }
@@ -387,6 +368,7 @@ end
 -- make sure self.item_margin and self.item_height are set before calling this
 function SortWidget:_populateItems()
     self.main_content:clear()
+    self.layout = { self.layout[#self.layout] } -- keep footer
     local idx_offset = (self.show_page - 1) * self.items_per_page
     local page_last
     if idx_offset + self.items_per_page <= #self.item_table then
@@ -400,16 +382,18 @@ function SortWidget:_populateItems()
         if idx == self.marked then
             invert_status = true
         end
+        local item = SortItemWidget:new{
+            height = self.item_height,
+            width = self.item_width,
+            item = self.item_table[idx],
+            invert = invert_status,
+            index = idx,
+            show_parent = self,
+        }
+        table.insert(self.layout, #self.layout, {item})
         table.insert(
             self.main_content,
-            SortItemWidget:new{
-                height = self.item_height,
-                width = self.item_width,
-                item = self.item_table[idx],
-                invert = invert_status,
-                index = idx,
-                show_parent = self,
-            }
+            item
         )
     end
     self.footer_page:setText(T(_("Page %1 of %2"), self.show_page, self.pages), self.footer_center_width)
@@ -441,10 +425,6 @@ function SortWidget:_populateItems()
     UIManager:setDirty(self, function()
         return "ui", self.dimen
     end)
-end
-
-function SortWidget:onAnyKeyPressed()
-    return self:onClose()
 end
 
 function SortWidget:onNextPage()

@@ -51,6 +51,7 @@ local CreDocument = Document:new{
         "Noto Sans CJK SC",
         "Noto Naskh Arabic",
         "Noto Sans Devanagari UI",
+        "Noto Sans Bengali UI",
         "FreeSans",
         "FreeSerif",
         "Noto Serif",
@@ -643,6 +644,7 @@ end
 
 function CreDocument:compareXPointers(xp1, xp2)
     -- Returns 1 if XPointers are ordered (if xp2 is after xp1), -1 if not, 0 if same
+    -- Returns nil if any of XPointers are invalid
     return self._document:compareXPointers(xp1, xp2)
 end
 

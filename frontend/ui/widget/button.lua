@@ -96,7 +96,7 @@ function Button:init()
                 local new_size = self.label_widget.face.orig_size - 1
                 if new_size < font_size_2_lines then
                     -- Switch to a 2-lines TextBoxWidget
-                    self.label_widget:free()
+                    self.label_widget:free(true)
                     self.label_widget = TextBoxWidget:new{
                         text = self.text,
                         line_height = 0,
@@ -118,7 +118,7 @@ function Button:init()
                 if new_size < 8 then -- don't go too small
                     break
                 end
-                self.label_widget:free()
+                self.label_widget:free(true)
                 self.label_widget = TextWidget:new{
                     text = self.text,
                     max_width = max_width,
@@ -165,31 +165,29 @@ function Button:init()
     end
     self.dimen = self.frame:getSize()
     self[1] = self.frame
-    if Device:isTouchDevice() then
-        self.ges_events = {
-            TapSelectButton = {
-                GestureRange:new{
-                    ges = "tap",
-                    range = self.dimen,
-                },
-                doc = "Tap Button",
+    self.ges_events = {
+        TapSelectButton = {
+            GestureRange:new{
+                ges = "tap",
+                range = self.dimen,
             },
-            HoldSelectButton = {
-                GestureRange:new{
-                    ges = "hold",
-                    range = self.dimen,
-                },
-                doc = "Hold Button",
+            doc = "Tap Button",
+        },
+        HoldSelectButton = {
+            GestureRange:new{
+                ges = "hold",
+                range = self.dimen,
             },
-            -- Safe-guard for when used inside a MovableContainer
-            HoldReleaseSelectButton = {
-                GestureRange:new{
-                    ges = "hold_release",
-                    range = self.dimen,
-                },
-            }
+            doc = "Hold Button",
+        },
+        -- Safe-guard for when used inside a MovableContainer
+        HoldReleaseSelectButton = {
+            GestureRange:new{
+                ges = "hold_release",
+                range = self.dimen,
+            },
         }
-    end
+    }
 end
 
 function Button:setText(text, width)
@@ -201,6 +199,7 @@ function Button:setText(text, width)
         else
             self.text = text
             self.width = width
+            self.label_widget:free()
             self:init()
         end
     end
@@ -210,6 +209,7 @@ function Button:setIcon(icon, width)
     if icon ~= self.icon then
         self.icon = icon
         self.width = width
+        self.label_widget:free()
         self:init()
     end
 end

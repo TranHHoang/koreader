@@ -13,11 +13,14 @@ local order = {
     navi = {
         "table_of_contents",
         "bookmarks",
-        "toggle_bookmark",
+        "toggle_bookmark", -- if not Device:isTouchDevice()
         "bookmark_browsing_mode",
         "----------------------------",
         "page_map",
         "hide_nonlinear_flows",
+        "----------------------------",
+        "book_map", -- if Device:isTouchDevice()
+        "page_browser", -- if Device:isTouchDevice()
         "----------------------------",
         "go_to",
         "skim_to",
@@ -51,8 +54,10 @@ local order = {
         "speed_reading_module_perception_expander",
         "----------------------------",
         "highlight_options",
+        "selection_text", -- if Device:hasDPad()
         "panel_zoom_options",
         "djvu_render_mode",
+        "start_content_selection", -- if Device:hasDPad(), put this as last one so it is easy to select with "press" and "up" keys
     },
     setting = {
         -- common settings
@@ -63,7 +68,8 @@ local order = {
         "network",
         "screen",
         "----------------------------",
-        "taps_and_gestures",
+        -- "taps_and_gestures", -- if Device:isTouchDevice()
+        -- "navigation",
         "document",
         "----------------------------",
         "device",
@@ -78,6 +84,8 @@ local order = {
     },
     device = {
         "keyboard_layout",
+        "font_ui_fallbacks",
+        "----------------------------",
         "time",
         "device_status_alarm",
         "charging_led", -- if Device:canToggleChargingLED()
@@ -95,6 +103,9 @@ local order = {
         "back_to_exit",
         "back_in_filemanager",
         "back_in_reader",
+        "backspace_as_back",
+        "----------------------------",
+        "page_turns_non_touch",
         "android_volume_keys",
         "android_camera_key",
         "android_haptic_feedback",

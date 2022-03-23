@@ -28,7 +28,6 @@ local ButtonTable = FocusManager:new{
 
 function ButtonTable:init()
     self.width = self.width or math.floor(math.min(Screen:getWidth(), Screen:getHeight()) * 0.9)
-    self.selected = { x = 1, y = 1 }
     self.buttons_layout = {}
     self.button_by_id = {}
     self.container = VerticalGroup:new{ width = self.width }
@@ -99,8 +98,7 @@ function ButtonTable:init()
     self:addHorizontalSep(true, false, false)
     if Device:hasDPad() then
         self.layout = self.buttons_layout
-        self.layout[1][1]:onFocus()
-        self.key_events.SelectByKeyPress = { {{"Press"}} }
+        self:refocusWidget()
     else
         self.key_events = {}  -- deregister all key press event listeners
     end
@@ -123,13 +121,6 @@ function ButtonTable:addHorizontalSep(vspan_before, add_line, vspan_after, black
     if vspan_after then
         table.insert(self.container,
                      VerticalSpan:new{ width = Size.span.vertical_default })
-    end
-end
-
-function ButtonTable:onSelectByKeyPress()
-    local item = self:getFocusItem()
-    if item.enabled then
-        item.callback()
     end
 end
 

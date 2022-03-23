@@ -7,6 +7,7 @@ local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("ui/widget/menu")
 local TextViewer = require("ui/widget/textviewer")
 local UIManager = require("ui/uimanager")
+local filemanagerutil = require("apps/filemanager/filemanagerutil")
 local logger = require("logger")
 local _ = require("gettext")
 local util = require("util")
@@ -113,7 +114,7 @@ function CoverMenu:updateItems(select_number)
     self:updatePageInfo(select_number)
 
     if self.show_path then
-        self.path_text:setText(BD.directory(self.path))
+        self.title_bar:setSubTitle(BD.directory(filemanagerutil.abbreviate(self.path)))
     end
     self.show_parent.dithered = self._has_cover_images
     UIManager:setDirty(self.show_parent, function()
@@ -417,10 +418,6 @@ function CoverMenu:onHistoryMenuHold(item)
         UIManager:close(self.histfile_dialog)
     end
 
-    -- Remove last button ("Clear history of deleted files"), we'll
-    -- add it back after our buttons
-    local last_button = table.remove(orig_buttons)
-
     -- Add some new buttons to original buttons set
     table.insert(orig_buttons, {
         { -- Allow user to view real size cover in ImageViewer
@@ -475,9 +472,6 @@ function CoverMenu:onHistoryMenuHold(item)
             end,
         },
     })
-    table.insert(orig_buttons, {}) -- separator
-    -- Put back "Clear history of deleted files"
-    table.insert(orig_buttons, last_button)
 
     -- Create the new ButtonDialog, and let UIManager show it
     local ButtonDialogTitle = require("ui/widget/buttondialogtitle")

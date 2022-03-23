@@ -5,12 +5,14 @@ local Cache = require("cache")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DocumentRegistry = require("document/documentregistry")
 local Font = require("ui/font")
+local ImageViewer = require("ui/widget/imageviewer")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local Menu = require("ui/widget/menu")
 local MultiInputDialog = require("ui/widget/multiinputdialog")
 local NetworkMgr = require("ui/network/manager")
 local OPDSParser = require("opdsparser")
+local RenderImage = require("ui/renderimage")
 local Screen = require("device").screen
 local UIManager = require("ui/uimanager")
 local http = require("socket.http")
@@ -35,6 +37,10 @@ local OPDSBrowser = Menu:extend{
         {
             title = "Project Gutenberg",
             url = "https://m.gutenberg.org/ebooks.opds/?format=opds",
+        },
+        {
+            title = "Standard Ebooks",
+            url = "https://standardebooks.org/opds",
         },
         {
             title = "Feedbooks",
@@ -66,6 +72,7 @@ local OPDSBrowser = Menu:extend{
     acquisition_rel = "^http://opds%-spec%.org/acquisition",
     image_rel = "http://opds-spec.org/image",
     thumbnail_rel = "http://opds-spec.org/image/thumbnail",
+    stream_rel = "http://vaemendis.net/opds-pse/stream",
 
     width = Screen:getWidth(),
     height = Screen:getHeight(),
@@ -76,13 +83,17 @@ local OPDSBrowser = Menu:extend{
 function OPDSBrowser:init()
     self.item_table = self:genItemTableFromRoot()
     self.catalog_title = nil
+    self.title_bar_left_icon = "plus"
+    self.onLeftButtonTap = function()
+        self:addNewCatalog()
+    end
     Menu.init(self) -- call parent's init()
 end
 
 -- This function is a callback fired from the new
 -- catalog dialog, 'addNewCatalog'.
 function OPDSBrowser:addServerFromInput(fields)
-    logger.info("New OPDS catalog input:", fields)
+    logger.dbg("New OPDS catalog input:", fields)
     local new_server = {
         title = fields[1],
         url = (fields[2]:match("^%a+://") and fields[2] or "http://" .. fields[2]),
@@ -146,6 +157,7 @@ function OPDSBrowser:addNewCatalog()
             {
                 {
                     text = _("Cancel"),
+                    id = "close",
                     callback = function()
                         self.add_server_dialog:onClose()
                         UIManager:close(self.add_server_dialog)
@@ -196,6 +208,7 @@ function OPDSBrowser:editCalibreServer()
             {
                 {
                     text = _("Cancel"),
+                    id = "close",
                     callback = function()
                         self.add_server_dialog:onClose()
                         UIManager:close(self.add_server_dialog)
@@ -261,14 +274,6 @@ function OPDSBrowser:genItemTableFromRoot()
             searchable = false,
         })
     end
-    -- Show the user a list item that would let them add more items
-    -- to their OPDS server list.
-    table.insert(item_table, {
-        text = _("Add new OPDS catalog"),
-        callback = function()
-            self:addNewCatalog()
-        end,
-    })
     return item_table
 end
 
@@ -291,7 +296,7 @@ function OPDSBrowser:fetchFeed(item_url, username, password, method)
         user     = username,
         password = password,
     }
-    logger.info("Request:", request)
+    logger.dbg("Request:", request)
     -- Fire off the request and wait to see what we get back.
     local code, headers = socket.skip(1, http.request(request))
     socketutil:reset_timeout()
@@ -498,6 +503,14 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url, username, passwo
                             href = build_href(link.href),
                             title = link.title,
                         })
+                    elseif link.rel == self.stream_rel then
+                        table.insert(item.acquisitions, {
+                            type = link.type,
+                            href = build_href(link.href),
+                            title = link.title,
+                            stream = true,
+                            count = tonumber(link["pse:count"] or "1"),
+                        })
                     elseif link.rel == self.thumbnail_rel then
                         item.thumbnail = build_href(link.href)
                     elseif link.rel == self.image_rel then
@@ -570,6 +583,10 @@ function OPDSBrowser:updateCatalog(item_url, username, password)
     local menu_table = self:genItemTableFromURL(item_url, username, password)
     if #menu_table > 0 then
         self:switchItemTable(self.catalog_title, menu_table)
+        self:setTitleBarLeftIcon("home")
+        self.onLeftButtonTap = function()
+            self:init()
+        end
         if self.page_num <= 1 then
             self:onNext()
         end
@@ -599,7 +616,7 @@ function OPDSBrowser:downloadFile(item, filename, remote_url)
     local download_dir = self.getCurrentDownloadDir()
 
     filename = util.getSafeFilename(filename, download_dir)
-    local local_path = download_dir .. "/" .. filename
+    local local_path = (download_dir ~= "/" and download_dir or "") .. '/' .. filename
     local_path = util.fixUtf8(local_path, "_")
 
     local function download()
@@ -666,12 +683,61 @@ function OPDSBrowser:downloadFile(item, filename, remote_url)
     end
 end
 
-function OPDSBrowser:createNewDownloadDialog(path, filename, buttons)
-    self.download_dialog = ButtonDialogTitle:new{
-        title = T(_("Download folder:\n%1\n\nDownload filename:\n%2\n\nDownload file type:"),
-            BD.dirpath(path), filename),
-        buttons = buttons
+function OPDSBrowser:streamPages(item, remote_url, count)
+    local page_table = {image_disposable = true}
+    setmetatable(page_table, {__index = function (_, key)
+        if type(key) ~= "number" then
+            local error_bb = RenderImage:renderImageFile("resources/koreader.png", false)
+            return error_bb
+        else
+            local index = key - 1
+            local page_url = remote_url:gsub("{pageNumber}", tostring(index))
+            page_url = page_url:gsub("{maxWidth}", tostring(Screen:getWidth()))
+            local page_data = {}
+
+            logger.dbg("Streaming page from", page_url)
+            local parsed = url.parse(page_url)
+
+            local code
+            if parsed.scheme == "http" or parsed.scheme == "https" then
+                socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
+                code = socket.skip(1, http.request {
+                    url         = page_url,
+                    headers     = {
+                        ["Accept-Encoding"] = "identity",
+                    },
+                    sink        = ltn12.sink.table(page_data),
+                    user        = item.username,
+                    password    = item.password,
+                })
+                socketutil:reset_timeout()
+            else
+                UIManager:show(InfoMessage:new {
+                    text = T(_("Invalid protocol:\n%1"), parsed.scheme),
+                    timeout = 3,
+                })
+            end
+
+            local data = table.concat(page_data)
+
+            if code == 200 then
+                local page_bb = RenderImage:renderImageData(data, #data, false)
+                return page_bb
+            else
+                local error_bb = RenderImage:renderImageFile("resources/koreader.png", false)
+                return error_bb
+            end
+        end
+    end})
+    local viewer = ImageViewer:new{
+        image = page_table,
+        fullscreen = true,
+        with_title_bar = false,
+        image_disposable = false, -- instead set page_table image_disposable to true
     }
+    -- in Lua 5.2 we could override __len, but this works too
+    viewer._images_list_nb = count
+    UIManager:show(viewer)
 end
 
 function OPDSBrowser:showDownloads(item)
@@ -680,29 +746,48 @@ function OPDSBrowser:showDownloads(item)
     if item.author then
         filename = item.author .. " - " .. filename
     end
+    local filename_orig = filename
+
+    local function createTitle(path, file) -- title for ButtonDialogTitle
+        return T(_("Download folder:\n%1\n\nDownload filename:\n%2\n\nDownload file type:"),
+            BD.dirpath(path), file)
+    end
 
     local buttons = {} -- buttons for ButtonDialogTitle
 
     local type_buttons = {} -- file type download buttons
     for i = 1, #acquisitions do -- filter out unsupported file types
         local acquisition = acquisitions[i]
-        local filetype = util.getFileNameSuffix(acquisition.href)
-        logger.dbg("Filetype for download is", filetype)
-        if not DocumentRegistry:hasProvider("dummy." .. filetype) then
-            filetype = nil
-        end
-        if not filetype and DocumentRegistry:hasProvider(nil, acquisition.type) then
-            filetype = DocumentRegistry:mimeToExt(acquisition.type)
-        end
-        if filetype then -- supported file type
-            local text = acquisition.title and acquisition.title or string.upper(filetype)
+
+        if acquisition.stream then
+            -- this is an OPDS PSE stream
             table.insert(type_buttons, {
-                text = text .. "\u{2B07}", -- append DOWNWARDS BLACK ARROW
+                text = _("Page stream") .. "\u{2B0C}", -- append LEFT RIGHT BLACK ARROW
                 callback = function()
-                    self:downloadFile(item, filename .. "." .. string.lower(filetype), acquisition.href)
+                    self:streamPages(item, acquisition.href, acquisition.count)
                     UIManager:close(self.download_dialog)
                 end,
             })
+        else
+            -- this is some other type of file
+            local filetype = util.getFileNameSuffix(acquisition.href)
+            logger.dbg("Filetype for download is", filetype)
+            if not DocumentRegistry:hasProvider("dummy." .. filetype) then
+                filetype = nil
+            end
+            if not filetype and DocumentRegistry:hasProvider(nil, acquisition.type) then
+                filetype = DocumentRegistry:mimeToExt(acquisition.type)
+            end
+            if filetype then -- supported file type
+                local text = acquisition.title and acquisition.title or string.upper(filetype)
+                table.insert(type_buttons, {
+                    text = text .. "\u{2B07}", -- append DOWNWARDS BLACK ARROW
+                    callback = function()
+                        self:downloadFile(item, filename .. "." .. string.lower(filetype), acquisition.href)
+                        UIManager:close(self.download_dialog)
+                    end,
+                })
+            end
         end
     end
     if (#type_buttons % 2 == 1) then -- we need even number of type buttons
@@ -719,15 +804,11 @@ function OPDSBrowser:showDownloads(item)
             callback = function()
                 require("ui/downloadmgr"):new{
                     onConfirm = function(path)
-                        logger.info("Download folder set to", path)
+                        logger.dbg("Download folder set to", path)
                         G_reader_settings:saveSetting("download_dir", path)
-                        UIManager:nextTick(function()
-                            UIManager:close(self.download_dialog)
-                            self:createNewDownloadDialog(path, filename, buttons)
-                            UIManager:show(self.download_dialog)
-                        end)
+                        self.download_dialog:setTitle(createTitle(path, filename))
                     end,
-                }:chooseDir()
+                }:chooseDir(self.getCurrentDownloadDir())
             end,
         },
         {
@@ -737,10 +818,12 @@ function OPDSBrowser:showDownloads(item)
                 input_dialog = InputDialog:new{
                     title = _("Enter filename"),
                     input = filename,
+                    input_hint = filename_orig,
                     buttons = {
                         {
                             {
                                 text = _("Cancel"),
+                                id = "close",
                                 callback = function()
                                     UIManager:close(input_dialog)
                                 end,
@@ -750,10 +833,11 @@ function OPDSBrowser:showDownloads(item)
                                 is_enter_default = true,
                                 callback = function()
                                     filename = input_dialog:getInputValue()
+                                    if filename == "" then
+                                        filename = filename_orig
+                                    end
                                     UIManager:close(input_dialog)
-                                    UIManager:close(self.download_dialog)
-                                    self:createNewDownloadDialog(self.getCurrentDownloadDir(), filename, buttons)
-                                    UIManager:show(self.download_dialog)
+                                    self.download_dialog:setTitle(createTitle(self.getCurrentDownloadDir(), filename))
                                 end,
                             },
                         }
@@ -778,6 +862,7 @@ function OPDSBrowser:showDownloads(item)
                 local TextViewer = require("ui/widget/textviewer")
                 UIManager:show(TextViewer:new{
                     title = item.text,
+                    title_multilines = true,
                     text = util.htmlToPlainTextIfHtml(item.content),
                     text_face = Font:getFace("x_smallinfofont", G_reader_settings:readSetting("items_font_size")),
                 })
@@ -785,7 +870,10 @@ function OPDSBrowser:showDownloads(item)
         },
     })
 
-    self:createNewDownloadDialog(self.getCurrentDownloadDir(), filename, buttons)
+    self.download_dialog = ButtonDialogTitle:new{
+        title = createTitle(self.getCurrentDownloadDir(), filename),
+        buttons = buttons,
+    }
     UIManager:show(self.download_dialog)
 end
 
@@ -814,6 +902,7 @@ function OPDSBrowser:browseSearchable(browse_url, username, password)
             {
                 {
                     text = _("Cancel"),
+                    id = "close",
                     callback = function()
                         UIManager:close(self.search_server_dialog)
                     end,
@@ -868,7 +957,7 @@ function OPDSBrowser:onMenuSelect(item)
 end
 
 function OPDSBrowser:editServerFromInput(item, fields)
-    logger.info("Edit OPDS catalog input:", fields)
+    logger.dbg("Edit OPDS catalog input:", fields)
     for _, server in ipairs(self.opds_servers) do
         if server.title == item.text or server.url == item.url then
             server.title = fields[1]
@@ -882,7 +971,7 @@ function OPDSBrowser:editServerFromInput(item, fields)
 end
 
 function OPDSBrowser:editOPDSServer(item)
-    logger.info("Edit OPDS Server:", item)
+    logger.dbg("Edit OPDS Server:", item)
     self.edit_server_dialog = MultiInputDialog:new{
         title = _("Edit OPDS catalog"),
         fields = {
@@ -908,6 +997,7 @@ function OPDSBrowser:editOPDSServer(item)
             {
                 {
                     text = _("Cancel"),
+                    id = "close",
                     callback = function()
                         self.edit_server_dialog:onClose()
                         UIManager:close(self.edit_server_dialog)

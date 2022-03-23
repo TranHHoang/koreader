@@ -7,7 +7,6 @@ local Button = require("ui/widget/button")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local CheckMark = require("ui/widget/checkmark")
 local Device = require("device")
-local Event = require("ui/event")
 local FocusManager = require("ui/widget/focusmanager")
 local Font = require("ui/font")
 local FrameContainer = require("ui/widget/container/framecontainer")
@@ -20,6 +19,7 @@ local InfoMessage = require("ui/widget/infomessage")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local LeftContainer = require("ui/widget/container/leftcontainer")
 local LineWidget = require("ui/widget/linewidget")
+local RadioMark = require("ui/widget/radiomark")
 local RightContainer = require("ui/widget/container/rightcontainer")
 local Size = require("ui/size")
 local TextWidget = require("ui/widget/textwidget")
@@ -74,11 +74,20 @@ function TouchMenuItem:init()
         item_checkable = true
         item_checked = self.item.checked_func()
     end
-    local checkmark_widget = CheckMark:new{
-        checkable = item_checkable,
-        checked = item_checked,
-        enabled = item_enabled,
-    }
+    local checkmark_widget
+    if self.item.radio then
+        checkmark_widget = RadioMark:new{
+            checkable = item_checkable,
+            checked = item_checked,
+            enabled = item_enabled,
+        }
+    else
+        checkmark_widget = CheckMark:new{
+            checkable = item_checkable,
+            checked = item_checked,
+            enabled = item_enabled,
+        }
+    end
 
     local checked_widget = CheckMark:new{ -- for layout, to :getSize()
         checked = true,
@@ -474,13 +483,12 @@ function TouchMenu:init()
         }
     }
 
-    self.key_events.Back = { {"Back"}, doc = "back to upper menu or close touchmenu" }
+    self.key_events.Back = { {Input.group.Back}, doc = "back to upper menu or close touchmenu" }
     if Device:hasFewKeys() then
         self.key_events.Back = { {"Left"}, doc = "back to upper menu or close touchmenu" }
     end
     self.key_events.NextPage = { {Input.group.PgFwd}, doc = "next page" }
     self.key_events.PrevPage = { {Input.group.PgBack}, doc = "previous page" }
-    self.key_events.Press = { {"Press"}, doc = "chose selected item" }
 
     local icons = {}
     for _, v in ipairs(self.tab_item_table) do
@@ -687,44 +695,23 @@ function TouchMenu:updateItems()
 
     local time_info_txt = util.secondsToHour(os.time(), G_reader_settings:isTrue("twelve_hour_clock"))
     local powerd = Device:getPowerDevice()
-    local batt_lvl = powerd:getCapacity()
-    local batt_symbol
-    if powerd:isCharging() then
-        batt_symbol = ""
-    else
-        if batt_lvl >= 100 then
-            batt_symbol = ""
-        elseif batt_lvl >= 90 then
-            batt_symbol = ""
-        elseif batt_lvl >= 80 then
-            batt_symbol = ""
-        elseif batt_lvl >= 70 then
-            batt_symbol = ""
-        elseif batt_lvl >= 60 then
-            batt_symbol = ""
-        elseif batt_lvl >= 50 then
-            batt_symbol = ""
-        elseif batt_lvl >= 40 then
-            batt_symbol = ""
-        elseif batt_lvl >= 30 then
-            batt_symbol = ""
-        elseif batt_lvl >= 20 then
-            batt_symbol = ""
-        elseif batt_lvl >= 10 then
-            batt_symbol = ""
-        else
-            batt_symbol = ""
-        end
-    end
     if Device:hasBattery() then
+        local batt_lvl = powerd:getCapacity()
+        local batt_symbol = powerd:getBatterySymbol(powerd:isCharging(), batt_lvl)
         time_info_txt = BD.wrap(time_info_txt) .. " " .. BD.wrap("⌁") .. BD.wrap(batt_symbol) ..  BD.wrap(batt_lvl .. "%")
+
+        if Device:hasAuxBattery() and powerd:isAuxBatteryConnected() then
+            local aux_batt_lvl = powerd:getAuxCapacity()
+            local aux_batt_symbol = powerd:getBatterySymbol(powerd:isAuxCharging(), aux_batt_lvl)
+            time_info_txt = time_info_txt .. " " .. BD.wrap("+") .. BD.wrap(aux_batt_symbol) ..  BD.wrap(aux_batt_lvl .. "%")
+        end
     end
     self.time_info:setText(time_info_txt)
 
     -- recalculate dimen based on new layout
     self.dimen.w = self.width
     self.dimen.h = self.item_group:getSize().h + self.bordersize*2 + self.padding -- (no padding at top)
-    self.selected = { x = self.cur_tab, y = 1 } -- reset the position of the focusmanager
+    self:moveFocusTo(self.cur_tab, 1, FocusManager.NOT_FOCUS) -- reset the position of the focusmanager
 
     -- NOTE: We use a slightly ugly hack to detect a brand new menu vs. a tab switch,
     --       in order to optionally flash on initial menu popup...
@@ -951,10 +938,6 @@ end
 
 function TouchMenu:onBack()
     self:backToUpperMenu()
-end
-
-function TouchMenu:onPress()
-    self:getFocusItem():handleEvent(Event:new("TapSelect"))
 end
 
 return TouchMenu

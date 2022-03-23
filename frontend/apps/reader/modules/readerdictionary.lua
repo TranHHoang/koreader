@@ -376,7 +376,7 @@ function ReaderDictionary:onLookupWord(word, is_sane, boxes, highlight, link, se
         while true do
             local pos = self.ui.document:getNextVisibleWordEnd(selected_text.pos1)
             if not pos then break end
-            
+                      
             local text = self.ui.document:getTextFromXPointers(selected_text.pos1, pos)
             local first_char = text:sub(1, 1)
             local first_char_trimmed = util.trim(text):sub(1, 1)
@@ -681,6 +681,7 @@ function ReaderDictionary:onShowDictionaryLookup()
             {
                 {
                     text = _("Cancel"),
+                    id = "close",
                     callback = function()
                         UIManager:close(self.dictionary_lookup_dialog)
                     end,
@@ -939,7 +940,7 @@ end
 
 function ReaderDictionary:showDict(word, results, boxes, link)
     if results and results[1] then
-        -- logger.dbg("showing quick lookup window", word, results)
+        logger.dbg("showing quick lookup window", #self.dict_window_list+1, ":", word, results)
         self.dict_window = DictQuickLookup:new{
             window_list = self.dict_window_list,
             ui = self.ui,
@@ -954,7 +955,6 @@ function ReaderDictionary:showDict(word, results, boxes, link)
             preferred_dictionaries = self.preferred_dictionaries,
             -- differentiate between dict and wiki
             is_wiki = self.is_wiki,
-            wiki_languages = self.wiki_languages,
             refresh_callback = function()
                 if self.view then
                     -- update info in footer (time, battery, etc)

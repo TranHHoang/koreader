@@ -451,76 +451,88 @@ function CoverBrowser:addToMainMenu(menu_items)
                     }
                 }
             },
-    --         {
-    --             text = _("Series"),
-    --             sub_item_table = {
-    --                 {
-    --                     text = _("Append series metadata to authors"),
-    --                     checked_func = function() return series_mode == "append_series_to_authors" end,
-    --                     callback = function()
-    --                         if series_mode == "append_series_to_authors" then
-    --                             series_mode = nil
-    --                         else
-    --                             series_mode = "append_series_to_authors"
-    --                         end
-    --                         BookInfoManager:saveSetting("series_mode", series_mode)
-    --                         self:refreshFileManagerInstance()
-    --                     end,
-    --                 },
-    --                 {
-    --                     text = _("Append series metadata to title"),
-    --                     checked_func = function() return series_mode == "append_series_to_title" end,
-    --                     callback = function()
-    --                         if series_mode == "append_series_to_title" then
-    --                             series_mode = nil
-    --                         else
-    --                             series_mode = "append_series_to_title"
-    --                         end
-    --                         BookInfoManager:saveSetting("series_mode", series_mode)
-    --                         self:refreshFileManagerInstance()
-    --                     end,
-    --                 },
-    --                 {
-    --                     text = _("Show series metadata in separate line"),
-    --                     checked_func = function() return series_mode == "series_in_separate_line" end,
-    --                     callback = function()
-    --                         if series_mode == "series_in_separate_line" then
-    --                             series_mode = nil
-    --                         else
-    --                             series_mode = "series_in_separate_line"
-    --                         end
-    --                         BookInfoManager:saveSetting("series_mode", series_mode)
-    --                         self:refreshFileManagerInstance()
-    --                     end,
-    --                 },
-    --             },
-    --             separator = true
-    --         },
-    --         {
-    --             text = _("Show number of pages read instead of progress %"),
-    --             checked_func = function() return BookInfoManager:getSetting("show_pages_read_as_progress") end,
-    --             callback = function()
-    --                 if BookInfoManager:getSetting("show_pages_read_as_progress") then
-    --                     BookInfoManager:saveSetting("show_pages_read_as_progress", false)
-    --                 else
-    --                     BookInfoManager:saveSetting("show_pages_read_as_progress", true)
-    --                 end
-    --                 self:refreshFileManagerInstance()
-    --             end,
-    --         },
-    --         {
-    --             text = _("Show number of pages left to read"),
-    --             checked_func = function() return BookInfoManager:getSetting("show_pages_left_in_progress") end,
-    --             callback = function()
-    --                 if BookInfoManager:getSetting("show_pages_left_in_progress") then
-    --                     BookInfoManager:saveSetting("show_pages_left_in_progress", false)
-    --                 else
-    --                     BookInfoManager:saveSetting("show_pages_left_in_progress", true)
-    --                 end
-    --                 self:refreshFileManagerInstance()
-    --             end,
-    --             separator = true,
-    --         },
+            -- {
+            --     text = _("Series"),
+            --     sub_item_table = {
+            --         {
+            --             text = _("Append series metadata to authors"),
+            --             checked_func = function() return series_mode == "append_series_to_authors" end,
+            --             callback = function()
+            --                 if series_mode == "append_series_to_authors" then
+            --                     series_mode = nil
+            --                 else
+            --                     series_mode = "append_series_to_authors"
+            --                 end
+            --                 BookInfoManager:saveSetting("series_mode", series_mode)
+            --                 self:refreshFileManagerInstance()
+            --             end,
+            --         },
+            --         {
+            --             text = _("Append series metadata to title"),
+            --             checked_func = function() return series_mode == "append_series_to_title" end,
+            --             callback = function()
+            --                 if series_mode == "append_series_to_title" then
+            --                     series_mode = nil
+            --                 else
+            --                     series_mode = "append_series_to_title"
+            --                 end
+            --                 BookInfoManager:saveSetting("series_mode", series_mode)
+            --                 self:refreshFileManagerInstance()
+            --             end,
+            --         },
+            --         {
+            --             text = _("Show series metadata in separate line"),
+            --             checked_func = function() return series_mode == "series_in_separate_line" end,
+            --             callback = function()
+            --                 if series_mode == "series_in_separate_line" then
+            --                     series_mode = nil
+            --                 else
+            --                     series_mode = "series_in_separate_line"
+            --                 end
+            --                 BookInfoManager:saveSetting("series_mode", series_mode)
+            --                 self:refreshFileManagerInstance()
+            --             end,
+            --         },
+            --     },
+            --     separator = true
+            -- },
+            -- {
+            --     text = _("Show progress % in mosaic mode"),
+            --     checked_func = function() return BookInfoManager:getSetting("show_progress_in_mosaic") end,
+            --     callback = function()
+            --         if BookInfoManager:getSetting("show_progress_in_mosaic") then
+            --             BookInfoManager:saveSetting("show_progress_in_mosaic", false)
+            --         else
+            --             BookInfoManager:saveSetting("show_progress_in_mosaic", true)
+            --         end
+            --         self:refreshFileManagerInstance()
+            --     end,
+            -- },
+            -- {
+            --     text = _("Show number of pages read instead of progress %"),
+            --     checked_func = function() return BookInfoManager:getSetting("show_pages_read_as_progress") end,
+            --     callback = function()
+            --         if BookInfoManager:getSetting("show_pages_read_as_progress") then
+            --             BookInfoManager:saveSetting("show_pages_read_as_progress", false)
+            --         else
+            --             BookInfoManager:saveSetting("show_pages_read_as_progress", true)
+            --         end
+            --         self:refreshFileManagerInstance()
+            --     end,
+            -- },
+            -- {
+            --     text = _("Show number of pages left to read"),
+            --     checked_func = function() return BookInfoManager:getSetting("show_pages_left_in_progress") end,
+            --     callback = function()
+            --         if BookInfoManager:getSetting("show_pages_left_in_progress") then
+            --             BookInfoManager:saveSetting("show_pages_left_in_progress", false)
+            --         else
+            --             BookInfoManager:saveSetting("show_pages_left_in_progress", true)
+            --         end
+            --         self:refreshFileManagerInstance()
+            --     end,
+            --     separator = true,
+            -- },
             {
                 text = _("Book info cache management"),
                 sub_item_table = {

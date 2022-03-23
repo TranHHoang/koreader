@@ -851,7 +851,8 @@ function Wikipedia:createEpub(epub_path, page, lang, with_images)
     --     </guide>
     local koreader_version = "KOReader"
     if lfs.attributes("git-rev", "mode") == "file" then
-        koreader_version = "KOReader "..io.open("git-rev", "r"):read("*line")
+        local Version = require("version")
+        koreader_version = "KOReader " .. Version:getCurrentRevision()
     end
     local content_opf_parts = {}
     -- head
@@ -956,6 +957,8 @@ body {
 }
 ol.references {
     list-style-type: inherit;
+    /* Allow hiding these pages as their content is available as footnotes */
+    -cr-hint: non-linear;
 }
 
 /* Show a box around image thumbnails */

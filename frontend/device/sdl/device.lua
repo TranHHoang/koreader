@@ -256,9 +256,6 @@ function Device:init()
                 if FileManager.instance then
                     FileManager.instance:reinit(FileManager.instance.path,
                         FileManager.instance.focused_file)
-                    UIManager:setDirty(FileManager.instance.banner, function()
-                        return "ui", FileManager.instance.banner.dimen
-                    end)
                 end
             elseif ev.code == SDL_WINDOWEVENT_MOVED then
                 self.window.left = ev.value.data1
@@ -318,22 +315,17 @@ function Device:setDateTime(year, month, day, hour, min, sec)
     end
 end
 
+function Emulator:supportsScreensaver() return true end
+
 function Emulator:simulateSuspend()
-    local InfoMessage = require("ui/widget/infomessage")
-    local UIManager = require("ui/uimanager")
-    local _ = require("gettext")
-    UIManager:show(InfoMessage:new{
-        text = _("Suspend")
-    })
+    local Screensaver = require("ui/screensaver")
+    Screensaver:setup()
+    Screensaver:show()
 end
 
 function Emulator:simulateResume()
-    local InfoMessage = require("ui/widget/infomessage")
-    local UIManager = require("ui/uimanager")
-    local _ = require("gettext")
-    UIManager:show(InfoMessage:new{
-        text = _("Resume")
-    })
+    local Screensaver = require("ui/screensaver")
+    Screensaver:close()
 end
 
 -- fake network manager for the emulator

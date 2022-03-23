@@ -33,6 +33,7 @@ local Device = {
 
     -- hardware feature tests: (these are functions!)
     hasBattery = yes,
+    hasAuxBattery = no,
     hasKeyboard = no,
     hasKeys = no,
     hasDPad = no,
@@ -52,6 +53,7 @@ local Device = {
     hasExternalSD = no, -- or other storage volume that cannot be accessed using the File Manager
     canHWDither = no,
     canHWInvert = no,
+    canModifyFBInfo = no, -- some NTX boards do wonky things with the rotate flag after a FBIOPUT_VSCREENINFO ioctl
     canUseCBB = yes, -- The C BB maintains a 1:1 feature parity with the Lua BB, except that is has NO support for BB4, and limited support for BBRGB24
     hasColorScreen = no,
     hasBGRFrameBuffer = no,
@@ -465,6 +467,9 @@ end
 
 -- Device specific method for toggling the charging LED
 function Device:toggleChargingLED(toggle) end
+
+-- Device specific method for setting the charging LED to the right state
+function Device:setupChargingLED() end
 
 -- Device specific method for enabling a specific amount of CPU cores
 -- (Should only be implemented on embedded platforms where we can afford to control that without screwing with the system).

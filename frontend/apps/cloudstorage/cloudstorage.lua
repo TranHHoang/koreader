@@ -1,20 +1,25 @@
 local BD = require("ui/bidi")
 local ButtonDialog = require("ui/widget/buttondialog")
 local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
+local CheckButton = require("ui/widget/checkbutton")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local DropBox = require("apps/cloudstorage/dropbox")
+local FFIUtil = require("ffi/util")
 local Ftp = require("apps/cloudstorage/ftp")
 local InfoMessage = require("ui/widget/infomessage")
+local InputDialog = require("ui/widget/inputdialog")
 local LuaSettings = require("luasettings")
 local Menu = require("ui/widget/menu")
+local PathChooser = require("ui/widget/pathchooser")
 local UIManager = require("ui/uimanager")
 local WebDav = require("apps/cloudstorage/webdav")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
-local T = require("ffi/util").template
 local _ = require("gettext")
+local N_ = _.ngettext
 local Screen = require("device").screen
+local T = require("ffi/util").template
 
 local CloudStorage = Menu:extend{
     cloud_servers = {
@@ -29,7 +34,13 @@ local CloudStorage = Menu:extend{
     show_parent = nil,
     is_popout = false,
     is_borderless = true,
-    title = _("Cloud storage")
+    title = _("Cloud storage"),
+}
+
+local server_types = {
+    dropbox = _("Dropbox"),
+    ftp = _("FTP"),
+    webdav = _("WebDAV"),
 }
 
 function CloudStorage:init()
@@ -44,6 +55,10 @@ function CloudStorage:init()
     end
     self.width = Screen:getWidth()
     self.height = Screen:getHeight()
+    self.title_bar_left_icon = "plus"
+    self.onLeftButtonTap = function() -- add new cloud storage
+        self:selectCloudType()
+    end
     Menu.init(self)
     if self.item then
         self.item_table[1].callback()
@@ -52,16 +67,11 @@ end
 
 function CloudStorage:genItemTableFromRoot()
     local item_table = {}
-    table.insert(item_table, {
-        text = _("Add new cloud storage"),
-        callback = function()
-            self:selectCloudType()
-        end,
-    })
     local added_servers = self.cs_settings:readSetting("cs_servers") or {}
     for _, server in ipairs(added_servers) do
         table.insert(item_table, {
             text = server.name,
+            mandatory = server_types[server.type],
             address = server.address,
             username = server.username,
             password = server.password,
@@ -108,41 +118,23 @@ function CloudStorage:genItemTable(item)
 end
 
 function CloudStorage:selectCloudType()
-    local buttons = {
-        {
+    local buttons = {}
+    for server_type, name in FFIUtil.orderedPairs(server_types) do
+        table.insert(buttons, {
             {
-                text = _("Dropbox"),
+                text = name,
                 callback = function()
                     UIManager:close(self.cloud_dialog)
-                    self:configCloud("dropbox")
+                    self:configCloud(server_type)
                 end,
             },
-        },
-        {
-            {
-                text = _("FTP"),
-                callback = function()
-                    UIManager:close(self.cloud_dialog)
-                    self:configCloud("ftp")
-                end,
-            },
-        },
-        {
-            {
-                text = _("WebDAV"),
-                callback = function()
-                    UIManager:close(self.cloud_dialog)
-                    self:configCloud("webdav")
-                end,
-            },
-        },
+        })
+    end
+    self.cloud_dialog = ButtonDialogTitle:new{
+        title = _("Add new cloud storage"),
+        title_align = "center",
+        buttons = buttons,
     }
-        self.cloud_dialog = ButtonDialogTitle:new{
-            title = _("Choose cloud storage type"),
-            title_align = "center",
-            buttons = buttons,
-    }
-
     UIManager:show(self.cloud_dialog)
     return true
 end
@@ -166,19 +158,26 @@ function CloudStorage:openCloudServer(url)
         end
         tbl, e = WebDav:run(self.address, self.username, self.password, url)
     end
-    if tbl and #tbl > 0 then
+    if tbl then
         self:switchItemTable(url, tbl)
+        if self.type == "dropbox" then
+            self.onLeftButtonTap = function()
+                self:showPlusMenu(url)
+            end
+        else
+            self:setTitleBarLeftIcon("home")
+            self.onLeftButtonTap = function()
+                self:init()
+            end
+        end
         return true
-    elseif not tbl then
+    else
         logger.err("CloudStorage:", e)
         UIManager:show(InfoMessage:new{
             text = _("Cannot fetch list of folder contents\nPlease check your configuration or network connection."),
             timeout = 3,
         })
         table.remove(self.paths)
-        return false
-    else
-        UIManager:show(InfoMessage:new{ text = _("Empty folder") })
         return false
     end
 end
@@ -207,119 +206,115 @@ function CloudStorage:onMenuSelect(item)
 end
 
 function CloudStorage:downloadFile(item)
-    local lastdir = G_reader_settings:readSetting("lastdir")
+    local function startDownloadFile(unit_item, address, username, password, path_dir, callback_close)
+        UIManager:scheduleIn(1, function()
+            if self.type == "dropbox" then
+                DropBox:downloadFile(unit_item, password, path_dir, callback_close)
+            elseif self.type == "ftp" then
+                Ftp:downloadFile(unit_item, address, username, password, path_dir, callback_close)
+            elseif self.type == "webdav" then
+                WebDav:downloadFile(unit_item, address, username, password, path_dir, callback_close)
+            end
+        end)
+        UIManager:show(InfoMessage:new{
+            text = _("Downloading. This might take a moment."),
+            timeout = 1,
+        })
+    end
+
+    local function createTitle(filename_orig, filename, path) -- title for ButtonDialogTitle
+        return T(_("Filename:\n%1\n\nDownload filename:\n%2\n\nDownload folder:\n%3"),
+            filename_orig, filename, BD.dirpath(path))
+    end
+
     local cs_settings = self:readSettings()
-    local download_dir = cs_settings:readSetting("download_dir") or lastdir
-    local path = download_dir .. '/' .. item.text
-    self:cloudFile(item, path)
-end
+    local download_dir = cs_settings:readSetting("download_dir") or G_reader_settings:readSetting("lastdir")
+    local filename_orig = item.text
+    local filename = filename_orig
 
-function CloudStorage:cloudFile(item, path)
-    local download_text = _("Downloading. This might take a moment.")
-    local function dropboxDownloadFile(unit_item, password, path_dir, callback_close)
-        UIManager:scheduleIn(1, function()
-            DropBox:downloadFile(unit_item, password, path_dir, callback_close)
-        end)
-        UIManager:show(InfoMessage:new{
-            text = download_text,
-            timeout = 1,
-        })
-    end
-
-    local function ftpDownloadFile(unit_item, address, username, password, path_dir, callback_close)
-        UIManager:scheduleIn(1, function()
-            Ftp:downloadFile(unit_item, address, username, password, path_dir, callback_close)
-        end)
-        UIManager:show(InfoMessage:new{
-            text = download_text,
-            timeout = 1,
-        })
-    end
-
-    local function webdavDownloadFile(unit_item, address, username, password, path_dir, callback_close)
-        UIManager:scheduleIn(1, function()
-            WebDav:downloadFile(unit_item, address, username, password, path_dir, callback_close)
-        end)
-        UIManager:show(InfoMessage:new{
-            text = download_text,
-            timeout = 1,
-        })
-    end
-
-    local path_dir = path
-    local overwrite_text = _("File already exists. Would you like to overwrite it?")
     local buttons = {
         {
             {
-                text = _("Download file"),
+                text = _("Choose folder"),
                 callback = function()
-                    if self.type == "dropbox" then
-                        local callback_close = function()
-                            self:onClose()
-                        end
-                        UIManager:close(self.download_dialog)
-                        if lfs.attributes(path) then
-                            UIManager:show(ConfirmBox:new{
-                                text = overwrite_text,
-                                ok_callback = function()
-                                    dropboxDownloadFile(item, self.password, path_dir, callback_close)
-                                end
-                            })
-                        else
-                            dropboxDownloadFile(item, self.password, path_dir, callback_close)
-                        end
-                    elseif self.type == "ftp" then
-                        local callback_close = function()
-                            self:onClose()
-                        end
-                        UIManager:close(self.download_dialog)
-                        if lfs.attributes(path) then
-                            UIManager:show(ConfirmBox:new{
-                                text = overwrite_text,
-                                ok_callback = function()
-                                    ftpDownloadFile(item, self.address, self.username, self.password, path_dir, callback_close)
-                                end
-                            })
-                        else
-                            ftpDownloadFile(item, self.address, self.username, self.password, path_dir, callback_close)
-                        end
-                    elseif self.type == "webdav" then
-                        local callback_close = function()
-                            self:onClose()
-                        end
-                        UIManager:close(self.download_dialog)
-                        if lfs.attributes(path) then
-                            UIManager:show(ConfirmBox:new{
-                                text = overwrite_text,
-                                ok_callback = function()
-                                    webdavDownloadFile(item, self.address, self.username, self.password, path_dir, callback_close)
-                                end
-                            })
-                        else
-                            webdavDownloadFile(item, self.address, self.username, self.password, path_dir, callback_close)
-                        end
+                    require("ui/downloadmgr"):new{
+                        show_hidden = G_reader_settings:readSetting("show_hidden"),
+                        onConfirm = function(path)
+                            self.cs_settings:saveSetting("download_dir", path)
+                            self.cs_settings:flush()
+                            download_dir = path
+                            self.download_dialog:setTitle(createTitle(filename_orig, filename, download_dir))
+                        end,
+                    }:chooseDir(download_dir)
+                end,
+            },
+            {
+                text = _("Change filename"),
+                callback = function()
+                    local input_dialog
+                    input_dialog = InputDialog:new{
+                        title = _("Enter filename"),
+                        input = filename,
+                        input_hint = filename_orig,
+                        buttons = {
+                            {
+                                {
+                                    text = _("Cancel"),
+                                    callback = function()
+                                        UIManager:close(input_dialog)
+                                    end,
+                                },
+                                {
+                                    text = _("Set filename"),
+                                    is_enter_default = true,
+                                    callback = function()
+                                        filename = input_dialog:getInputValue()
+                                        if filename == "" then
+                                            filename = filename_orig
+                                        end
+                                        UIManager:close(input_dialog)
+                                        self.download_dialog:setTitle(createTitle(filename_orig, filename, download_dir))
+                                    end,
+                                },
+                            }
+                        },
+                    }
+                    UIManager:show(input_dialog)
+                    input_dialog:onShowKeyboard()
+                end,
+            },
+        },
+        {
+            {
+                text = _("Cancel"),
+                callback = function()
+                    UIManager:close(self.download_dialog)
+                end,
+            },
+            {
+                text = _("Download"),
+                callback = function()
+                    UIManager:close(self.download_dialog)
+                    local path_dir = (download_dir ~= "/" and download_dir or "") .. '/' .. filename
+                    local callback_close = function() self:onClose() end
+                    if lfs.attributes(path_dir) then
+                        UIManager:show(ConfirmBox:new{
+                            text = _("File already exists. Would you like to overwrite it?"),
+                            ok_callback = function()
+                                startDownloadFile(item, self.address, self.username, self.password, path_dir, callback_close)
+                            end
+                        })
+                    else
+                        startDownloadFile(item, self.address, self.username, self.password, path_dir, callback_close)
                     end
                 end,
             },
         },
-        {
-            {
-                text = _("Choose download folder"),
-                callback = function()
-                    require("ui/downloadmgr"):new{
-                        show_hidden = G_reader_settings:readSetting("show_hidden"),
-                        onConfirm = function(path_download)
-                            self.cs_settings:saveSetting("download_dir", path_download)
-                            self.cs_settings:flush()
-                            path_dir = path_download .. '/' .. item.text
-                        end,
-                    }:chooseDir()
-                end,
-            },
-        },
     }
-    self.download_dialog = ButtonDialog:new{
-        buttons = buttons
+
+    self.download_dialog = ButtonDialogTitle:new{
+        title = createTitle(filename_orig, filename, download_dir),
+        buttons = buttons,
     }
     UIManager:show(self.download_dialog)
 end
@@ -378,7 +373,6 @@ function CloudStorage:onMenuHold(item)
             {
                 {
                     text = _("Info"),
-                    enabled = true,
                     callback = function()
                         UIManager:close(cs_server_dialog)
                         self:infoServer(item)
@@ -386,7 +380,6 @@ function CloudStorage:onMenuHold(item)
                 },
                 {
                     text = _("Edit"),
-                    enabled = true,
                     callback = function()
                         UIManager:close(cs_server_dialog)
                         self:editCloudServer(item)
@@ -395,7 +388,6 @@ function CloudStorage:onMenuHold(item)
                 },
                 {
                     text = _("Delete"),
-                    enabled = true,
                     callback = function()
                         UIManager:close(cs_server_dialog)
                         self:deleteCloudServer(item)
@@ -415,7 +407,6 @@ function CloudStorage:onMenuHold(item)
                 },
                 {
                     text = _("Synchronize settings"),
-                    enabled = true,
                     callback = function()
                         UIManager:close(cs_server_dialog)
                         self:synchronizeSettings(item)
@@ -441,11 +432,11 @@ function CloudStorage:synchronizeCloud(item)
             local text
             if downloaded_files == 0 and failed_files == 0 then
                 text = _("No files to download from Dropbox.")
-            elseif downloaded_files > 0 and failed_files == 0 then
-                text = T(_("Successfully downloaded %1 files from Dropbox to local storage."), downloaded_files)
             else
-                text = T(_("Successfully downloaded %1 files from Dropbox to local storage.\nFailed to download %2 files."),
-                    downloaded_files, failed_files)
+                text = T(N_("Successfully downloaded 1 file from Dropbox to local storage.", "Successfully downloaded %1 files from Dropbox to local storage.", downloaded_files), downloaded_files)
+                if failed_files > 0 then
+                    text = text .. "\n" .. T(N_("Failed to download 1 file.", "Failed to download %1 files.", failed_files), failed_files)
+                end
             end
             UIManager:show(InfoMessage:new{
                 text = text,
@@ -570,6 +561,122 @@ function CloudStorage:synchronizeSettings(item)
         }
     }
     UIManager:show(syn_dialog)
+end
+
+function CloudStorage:showPlusMenu(url)
+    local button_dialog
+    button_dialog = ButtonDialog:new{
+        buttons = {
+            {
+                {
+                    text = _("Upload file"),
+                    callback = function()
+                        UIManager:close(button_dialog)
+                        self:uploadFile(url)
+                    end,
+                },
+            },
+            {
+                {
+                    text = _("New folder"),
+                    callback = function()
+                        UIManager:close(button_dialog)
+                        self:createFolder(url)
+                    end,
+                },
+            },
+            {},
+            {
+                {
+                    text = _("Return to cloud storage list"),
+                    callback = function()
+                        UIManager:close(button_dialog)
+                        self:init()
+                    end,
+                },
+            },
+        },
+    }
+    UIManager:show(button_dialog)
+end
+
+function CloudStorage:uploadFile(url)
+    local path_chooser
+    path_chooser = PathChooser:new{
+        select_directory = false,
+        detailed_file_info = true,
+        path = self.last_path,
+        onConfirm = function(file_path)
+            self.last_path = file_path:match("(.*)/")
+            if self.last_path == "" then self.last_path = "/" end
+            if lfs.attributes(file_path, "size") > 157286400 then
+                UIManager:show(InfoMessage:new{
+                    text = _("File size must be less than 150 MB."),
+                })
+            else
+                local callback_close = function()
+                    self:openCloudServer(url)
+                end
+                UIManager:nextTick(function()
+                    UIManager:show(InfoMessage:new{
+                        text = _("Uploading…"),
+                        timeout = 1,
+                    })
+                end)
+                local url_base = url ~= "/" and url or ""
+                UIManager:tickAfterNext(function()
+                    DropBox:uploadFile(url_base, self.password, file_path, callback_close)
+                end)
+            end
+        end
+    }
+    UIManager:show(path_chooser)
+end
+
+function CloudStorage:createFolder(url)
+    local input_dialog, check_button_enter_folder
+    input_dialog = InputDialog:new{
+        title = _("New folder"),
+        buttons = {
+            {
+                {
+                    text = _("Cancel"),
+                    id = "close",
+                    callback = function()
+                        UIManager:close(input_dialog)
+                    end,
+                },
+                {
+                    text = _("Create"),
+                    is_enter_default = true,
+                    callback = function()
+                        local folder_name = input_dialog:getInputText()
+                        if folder_name == "" then return end
+                        UIManager:close(input_dialog)
+                        local url_base = url ~= "/" and url or ""
+                        local callback_close = function()
+                            if check_button_enter_folder.checked then
+                                table.insert(self.paths, {
+                                    url = url,
+                                })
+                                url = url_base .. "/" .. folder_name
+                            end
+                            self:openCloudServer(url)
+                        end
+                        DropBox:createFolder(url_base, self.password, folder_name, callback_close)
+                    end,
+                },
+            }
+        },
+    }
+    check_button_enter_folder = CheckButton:new{
+        text = _("Enter folder after creation"),
+        checked = false,
+        parent = input_dialog,
+    }
+    input_dialog:addWidget(check_button_enter_folder)
+    UIManager:show(input_dialog)
+    input_dialog:onShowKeyboard()
 end
 
 function CloudStorage:configCloud(type)
