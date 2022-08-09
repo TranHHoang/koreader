@@ -1171,16 +1171,16 @@ end
 function FileManager:getSortingMenuTable()
     local fm = self
     local collates = {
-        strcoll = {_("filename"), _("Sort by filename")},
-        natural = {_("natural"), _("Sort by filename (natural sorting)")},
-        strcoll_mixed = {_("name mixed"), _("Sort by name – mixed files and folders")},
-        access = {_("date read"), _("Sort by last read date")},
-        change = {_("date added"), _("Sort by date added")},
-        modification = {_("date modified"), _("Sort by date modified")},
-        size = {_("size"), _("Sort by size")},
-        type = {_("type"), _("Sort by type")},
-        percent_unopened_first = {_("percent – unopened first"), _("Sort by percent – unopened first")},
-        percent_unopened_last = {_("percent – unopened last"), _("Sort by percent – unopened last")},
+        strcoll = { _("File Name"), _("File name") },
+        natural = { _("Natural"), _("File name (natural sorting)") },
+        strcoll_mixed = { _("Name Mixed"), _("Name – mixed files and folders") },
+        access = { _("Date Read"), _("Last read date") },
+        change = { _("Date Added"), _("Date added") },
+        modification = { _("Date Modified"), _("Date modified") },
+        size = { _("Size"), _("Size") },
+        type = { _("Type"), _("Type") },
+        percent_unopened_first = { _("Unopened first"), _("Unopened first") },
+        percent_unopened_last = { _("Unopened last"), _("Unopened last") },
     }
     local set_collate_table = function(collate)
         return {
@@ -1196,7 +1196,7 @@ function FileManager:getSortingMenuTable()
         if collate_type == "percent_unopened_first" or collate_type == "percent_unopened_last" then
             return collates[collate_type][2]
         else
-            return _("Sort by percent")
+            return _("Percent")
         end
     end
     return {
@@ -1207,16 +1207,29 @@ function FileManager:getSortingMenuTable()
             )
         end,
         sub_item_table = {
+            {
+                text = _("Name"),
+                sub_item_table = {
             set_collate_table("strcoll"),
             set_collate_table("natural"),
             set_collate_table("strcoll_mixed"),
+                }
+            },
+            {
+                text = _("Date"),
+                sub_item_table = {
             set_collate_table("access"),
             set_collate_table("change"),
             set_collate_table("modification"),
+                }
+            },
+            {
+                text = _("Others"),
+                sub_item_table = {
             set_collate_table("size"),
             set_collate_table("type"),
             {
-                text_func =  get_collate_percent,
+                        text_func = get_collate_percent,
                 checked_func = function()
                     return fm.file_chooser.collate == "percent_unopened_first"
                         or fm.file_chooser.collate == "percent_unopened_last"
@@ -1224,7 +1237,10 @@ function FileManager:getSortingMenuTable()
                 sub_item_table = {
                     set_collate_table("percent_unopened_first"),
                     set_collate_table("percent_unopened_last"),
-                }
+                        },
+                    },
+                },
+                separator = true,
             },
         }
     }
@@ -1233,11 +1249,11 @@ end
 function FileManager:getStartWithMenuTable()
     local start_with_setting = G_reader_settings:readSetting("start_with") or "filemanager"
     local start_withs = {
-        filemanager = {_("file browser"), _("Start with file browser")},
-        history = {_("history"), _("Start with history")},
-        favorites = {_("favorites"), _("Start with favorites")},
-        folder_shortcuts = {_("folder shortcuts"), _("Start with folder shortcuts")},
-        last = {_("last file"), _("Start with last file")},
+        filemanager = { _("File browser"), _("File browser") },
+        history = { _("History"), _("History") },
+        favorites = { _("Favorites"), _("Favorites") },
+        folder_shortcuts = { _("Folder shortcuts"), _("Folder shortcuts") },
+        last = { _("Last file"), _("Last file") },
     }
     local set_sw_table = function(start_with)
         return {

@@ -142,118 +142,135 @@ function FileManagerMenu:setUpdateItemTable()
         text = _("Settings"),
         sub_item_table = {
             {
-                text = _("Show hidden files"),
-                checked_func = function() return self.ui.file_chooser.show_hidden end,
-                callback = function() self.ui:toggleHiddenFiles() end,
-            },
-            {
-                text = _("Show unsupported files"),
-                checked_func = function() return self.ui.file_chooser.show_unsupported end,
-                callback = function() self.ui:toggleUnsupportedFiles() end,
-                separator = true,
-            },
-            {
-                text = _("Classic mode settings"),
+                text = _("Display mode"),
                 sub_item_table = {
                     {
-                        text = _("Items per page"),
-                        help_text = _([[This sets the number of items per page in:
-- File browser, history and favorites in 'classic' display mode
-- Search results and folder shortcuts
-- File and folder selection
-- Calibre and OPDS browsers/search results]]),
+                        text = _("Classic (filename only)"),
+                        checked_func = function() return true end,
                         callback = function()
-                            local SpinWidget = require("ui/widget/spinwidget")
-                            local Menu = require("ui/widget/menu")
-                            local default_perpage = Menu.items_per_page_default
-                            local curr_perpage = G_reader_settings:readSetting("items_per_page") or default_perpage
-                            local items = SpinWidget:new{
-                                value = curr_perpage,
-                                value_min = 6,
-                                value_max = 24,
-                                default_value = default_perpage,
-                                title_text =  _("Items per page"),
-                                keep_shown_on_apply = true,
-                                callback = function(spin)
-                                    G_reader_settings:saveSetting("items_per_page", spin.value)
-                                    self.ui:onRefresh()
-                                end
-                            }
-                            UIManager:show(items)
-                        end,
-                    },
-                    {
-                        text = _("Item font size"),
-                        callback = function()
-                            local SpinWidget = require("ui/widget/spinwidget")
-                            local Menu = require("ui/widget/menu")
-                            local curr_perpage = G_reader_settings:readSetting("items_per_page") or Menu.items_per_page_default
-                            local default_font_size = Menu.getItemFontSize(curr_perpage)
-                            local curr_font_size = G_reader_settings:readSetting("items_font_size") or default_font_size
-                            local items_font = SpinWidget:new{
-                                value = curr_font_size,
-                                value_min = 10,
-                                value_max = 72,
-                                default_value = default_font_size,
-                                keep_shown_on_apply = true,
-                                title_text =  _("Item font size"),
-                                callback = function(spin)
-                                    if spin.value == default_font_size then
-                                        -- We can't know if the user has set a size or hit "Use default", but
-                                        -- assume that if it is the default font size, he will prefer to have
-                                        -- our default font size if he later updates per-page
-                                        G_reader_settings:delSetting("items_font_size")
-                                    else
-                                        G_reader_settings:saveSetting("items_font_size", spin.value)
-                                    end
-                                    self.ui:onRefresh()
-                                end
-                            }
-                            UIManager:show(items_font)
-                        end,
-                    },
-                    {
-                        text = _("Shrink item font size to fit more text"),
-                        checked_func = function()
-                            return G_reader_settings:isTrue("items_multilines_show_more_text")
-                        end,
-                        callback = function()
-                            G_reader_settings:flipNilOrFalse("items_multilines_show_more_text")
-                            self.ui:onRefresh()
+                            self:setupFileManagerDisplayMode("")
                         end,
                         separator = true,
                     },
                     {
-                        text = _("Show opened files in bold"),
-                        checked_func = function()
-                            return G_reader_settings:readSetting("show_file_in_bold") == "opened"
-                        end,
-                        callback = function()
-                            if G_reader_settings:readSetting("show_file_in_bold") == "opened" then
-                                G_reader_settings:saveSetting("show_file_in_bold", false)
-                            else
-                                G_reader_settings:saveSetting("show_file_in_bold", "opened")
-                            end
-                            self.ui:onRefresh()
-                        end,
-                    },
-                    {
-                        text = _("Show new (not yet opened) files in bold"),
-                        checked_func = function()
-                            return G_reader_settings:hasNot("show_file_in_bold")
-                        end,
-                        callback = function()
-                            if G_reader_settings:hasNot("show_file_in_bold") then
-                                G_reader_settings:saveSetting("show_file_in_bold", false)
-                            else
-                                G_reader_settings:delSetting("show_file_in_bold")
-                            end
-                            self.ui:onRefresh()
-                        end,
+                        text = _("Classic mode settings"),
+                        separator = true,
+                        sub_item_table = {
+                            {
+                                text = _("Items per page"),
+                                help_text = _([[This sets the number of items per page in:
+        - File browser, history and favorites in 'classic' display mode
+        - Search results and folder shortcuts
+        - File and folder selection
+        - Calibre and OPDS browsers/search results]]),
+                                callback = function()
+                                    local SpinWidget = require("ui/widget/spinwidget")
+                                    local Menu = require("ui/widget/menu")
+                                    local default_perpage = Menu.items_per_page_default
+                                    local curr_perpage = G_reader_settings:readSetting("items_per_page") or default_perpage
+                                    local items = SpinWidget:new{
+                                        value = curr_perpage,
+                                        value_min = 6,
+                                        value_max = 24,
+                                        default_value = default_perpage,
+                                        title_text =  _("Items per page"),
+                                        keep_shown_on_apply = true,
+                                        callback = function(spin)
+                                            G_reader_settings:saveSetting("items_per_page", spin.value)
+                                            self.ui:onRefresh()
+                                        end
+                                    }
+                                    UIManager:show(items)
+                                end,
+                            },
+                            {
+                                text = _("Item font size"),
+                                callback = function()
+                                    local SpinWidget = require("ui/widget/spinwidget")
+                                    local Menu = require("ui/widget/menu")
+                                    local curr_perpage = G_reader_settings:readSetting("items_per_page") or Menu.items_per_page_default
+                                    local default_font_size = Menu.getItemFontSize(curr_perpage)
+                                    local curr_font_size = G_reader_settings:readSetting("items_font_size") or default_font_size
+                                    local items_font = SpinWidget:new{
+                                        value = curr_font_size,
+                                        value_min = 10,
+                                        value_max = 72,
+                                        default_value = default_font_size,
+                                        keep_shown_on_apply = true,
+                                        title_text =  _("Item font size"),
+                                        callback = function(spin)
+                                            if spin.value == default_font_size then
+                                                -- We can't know if the user has set a size or hit "Use default", but
+                                                -- assume that if it is the default font size, he will prefer to have
+                                                -- our default font size if he later updates per-page
+                                                G_reader_settings:delSetting("items_font_size")
+                                            else
+                                                G_reader_settings:saveSetting("items_font_size", spin.value)
+                                            end
+                                            self.ui:onRefresh()
+                                        end
+                                    }
+                                    UIManager:show(items_font)
+                                end,
+                            },
+                            {
+                                text = _("Shrink item font size to fit more text"),
+                                checked_func = function()
+                                    return G_reader_settings:isTrue("items_multilines_show_more_text")
+                                end,
+                                callback = function()
+                                    G_reader_settings:flipNilOrFalse("items_multilines_show_more_text")
+                                    self.ui:onRefresh()
+                                end,
+                                separator = true,
+                            },
+                            {
+                                text = _("Show opened files in bold"),
+                                checked_func = function()
+                                    return G_reader_settings:readSetting("show_file_in_bold") == "opened"
+                                end,
+                                callback = function()
+                                    if G_reader_settings:readSetting("show_file_in_bold") == "opened" then
+                                        G_reader_settings:saveSetting("show_file_in_bold", false)
+                                    else
+                                        G_reader_settings:saveSetting("show_file_in_bold", "opened")
+                                    end
+                                    self.ui:onRefresh()
+                                end,
+                            },
+                            {
+                                text = _("Show new (not yet opened) files in bold"),
+                                checked_func = function()
+                                    return G_reader_settings:hasNot("show_file_in_bold")
+                                end,
+                                callback = function()
+                                    if G_reader_settings:hasNot("show_file_in_bold") then
+                                        G_reader_settings:saveSetting("show_file_in_bold", false)
+                                    else
+                                        G_reader_settings:delSetting("show_file_in_bold")
+                                    end
+                                    self.ui:onRefresh()
+                                end,
+                            },
+                        },
                     },
                 },
             },
             {
+                text = _("Advanced"),
+                sub_item_table = {
+                    {
+                        text = _("Show hidden files"),
+                        checked_func = function() return self.ui.file_chooser.show_hidden end,
+                        callback = function() self.ui:toggleHiddenFiles() end,
+                    },
+                    {
+                        text = _("Show unsupported files"),
+                        checked_func = function() return self.ui.file_chooser.show_unsupported end,
+                        callback = function() self.ui:toggleUnsupportedFiles() end,
+                        separator = true,
+                    },
+                    {
                 text = _("History settings"),
                 sub_item_table = {
                     {
@@ -389,6 +406,9 @@ To:
                     UIManager:show(items)
                 end,
             },
+                },
+            },
+            self.ui:getStartWithMenuTable(),
         }
     }
 
@@ -400,12 +420,12 @@ To:
     end
 
     self.menu_items.sort_by = self.ui:getSortingMenuTable()
-    self.menu_items.reverse_sorting = {
-        text = _("Reverse sorting"),
+    table.insert(self.menu_items.sort_by.sub_item_table, {
+        text = _("Reverse order"),
         checked_func = function() return self.ui.file_chooser.reverse_collate end,
-        callback = function() self.ui:toggleReverseCollate() end
-    }
-    self.menu_items.start_with = self.ui:getStartWithMenuTable()
+        callback = function() self.ui:toggleReverseCollate() end,
+    })
+    -- self.menu_items.start_with = self.ui:getStartWithMenuTable()
     if Device:supportsScreensaver() then
         self.menu_items.screensaver = {
             text = _("Screensaver"),

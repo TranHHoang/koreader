@@ -64,7 +64,6 @@ local order = {
         -- common settings
         -- those that don't exist will simply be skipped during menu gen
         "frontlight", -- if Device:hasFrontlight()
-        "night_mode",
         "----------------------------",
         "network",
         "screen",
@@ -129,6 +128,8 @@ local order = {
         "ssh",
     },
     screen = {
+        "night_mode",
+        "----------------------------",
         "screensaver",
         "coverimage",
         "autodim",
@@ -187,14 +188,16 @@ local order = {
         "plugin_management",
     },
     search = {
-        "dictionary_lookup",
-        "dictionary_lookup_history",
+        "dictionary",
+        "wikipedia",
+        -- "dictionary_lookup",
+        -- "dictionary_lookup_history",
         "vocabbuilder",
-        "dictionary_settings",
-        "----------------------------",
-        "wikipedia_lookup",
-        "wikipedia_history",
-        "wikipedia_settings",
+        -- "dictionary_settings",
+        -- "----------------------------",
+        -- "wikipedia_lookup",
+        -- "wikipedia_history",
+        -- "wikipedia_settings",
         "----------------------------",
         "translation_settings",
         "----------------------------",
@@ -204,9 +207,9 @@ local order = {
     },
     filemanager = {},
     main = {
-        "history",
         "open_previous_document",
         "----------------------------",
+        "history",
         "collections",
         "----------------------------",
         "book_status",
