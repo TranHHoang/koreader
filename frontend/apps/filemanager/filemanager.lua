@@ -1226,17 +1226,17 @@ function FileManager:getSortingMenuTable()
             {
                 text = _("Others"),
                 sub_item_table = {
-            set_collate_table("size"),
-            set_collate_table("type"),
-            {
+                    set_collate_table("size"),
+                    set_collate_table("type"),
+                    {
                         text_func = get_collate_percent,
-                checked_func = function()
-                    return fm.file_chooser.collate == "percent_unopened_first"
-                        or fm.file_chooser.collate == "percent_unopened_last"
-                end,
-                sub_item_table = {
-                    set_collate_table("percent_unopened_first"),
-                    set_collate_table("percent_unopened_last"),
+                        checked_func = function()
+                            return fm.file_chooser.collate == "percent_unopened_first"
+                                or fm.file_chooser.collate == "percent_unopened_last"
+                        end,
+                        sub_item_table = {
+                            set_collate_table("percent_unopened_first"),
+                            set_collate_table("percent_unopened_last"),
                         },
                     },
                 },
