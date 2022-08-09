@@ -28,7 +28,6 @@ local ReaderDeviceStatus = require("apps/reader/modules/readerdevicestatus")
 local ReaderDictionary = require("apps/reader/modules/readerdictionary")
 local ReaderWikipedia = require("apps/reader/modules/readerwikipedia")
 local Screenshoter = require("ui/widget/screenshoter")
-local TitleBar = require("ui/widget/titlebar")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local UIManager = require("ui/uimanager")
 local filemanagerutil = require("apps/filemanager/filemanagerutil")
@@ -41,6 +40,12 @@ local C_ = _.pgettext
 local N_ = _.ngettext
 local Screen = Device.screen
 local T = BaseUtil.template
+local Button = require("ui/widget/button")
+local Font = require("ui/font")
+local HorizontalGroup = require("ui/widget/horizontalgroup")
+local IconButton = require("ui/widget/iconbutton")
+local Size = require("ui/size")
+local TextWidget = require("ui/widget/textwidget")
 
 local FileManager = InputContainer:extend{
     title = _("KOReader"),
@@ -99,25 +104,90 @@ function FileManager:onSetDimensions(dimen)
     end
 end
 
+local function split(inputstr, sep)
+    if sep == nil then
+            sep = "%s"
+    end
+    local t={}
+    for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
+            table.insert(t, str)
+    end
+    return t
+end
+
 function FileManager:setupLayout()
     self.show_parent = self.show_parent or self
-    self.title_bar = TitleBar:new{
-        fullscreen = "true",
-        align = "center",
-        title = self.title,
-        title_top_padding = Screen:scaleBySize(6),
-        subtitle = BD.directory(filemanagerutil.abbreviate(self.root_path)),
-        subtitle_truncate_left = true,
-        subtitle_fullwidth = true,
-        button_padding = Screen:scaleBySize(5),
-        left_icon = "home",
-        left_icon_size_ratio = 1,
-        left_icon_tap_callback = function() self:goHome() end,
-        left_icon_hold_callback = false, -- propagate long-press to dispatcher
-        right_icon = "plus",
-        right_icon_size_ratio = 1,
-        right_icon_tap_callback = function() self:onShowPlusMenu() end,
-        right_icon_hold_callback = false, -- propagate long-press to dispatcher
+    local home_dir = G_reader_settings:readSetting("home_dir") or filemanagerutil.getDefaultDir() or ""
+
+    local icon_size = Screen:scaleBySize(24)
+    local up_button = IconButton:new{
+        icon = home_dir == self.root_path and "up" or "home",
+        bordersize = 0,
+        width = icon_size, -- our icons are square
+        height = icon_size,
+        padding_left = Size.padding.default,
+        padding_right = Size.padding.default,
+        callback = function()
+            if home_dir == self.root_path then
+                self.file_chooser:onFolderUp()
+            else
+                self:goHome()
+            end
+        end,
+    }
+    self.plus_button = IconButton:new{
+        icon = "plus",
+        bordersize = 0,
+        width = icon_size, -- our icons are square
+        height = icon_size,
+        padding_left = Size.padding.default,
+        callback = function()
+            self:onShowPlusMenu()
+        end,
+    }
+
+    local WidgetContainer = require("ui/widget/container/widgetcontainer")
+
+    self.path_group = HorizontalGroup:new{}
+    local paths = split(self.root_path:gsub(home_dir, "Home"), "/")
+
+    for k, v in pairs(paths) do
+        if (v ~= "Home" or #paths == 1) and k >= math.max(#paths - 3, 0) then
+            table.insert(self.path_group, Button:new{
+                text = v,
+                padding = 0,
+                avoid_text_truncation = false,
+                max_width = 110,
+                bordersize = 0,
+                text_font_bold = false,
+                text_font_size = 18,
+                callback = function()
+                    local path = table.concat({unpack(paths, 1, k)}, "/"):gsub("Home", home_dir)
+                    self.file_chooser:changeToPath("/"..path)
+                end,
+            })
+            table.insert(self.path_group, TextWidget:new{
+                face = Font:getFace("smallinfofont", 20),
+                bold = "true",
+                text = " › ",
+            })
+        end
+    end
+
+    self.banner = FrameContainer:new{
+        padding = Size.padding.tiny,
+        bordersize = 0,
+        WidgetContainer:new{
+            dimen = { w = Screen:getWidth() },
+            HorizontalGroup:new{
+                up_button,
+                WidgetContainer:new{
+                    dimen = { w = Screen:getWidth() - 2 * icon_size - 4 * Size.padding.default },
+                    self.path_group,
+                },
+                self.plus_button,
+            }
+        },
     }
 
     local show_hidden = G_reader_settings:isTrue("show_hidden") or DSHOWHIDDENFILES
@@ -131,7 +201,7 @@ function FileManager:setupLayout()
         show_parent = self.show_parent,
         show_hidden = show_hidden,
         width = Screen:getWidth(),
-        height = Screen:getHeight() - self.title_bar:getHeight(),
+        height = Screen:getHeight() - self.banner:getSize().h,
         is_popout = false,
         is_borderless = true,
         has_close_button = true,
@@ -146,8 +216,6 @@ function FileManager:setupLayout()
         return_arrow_propagation = true,
         -- allow Menu widget to delegate handling of some gestures to GestureManager
         filemanager = self,
-        -- let Menu widget merge our title_bar into its own TitleBar's FocusManager layout
-        outer_title_bar = self.title_bar,
     }
     self.file_chooser = file_chooser
     self.focused_file = nil -- use it only once
@@ -155,8 +223,9 @@ function FileManager:setupLayout()
     local file_manager = self
 
     function file_chooser:onPathChanged(path)  -- luacheck: ignore
-        file_manager.title_bar:setSubTitle(BD.directory(filemanagerutil.abbreviate(path)))
-        return true
+        local fm = FileManager.instance
+        fm:reinit(path, nil)
+        UIManager:setDirty(fm.banner, "ui", fm.banner.dimen)
     end
 
     function file_chooser:onFileSelect(file)  -- luacheck: ignore
@@ -423,7 +492,7 @@ function FileManager:setupLayout()
     end
 
     self.layout = VerticalGroup:new{
-        self.title_bar,
+        self.banner,
         file_chooser,
     }
 
@@ -560,7 +629,7 @@ function FileManager:onToggleSelectMode()
     logger.dbg("toggle select mode")
     self.select_mode = not self.select_mode
     self.selected_files = self.select_mode and {} or nil
-    self.title_bar:setRightIcon(self.select_mode and "check" or "plus")
+    self.plus_button:setIcon(self.select_mode and "check" or "plus")
     self:onRefresh()
 end
 
@@ -817,7 +886,7 @@ function FileManager:reinit(path, focused_file)
     -- CoverBrowser plugin's cover image renderings)
     -- self:onRefresh()
     if self.select_mode then
-        self.title_bar:setRightIcon("check")
+        self.plus_button:setIcon("check")
     end
 end
 
