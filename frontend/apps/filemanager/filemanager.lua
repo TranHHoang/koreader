@@ -153,24 +153,25 @@ function FileManager:setupLayout()
 
     for k, v in pairs(paths) do
         if (v ~= "Home" or #paths == 1) and k >= math.max(#paths - 3, 0) then
+            local separator = TextWidget:new{
+                face = Font:getFace("smallinfofont", 20),
+                bold = "true",
+                text = " › ",
+            }
             table.insert(self.path_group, Button:new{
                 text = v,
                 padding = 0,
                 avoid_text_truncation = false,
-                max_width = 110,
+                max_width = (Screen:getWidth() - 2 * icon_size - separator:getSize().w * #paths) / (#paths - (paths[1] == "Home" and 1 or 0)),
                 bordersize = 0,
                 text_font_bold = false,
-                text_font_size = 18,
+                text_font_size = 16,
                 callback = function()
                     local path = table.concat({unpack(paths, 1, k)}, "/"):gsub("Home", home_dir)
                     self.file_chooser:changeToPath("/"..path)
                 end,
             })
-            table.insert(self.path_group, TextWidget:new{
-                face = Font:getFace("smallinfofont", 20),
-                bold = "true",
-                text = " › ",
-            })
+            table.insert(self.path_group, separator)
         end
     end
 
