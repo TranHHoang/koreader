@@ -43,14 +43,14 @@ function ReaderWikipedia:lookupInput()
         buttons = {
             {
                 {
-                    text = _("Cancel"),
+                    text = _("ﰸ"), -- Cancel
                     id = "close",
                     callback = function()
                         UIManager:close(self.input_dialog)
                     end,
                 },
                 {
-                    text = _("Search Wikipedia"),
+                    text = _(""), -- Search wikipedia
                     is_enter_default = true,
                     callback = function()
                         if self.input_dialog:getInputText() == "" then return end

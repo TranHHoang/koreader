@@ -274,7 +274,7 @@ function CoverMenu:updateItems(select_number)
                             -- NOTE: This also means we assume "on hold" means reading, meaning it'll be flipped to "finished",
                             --       which I'm personally okay with, too.
                             --       c.f., BookStatusWidget:generateSwitchGroup for the three possible constant values.
-                            return status == "complete" and _("Mark as reading") or _("Mark as read")
+                            return status == "complete" and _("Mark as reading") or _("牢 Mark as read")
                         end,
                         enabled = true,
                         callback = function()
@@ -318,7 +318,7 @@ function CoverMenu:updateItems(select_number)
                 -- Keep on adding new buttons
                 table.insert(orig_buttons, {
                     { -- Allow user to view real size cover in ImageViewer
-                        text = _("View full size cover"),
+                        text = _("  Full size cover"),
                         enabled = bookinfo.has_cover and true or false,
                         callback = function()
                             local document = DocumentRegistry:openDocument(file)
@@ -345,7 +345,7 @@ function CoverMenu:updateItems(select_number)
                         end,
                     },
                     { -- Allow user to directly view description in TextViewer
-                        text = _("Book description"),
+                        text = _(" Book description"),
                         enabled = bookinfo.description and true or false,
                         callback = function()
                             local description = util.htmlToPlainTextIfHtml(bookinfo.description)
@@ -360,7 +360,7 @@ function CoverMenu:updateItems(select_number)
                 })
                 table.insert(orig_buttons, {
                     { -- Allow user to ignore some offending cover image
-                        text = bookinfo.ignore_cover and _("Unignore cover") or _("Ignore cover"),
+                        text = bookinfo.ignore_cover and _("Unignore cover") or _("ﴩ Ignore cover"),
                         enabled = bookinfo.has_cover and true or false,
                         callback = function()
                             BookInfoManager:setBookInfoProperties(file, {
@@ -384,7 +384,7 @@ function CoverMenu:updateItems(select_number)
                 })
                 table.insert(orig_buttons, {
                     { -- Allow a new extraction (multiple interruptions, book replaced)...
-                        text = _("Refresh cached book information"),
+                        text = _("累 Refresh cached book information"),
                         enabled = bookinfo and true or false,
                         callback = function()
                             -- Wipe the cache
@@ -448,7 +448,7 @@ function CoverMenu:onHistoryMenuHold(item)
     -- Add some new buttons to original buttons set
     table.insert(orig_buttons, {
         { -- Allow user to view real size cover in ImageViewer
-            text = _("View full size cover"),
+            text = _("  Full size cover"),
             enabled = bookinfo.has_cover and true or false,
             callback = function()
                 local document = DocumentRegistry:openDocument(file)
@@ -475,7 +475,7 @@ function CoverMenu:onHistoryMenuHold(item)
             end,
         },
         { -- Allow user to directly view description in TextViewer
-            text = _("Book description"),
+            text = _(" Book description"),
             enabled = bookinfo.description and true or false,
             callback = function()
                 local description = util.htmlToPlainTextIfHtml(bookinfo.description)
@@ -490,7 +490,7 @@ function CoverMenu:onHistoryMenuHold(item)
     })
     table.insert(orig_buttons, {
         { -- Allow user to ignore some offending cover image
-            text = bookinfo.ignore_cover and _("Unignore cover") or _("Ignore cover"),
+            text = bookinfo.ignore_cover and _("Unignore cover") or _("ﴩ Ignore cover"),
             enabled = bookinfo.has_cover and true or false,
             callback = function()
                 BookInfoManager:setBookInfoProperties(file, {
@@ -514,7 +514,7 @@ function CoverMenu:onHistoryMenuHold(item)
     })
     table.insert(orig_buttons, {
         { -- Allow a new extraction (multiple interruptions, book replaced)...
-            text = _("Refresh cached book information"),
+            text = _("累 Refresh cached book information"),
             enabled = bookinfo and true or false,
             callback = function()
                 BookInfoManager:deleteBookInfo(file)
@@ -567,7 +567,7 @@ function CoverMenu:onCollectionsMenuHold(item)
     -- Add some new buttons to original buttons set
     table.insert(orig_buttons, {
         { -- Allow user to view real size cover in ImageViewer
-            text = _("View full size cover"),
+            text = _("  Full size cover"),
             enabled = bookinfo.has_cover and true or false,
             callback = function()
                 local document = DocumentRegistry:openDocument(file)
@@ -594,7 +594,7 @@ function CoverMenu:onCollectionsMenuHold(item)
             end,
         },
         { -- Allow user to directly view description in TextViewer
-            text = _("Book description"),
+            text = _(" Book description"),
             enabled = bookinfo.description and true or false,
             callback = function()
                 local description = util.htmlToPlainTextIfHtml(bookinfo.description)
@@ -609,7 +609,7 @@ function CoverMenu:onCollectionsMenuHold(item)
     })
     table.insert(orig_buttons, {
         { -- Allow user to ignore some offending cover image
-            text = bookinfo.ignore_cover and _("Unignore cover") or _("Ignore cover"),
+            text = bookinfo.ignore_cover and _("Unignore cover") or _("ﴩ Ignore cover"),
             enabled = bookinfo.has_cover and true or false,
             callback = function()
                 BookInfoManager:setBookInfoProperties(file, {
@@ -633,7 +633,7 @@ function CoverMenu:onCollectionsMenuHold(item)
     })
     table.insert(orig_buttons, {
         { -- Allow a new extraction (multiple interruptions, book replaced)...
-            text = _("Refresh cached book information"),
+            text = _("累 Refresh cached book information"),
             enabled = bookinfo and true or false,
             callback = function()
                 BookInfoManager:deleteBookInfo(file)
@@ -709,7 +709,6 @@ function CoverMenu:tapPlus()
     UIManager:clearRenderStack()
 
     -- Add a new button to original buttons set
-    table.insert(orig_buttons, {}) -- separator
     table.insert(orig_buttons, {
         {
             text = _("Extract and cache book information"),

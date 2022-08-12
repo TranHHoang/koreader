@@ -258,7 +258,7 @@ function FileManager:setupLayout()
         local buttons = {
             {
                 {
-                    text = C_("File", "Copy"),
+                    text = C_("File", " Copy"), -- Copy
                     enabled = is_not_parent_folder,
                     callback = function()
                         copyFile(file)
@@ -266,7 +266,7 @@ function FileManager:setupLayout()
                     end,
                 },
                 {
-                    text = C_("File", "Paste"),
+                    text = C_("File", " Paste"), -- Paste
                     enabled = file_manager.clipboard and true or false,
                     callback = function()
                         pasteHere(file)
@@ -274,7 +274,7 @@ function FileManager:setupLayout()
                     end,
                 },
                 {
-                    text = _("Reset settings"),
+                    text = _("裸 Reset settings"), -- Reset settings
                     enabled = is_file and DocSettings:hasSidecarFile(BaseUtil.realpath(file)),
                     callback = function()
                         UIManager:show(ConfirmBox:new{
@@ -292,7 +292,7 @@ function FileManager:setupLayout()
             },
             {
                 {
-                    text = _("Cut"),
+                    text = _(" Cut"), -- Cut
                     enabled = is_not_parent_folder,
                     callback = function()
                         cutFile(file)
@@ -300,7 +300,7 @@ function FileManager:setupLayout()
                     end,
                 },
                 {
-                    text = _("Delete"),
+                    text = _("﯊ Delete"), -- Delete
                     enabled = is_not_parent_folder,
                     callback = function()
                         UIManager:close(self.file_dialog)
@@ -317,7 +317,7 @@ function FileManager:setupLayout()
                     end,
                 },
                 {
-                    text = _("Rename"),
+                    text = _("凜 Rename"), -- Rename
                     enabled = is_not_parent_folder,
                     callback = function()
                         UIManager:close(self.file_dialog)
@@ -422,7 +422,7 @@ function FileManager:setupLayout()
                     end,
                 },
                 {
-                    text = _("Book information"),
+                    text = _(" Book information"), -- Book information
                     enabled = FileManagerBookInfo:isSupported(file),
                     callback = function()
                         FileManagerBookInfo:show(file)
@@ -436,7 +436,7 @@ function FileManager:setupLayout()
                         if ReadCollection:checkItemExist(file) then
                             return _("Remove from favorites")
                         else
-                            return _("Add to favorites")
+                            return _(" Add to favorites")
                         end
                     end,
                     enabled = DocumentRegistry:getProviders(file) ~= nil,
@@ -467,7 +467,7 @@ function FileManager:setupLayout()
             local realpath = BaseUtil.realpath(file)
             table.insert(buttons, {
                 {
-                    text = _("Set as HOME folder"),
+                    text = _(" Set as Home folder"),
                     callback = function()
                         setHome(realpath)
                         UIManager:close(self.file_dialog)
@@ -644,7 +644,7 @@ function FileManager:tapPlus()
         buttons = {
             {
                 {
-                    text = _("Select all files in folder"),
+                    text = _("礪"), -- Select all
                     callback = function()
                         self.file_chooser:selectAllFilesInFolder()
                         self:onRefresh()
@@ -652,7 +652,7 @@ function FileManager:tapPlus()
                     end,
                 },
                 {
-                    text = _("Copy"),
+                    text = _(""), -- Copy
                     enabled = actions_enabled,
                     callback = function()
                         UIManager:show(ConfirmBox:new{
@@ -670,10 +670,8 @@ function FileManager:tapPlus()
                         })
                     end
                 },
-            },
-            {
                 {
-                    text = _("Deselect all"),
+                    text = _("ﱵ"), -- Deselect
                     enabled = actions_enabled,
                     callback = function()
                         self.selected_files = {}
@@ -682,7 +680,7 @@ function FileManager:tapPlus()
                     end,
                 },
                 {
-                    text = _("Move"),
+                    text = _(""), -- Move
                     enabled = actions_enabled,
                     callback = function()
                         UIManager:show(ConfirmBox:new{
@@ -700,17 +698,8 @@ function FileManager:tapPlus()
                         })
                     end
                 },
-            },
-            {
                 {
-                    text = _("Exit select mode"),
-                    callback = function()
-                        self:onToggleSelectMode()
-                        UIManager:close(self.file_dialog)
-                    end,
-                },
-                {
-                    text = _("Delete"),
+                    text = _("﯊"), -- Delete
                     enabled = actions_enabled,
                     callback = function()
                         UIManager:show(ConfirmBox:new{
@@ -728,22 +717,12 @@ function FileManager:tapPlus()
                         })
                     end
                 },
-            },
-            {},
-            {
                 {
-                    text = _("New folder"),
+                    text = _(""), -- Exit
                     callback = function()
+                        self:onToggleSelectMode()
                         UIManager:close(self.file_dialog)
-                        self:createFolder()
                     end,
-                },
-                {
-                    text = _("Folder shortcuts"),
-                    callback = function()
-                        UIManager:close(self.file_dialog)
-                        self:handleEvent(Event:new("ShowFolderShortcutsDialog"))
-                    end
                 },
             },
         }
@@ -752,25 +731,21 @@ function FileManager:tapPlus()
         buttons = {
             {
                 {
-                    text = _("Select files"),
+                    text = _("麗"), -- Select mode
                     callback = function()
                         self:onToggleSelectMode()
                         UIManager:close(self.file_dialog)
                     end,
                 },
-            },
-            {
                 {
-                    text = _("New folder"),
+                    text = _(""), -- New folder
                     callback = function()
                         UIManager:close(self.file_dialog)
                         self:createFolder()
                     end,
                 },
-            },
-            {
                 {
-                    text = _("Paste"),
+                    text = _(""), -- Paste
                     enabled = self.clipboard and true or false,
                     callback = function()
                         self:pasteHere(self.file_chooser.path)
@@ -778,43 +753,14 @@ function FileManager:tapPlus()
                         UIManager:close(self.file_dialog)
                     end,
                 },
-            },
-            {
                 {
-                    text = _("Set as HOME folder"),
+                    text = _(""), -- Set home
                     callback = function()
                         self:setHome(self.file_chooser.path)
                         UIManager:close(self.file_dialog)
                     end
                 }
             },
-            {
-                {
-                    text = _("Go to HOME folder"),
-                    callback = function()
-                        self:goHome()
-                        UIManager:close(self.file_dialog)
-                    end
-                }
-            },
-            {
-                {
-                    text = _("Open random document"),
-                    callback = function()
-                        self:openRandomFile(self.file_chooser.path)
-                        UIManager:close(self.file_dialog)
-                    end
-                }
-            },
-            {
-                {
-                    text = _("Folder shortcuts"),
-                    callback = function()
-                        self:handleEvent(Event:new("ShowFolderShortcutsDialog"))
-                        UIManager:close(self.file_dialog)
-                    end
-                }
-            }
         }
 
         if Device:canImportFiles() then

@@ -58,8 +58,8 @@ local DictQuickLookup = InputContainer:new{
 }
 
 local highlight_strings = {
-    highlight =_("Highlight"),
-    unhighlight = _("Unhighlight"),
+    highlight =_("ﭑ"), -- Highlight
+    unhighlight = _("林"), -- Unhighlight
 }
 
 function DictQuickLookup:canSearch()
@@ -388,8 +388,8 @@ function DictQuickLookup:init()
             },
         }
     else
-        local prev_dict_text = "◁◁"
-        local next_dict_text = "▷▷"
+        local prev_dict_text = ""
+        local next_dict_text = ""
         if BD.mirroredUILayout() then
             prev_dict_text, next_dict_text = next_dict_text, prev_dict_text
         end
@@ -426,20 +426,6 @@ function DictQuickLookup:init()
                     end,
                 },
                 {
-                    id = "next_dict",
-                    text = next_dict_text,
-                    vsync = true,
-                    enabled = self:isNextDictAvaiable(),
-                    callback = function()
-                        self:changeToNextDict()
-                    end,
-                    hold_callback = function()
-                        self:changeToLastDict()
-                    end,
-                },
-            },
-            {
-                {
                     id = "wikipedia",
                     -- if dictionary result, do the same search on wikipedia
                     -- if already wiki, get the full page for the current result
@@ -448,7 +434,7 @@ function DictQuickLookup:init()
                             -- @translators Full Wikipedia article.
                             return C_("Button", "Wikipedia full")
                         else
-                            return _("Wikipedia")
+                            return _("")
                         end
                     end,
                     callback = function()
@@ -465,7 +451,7 @@ function DictQuickLookup:init()
                     text = self.is_wiki
                         and ( #self.wiki_languages > 1 and BD.wrap(self.wiki_languages[1]).." > "..BD.wrap(self.wiki_languages[2])
                                                         or self.wiki_languages[1] ) -- (this " > " will be auro-mirrored by bidi)
-                        or _("Search"),
+                        or _(""),
                     enabled = self:canSearch(),
                     callback = function()
                         if self.is_wiki then
@@ -481,10 +467,15 @@ function DictQuickLookup:init()
                     end,
                 },
                 {
-                    id = "close",
-                    text = _("Close"),
+                    id = "next_dict",
+                    text = next_dict_text,
+                    vsync = true,
+                    enabled = self:isNextDictAvaiable(),
                     callback = function()
-                        self:onClose()
+                        self:changeToNextDict()
+                    end,
+                    hold_callback = function()
+                        self:changeToLastDict()
                     end,
                 },
             },
@@ -1207,7 +1198,7 @@ function DictQuickLookup:lookupInputWord(hint)
         buttons = {
             {
                 {
-                    text = _("Translate"),
+                    text = _(""), -- Translate
                     is_enter_default = false,
                     callback = function()
                         if self.input_dialog:getInputText() == "" then return end
@@ -1216,7 +1207,7 @@ function DictQuickLookup:lookupInputWord(hint)
                     end,
                 },
                 {
-                    text = _("Search Wikipedia"),
+                    text = _(""), -- Search wikipedia
                     is_enter_default = self.is_wiki,
                     callback = function()
                         if self.input_dialog:getInputText() == "" then return end
@@ -1225,17 +1216,15 @@ function DictQuickLookup:lookupInputWord(hint)
                         self:inputLookup()
                     end,
                 },
-            },
-            {
                 {
-                    text = _("Cancel"),
+                    text = _("ﰸ"), -- Cancel
                     id = "close",
                     callback = function()
                         self:closeInputDialog()
                     end,
                 },
                 {
-                    text = _("Search dictionary"),
+                    text = _("﬜ "), -- Search dictionary
                     is_enter_default = not self.is_wiki,
                     callback = function()
                         if self.input_dialog:getInputText() == "" then return end

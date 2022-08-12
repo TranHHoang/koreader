@@ -77,7 +77,7 @@ function ReaderHighlight:init()
         -- so we put them first.
         ["01_select"] = function(this)
             return {
-                text = _("Select"),
+                text = _("濾"), -- Select
                 enabled = this.hold_pos ~= nil,
                 callback = function()
                     this:startSelection()
@@ -87,7 +87,7 @@ function ReaderHighlight:init()
         end,
         ["02_highlight"] = function(this)
             return {
-                text = _("Highlight"),
+                text = _("ﭑ"), -- Highlight
                 callback = function()
                     this:saveHighlight(true)
                     this:onClose()
@@ -97,7 +97,7 @@ function ReaderHighlight:init()
         end,
         ["03_copy"] = function(this)
             return {
-                text = C_("Text", "Copy"),
+                text = C_("Text", ""), -- Copy
                 enabled = Device:hasClipboard(),
                 callback = function()
                     Device.input.setClipboardText(cleanupSelectedText(this.selected_text.text))
@@ -110,7 +110,7 @@ function ReaderHighlight:init()
         end,
         ["04_add_note"] = function(this)
             return {
-                text = _("Add Note"),
+                text = _(""), -- Add note
                 callback = function()
                     this:addNote()
                     this:onClose()
@@ -122,7 +122,7 @@ function ReaderHighlight:init()
         -- depend on an internet connection.
         ["05_wikipedia"] = function(this)
             return {
-                text = _("Wikipedia"),
+                text = _(""), -- Wikipedia
                 callback = function()
                     UIManager:scheduleIn(0.1, function()
                         this:lookupWikipedia()
@@ -135,7 +135,7 @@ function ReaderHighlight:init()
         end,
         ["06_dictionary"] = function(this)
             return {
-                text = _("Dictionary"),
+                text = _("﬜"), -- Dictionary
                 callback = function()
                     this:onHighlightDictLookup()
                     -- We don't call this:onClose(), same reason as above
@@ -144,7 +144,7 @@ function ReaderHighlight:init()
         end,
         ["07_translate"] = function(this, page, index)
             return {
-                text = _("Translate"),
+                text = _(""), -- Translate
                 callback = function()
                     this:translate(this.selected_text, page, index)
                     -- We don't call this:onClose(), so one can still see
@@ -159,7 +159,7 @@ function ReaderHighlight:init()
         -- let the Search button be the last, occasionally narrow or wide, less confusing
         ["12_search"] = function(this)
             return {
-                text = _("Search"),
+                text = _(""), -- Search
                 callback = function()
                     this:onHighlightSearch()
                     -- We don't call this:onClose(), crengine will highlight
@@ -190,7 +190,7 @@ function ReaderHighlight:init()
     if not self.document.info.has_pages then
         self:addToHighlightDialog("09_view_html", function(this)
             return {
-                text = _("View HTML"),
+                text = _(""), -- View HTML
                 callback = function()
                     this:viewSelectionHTML()
                 end,
@@ -812,7 +812,7 @@ function ReaderHighlight:onShowHighlightDialog(page, index, is_auto_text)
     local buttons = {
         {
             {
-                text = _("Delete"),
+                text = _("﯊"), -- Delete
                 callback = function()
                     self:deleteHighlight(page, index)
                     -- other part outside of the dialog may be dirty
@@ -821,7 +821,7 @@ function ReaderHighlight:onShowHighlightDialog(page, index, is_auto_text)
                 end,
             },
             {
-                text = C_("Highlight", "Style"),
+                text = C_("Highlight", ""), -- Style
                 callback = function()
                     self:editHighlightStyle(page, index)
                     UIManager:close(self.edit_highlight_dialog)
@@ -829,7 +829,7 @@ function ReaderHighlight:onShowHighlightDialog(page, index, is_auto_text)
                 end,
             },
             {
-                text = is_auto_text and _("Add note") or _("Edit note"),
+                text = is_auto_text and _("") or _(""), -- And or Edit note
                 callback = function()
                     self:editHighlight(page, index)
                     UIManager:close(self.edit_highlight_dialog)
@@ -925,7 +925,7 @@ function ReaderHighlight:onShowHighlightMenu(page, index)
 
     local highlight_buttons = {{}}
 
-    local columns = 2
+    local columns = 5
     for idx, fn_button in ffiUtil.orderedPairs(self._highlight_buttons) do
         local button = fn_button(self, page, index)
         if not button.show_in_highlight_dialog_func or button.show_in_highlight_dialog_func() then

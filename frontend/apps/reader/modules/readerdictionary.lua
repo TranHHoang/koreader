@@ -696,14 +696,14 @@ function ReaderDictionary:onShowDictionaryLookup()
         buttons = {
             {
                 {
-                    text = _("Cancel"),
+                    text = _("ﰸ"), -- Cancel
                     id = "close",
                     callback = function()
                         UIManager:close(self.dictionary_lookup_dialog)
                     end,
                 },
                 {
-                    text = _("Search dictionary"),
+                    text = _("﬜ "), -- Search dictionary
                     is_enter_default = true,
                     callback = function()
                         if self.dictionary_lookup_dialog:getInputText() == "" then return end
