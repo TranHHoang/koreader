@@ -1,6 +1,5 @@
 local BD = require("ui/bidi")
 local Blitbuffer = require("ffi/blitbuffer")
-local BottomContainer = require("ui/widget/container/bottomcontainer")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
 local DocSettings = require("docsettings")
@@ -15,6 +14,7 @@ local ImageWidget = require("ui/widget/imagewidget")
 local InfoMessage = require("ui/widget/infomessage")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local LeftContainer = require("ui/widget/container/leftcontainer")
+local RightContainer = require("ui/widget/container/rightcontainer")
 local ProgressWidget = require("ui/widget/progresswidget")
 local OverlapGroup = require("ui/widget/overlapgroup")
 local Size = require("ui/size")
@@ -359,6 +359,9 @@ local MosaicMenuItem = InputContainer:new{
     bookinfo_found = false,
     cover_specs = nil,
     has_description = false,
+    -- Folder self for updating layout
+    bookinfo_notfound_books = {},
+    folder_self = nil,
 }
 
 function MosaicMenuItem:init()
@@ -421,10 +424,158 @@ function MosaicMenuItem:init()
     }
     self[1] = self._underline_container
 
+    -- Get thumbnails of contents inside folder
+    local file_mode = lfs.attributes(self.filepath, "mode")
+    if file_mode == "directory" then
+        self.show_cover_files = require("ui/widget/filechooser")._thumbnails_map[self.filepath]
+        self.bookinfo_notfound_books = util.tableDeepCopy(self.show_cover_files)
+    end
+
     -- Remaining part of initialization is done in update(), because we may
     -- have to do it more than once if item not found in db
     self:update()
     self.init_done = true
+end
+
+function MosaicMenuItem:bookCoverWidget(path, scale)
+    local dimen = Geom:new{
+        w = self.width * scale,
+        h = (self.height - self.underline_h) * scale
+    }
+    local border_size = Size.border.thin
+    local max_img_w = dimen.w
+    local max_img_h = dimen.h - border_size * 2
+
+    local widget
+
+    local bookinfo = BookInfoManager:getBookInfo(path, self.do_cover_image)
+    if bookinfo and self.do_cover_image and not bookinfo.ignore_cover then
+        if bookinfo.cover_fetched then
+            if bookinfo.has_cover and bookinfo.cover_sizetag ~= "M" then
+                -- there is a cover, but it's a small one (made by ListMenuItem),
+                -- and it would be ugly if scaled up to MosaicMenuItem size:
+                -- do as if not found to force a new extraction with our size
+                if bookinfo.cover_bb then
+                    bookinfo.cover_bb:free()
+                end
+                bookinfo = nil
+            end
+            -- if not has_cover, book has no cover, no need to try again
+        else
+            -- cover was not fetched previously, do as if not found
+            -- to force a new extraction
+            bookinfo = nil
+        end
+    end
+
+    if bookinfo then -- This book is known
+        local cover_bb_used = false
+        util.arrayRemove(self.bookinfo_notfound_books, function(t, i, _)
+            return t[i] ~= path
+        end)
+        -- For wikipedia saved as epub, we made a cover from the 1st pic of the page,
+        -- which may not say much about the book. So, here, pretend we don't have
+        -- a cover
+        if bookinfo.authors and bookinfo.authors:match("^Wikipedia ") then
+            bookinfo.has_cover = nil
+        end
+        if self.do_cover_image and bookinfo.has_cover and not bookinfo.ignore_cover then
+            cover_bb_used = true
+            -- Let ImageWidget do the scaling and give us a bb that fit
+            local scale_factor = math.min(max_img_w / bookinfo.cover_w, max_img_h / bookinfo.cover_h)
+            local image = ImageWidget:new{
+                image = bookinfo.cover_bb,
+                scale_factor = scale_factor,
+            }
+            image:_render()
+            local image_size = image:getSize()
+            widget = CenterContainer:new{
+                dimen = dimen,
+                FrameContainer:new{
+                    width = image_size.w + 2*border_size,
+                    height = image_size.h + 2*border_size,
+                    margin = 0,
+                    padding = 0,
+                    bordersize = 1,
+                    dim = self.file_deleted,
+                    color = self.file_deleted and Blitbuffer.COLOR_DARK_GRAY or Blitbuffer.COLOR_LIGHT_GRAY,
+                    image,
+                }
+            }
+            -- Let menu know it has some item with images
+            self.menu._has_cover_images = true
+            self._has_cover_image = true
+        else
+            -- add Series metadata if requested
+            local series_mode = BookInfoManager:getSetting("series_mode")
+            local title_add, authors_add
+            if bookinfo.series then
+                if bookinfo.series_index then
+                    bookinfo.series = BD.auto(bookinfo.series .. " #" .. bookinfo.series_index)
+                else
+                    bookinfo.series = BD.auto(bookinfo.series)
+                end
+                if series_mode == "append_series_to_title" then
+                    if bookinfo.title then
+                        title_add = " - " .. bookinfo.series
+                    else
+                        title_add = bookinfo.series
+                    end
+                end
+                if not bookinfo.authors then
+                    if series_mode == "append_series_to_authors" or series_mode == "series_in_separate_line" then
+                        authors_add = bookinfo.series
+                    end
+                else
+                    if series_mode == "append_series_to_authors" then
+                        authors_add = " - " .. bookinfo.series
+                    elseif series_mode == "series_in_separate_line" then
+                        authors_add = "\n \n" .. bookinfo.series
+                    end
+                end
+            end
+            widget = CenterContainer:new{
+                dimen = dimen,
+                FakeCover:new{
+                    -- reduced width to make it look less squared, more like a book
+                    width = math.floor(dimen.w * 7/8),
+                    height = dimen.h,
+                    bordersize = border_size,
+                    filename = self.text,
+                    title = not bookinfo.ignore_meta and bookinfo.title,
+                    authors = not bookinfo.ignore_meta and bookinfo.authors,
+                    title_add = not bookinfo.ignore_meta and title_add,
+                    authors_add = not bookinfo.ignore_meta and authors_add,
+                    book_lang = not bookinfo.ignore_meta and bookinfo.language,
+                    file_deleted = self.file_deleted,
+                }
+            }
+        end
+        -- In case we got a blitbuffer and didnt use it (ignore_cover, wikipedia), free it
+        if bookinfo.cover_bb and not cover_bb_used then
+            bookinfo.cover_bb:free()
+        end
+    else -- bookinfo not found
+        -- Same as real FakeCover, but let it be squared (like a file)
+        local hint = "…" -- display hint it's being loaded
+        if self.file_deleted then -- unless file was deleted (can happen with History)
+            hint = _("(deleted)")
+        end
+        widget = CenterContainer:new{
+            dimen = dimen,
+            FakeCover:new{
+                width = dimen.w,
+                height = dimen.h,
+                bordersize = 1,
+                filename = self.text,
+                filename_add = "\n" .. hint,
+                initial_sizedec = 4, -- start with a smaller font when filenames only
+                file_deleted = self.file_deleted,
+            }
+        }
+    end
+
+    return widget
 end
 
 function MosaicMenuItem:update()
@@ -432,15 +583,16 @@ function MosaicMenuItem:update()
     -- a known file with image / without image, or a not yet known file
     local widget
 
-    local dimen = Geom:new{
-        w = self.width,
-        h = self.height - self.underline_h
-    }
-
     -- We'll draw a border around cover images, it may not be
     -- needed with some covers, but it's nicer when cover is
     -- a pure white background (like rendered text page)
     local border_size = Size.border.thin
+
+    local dimen = Geom:new{
+        w = self.width + 2 * border_size,
+        h = self.height - self.underline_h - 2 * border_size
+    }
+
     local max_img_w = dimen.w - 2*border_size
     local max_img_h = dimen.h - 2*border_size
     local cover_specs = {
@@ -460,9 +612,8 @@ function MosaicMenuItem:update()
     if file_mode == "directory" then
         self.is_directory = true
         -- Directory : rounded corners
-        local margin = Screen:scaleBySize(5) -- make directories less wide
-        local padding = Screen:scaleBySize(5)
-        border_size = Size.border.thick -- make directories' borders larger
+        local margin = Screen:scaleBySize(0) -- make directories less wide
+        local padding = Screen:scaleBySize(0)
         local dimen_in = Geom:new{
             w = dimen.w - (margin + padding + border_size)*2,
             h = dimen.h - (margin + padding + border_size)*2
@@ -472,29 +623,27 @@ function MosaicMenuItem:update()
             text = text:sub(1, -2)
         end
         text = BD.directory(text)
-        local nbitems = TextBoxWidget:new{
-            text = self.mandatory,
-            face = Font:getFace("infont", 15),
-            width = dimen_in.w,
-            alignment = "center",
-        }
-        -- The directory name will be centered, with nbitems at bottom.
-        -- We could use 2*nbitems:getSize().h to keep that centering,
-        -- but using 3* will avoid getting the directory name stuck
-        -- to nbitems.
-        local available_height = dimen_in.h - 3 * nbitems:getSize().h
-        local dir_font_size = 20
+
+        -- Get cover images
+        local files_count = util.tableSize(self.show_cover_files or {})
+
+        local available_height = 70
+        local dir_font_size = 10
         local directory
         while true do
             if directory then
                 directory:free(true)
             end
             directory = TextBoxWidget:new{
-                text = text,
-                face = Font:getFace("cfont", dir_font_size),
-                width = dimen_in.w,
+                text = (files_count == 0 or files_count > 1) and text or " "..util.splitToWords(self.mandatory)[1].." ",
+                face = Font:getFace("infofont", dir_font_size),
+                width = (files_count == 0 or files_count > 1) and dimen.w or 40,
+                height_adjust = true,
+                height_overflow_show_ellipsis = true,
                 alignment = "center",
                 bold = true,
+                fgcolor = Blitbuffer.COLOR_WHITE,
+                bgcolor = Blitbuffer.COLOR_DARK_GRAY,
             }
             if directory:getSize().h <= available_height then
                 break
@@ -509,17 +658,52 @@ function MosaicMenuItem:update()
                 break
             end
         end
+
+        local mainCover = self.show_cover_files and self.show_cover_files[1] and self:bookCoverWidget(self.show_cover_files[1], files_count > 1 and 0.5 or 1)
+        local subCover1 = self.show_cover_files and self.show_cover_files[2] and self:bookCoverWidget(self.show_cover_files[2], 0.5)
+        local subCover2 = self.show_cover_files and self.show_cover_files[3] and self:bookCoverWidget(self.show_cover_files[3], 0.5)
+        local subCover3 = self.show_cover_files and self.show_cover_files[4] and self:bookCoverWidget(self.show_cover_files[4], 0.5)
+
         widget = FrameContainer:new{
             width = dimen.w,
             height = dimen.h,
-            margin = margin,
-            padding = padding,
-            bordersize = border_size,
-            radius = Screen:scaleBySize(10),
+            padding = 0,
+            bordersize = files_count == 0 and border_size or 0,
             OverlapGroup:new{
-                dimen = dimen_in,
-                CenterContainer:new{ dimen=dimen_in, directory},
-                BottomContainer:new{ dimen=dimen_in, nbitems},
+                dimen = dimen,
+                mainCover and LeftContainer:new{
+                    dimen = {
+                        w = dimen_in.w,
+                        h = dimen_in.h / math.ceil(files_count / 2) + Screen:scaleBySize(1),
+                    },
+                    mainCover,
+                } or WidgetContainer:new{},
+                subCover1 and RightContainer:new{
+                    dimen = {
+                        w = dimen_in.w,
+                        h = dimen_in.h / math.ceil(files_count / 2) + Screen:scaleBySize(1),
+                    },
+                    subCover1,
+                } or WidgetContainer:new{},
+                subCover2 and (files_count > 3 and LeftContainer or CenterContainer):new{
+                    dimen = {
+                        w = dimen_in.w,
+                        h = dimen_in.h * 1.5,
+                    },
+                    subCover2,
+                } or WidgetContainer:new{},
+                subCover3 and RightContainer:new{
+                    dimen = {
+                        w = dimen_in.w,
+                        h = dimen_in.h * 1.5,
+                    },
+                    subCover3,
+                } or WidgetContainer:new{},
+                ((files_count == 0 or files_count > 1) and CenterContainer or RightContainer):new{
+                    dimen = dimen_in,
+                    bordersize = Size.border.thin,
+                    directory,
+                },
             },
         }
     else
@@ -588,7 +772,7 @@ function MosaicMenuItem:update()
                         padding = 0,
                         bordersize = border_size,
                         dim = self.file_deleted,
-                        color = self.file_deleted and Blitbuffer.COLOR_DARK_GRAY or nil,
+                        color = self.file_deleted and Blitbuffer.COLOR_DARK_GRAY or Blitbuffer.COLOR_LIGHT_GRAY,
                         image,
                     }
                 }
@@ -763,9 +947,9 @@ function MosaicMenuItem:paintTo(bb, x, y)
         if BD.mirroredUILayout() then
             ix = math.floor((self.width - target.dimen.w)/2)
         else
-            ix = self.width - math.ceil((self.width - target.dimen.w)/2) - corner_mark:getSize().w
+            ix = self.width - math.ceil((self.width - target.dimen.w)/2) - corner_mark:getSize().w + 1
         end
-        local iy = self.height - math.ceil((self.height - target.dimen.h)/2) - corner_mark:getSize().h
+        local iy = self.height - math.ceil((self.height - target.dimen.h)/2) - corner_mark:getSize().h - 1
         -- math.ceil() makes it looks better than math.floor()
         corner_mark:paintTo(bb, x+ix, y+iy)
     end
@@ -778,37 +962,6 @@ function MosaicMenuItem:paintTo(bb, x, y)
         local pos_y = y + self.height - progress_widget.height - math.ceil((self.height - cover_item.height) / 2)
         progress_widget:setPercentage(self.percent_finished)
         progress_widget:paintTo(bb, pos_x, pos_y)
-    end
-
-    -- to which we paint a small indicator if this book has a description
-    if self.has_description and not BookInfoManager:getSetting("no_hint_description") then
-        -- On book's right (for similarity to ListMenuItem)
-        local target =  self[1][1][1]
-        local d_w = Screen:scaleBySize(3)
-        local d_h = math.ceil(target.dimen.h / 8)
-        -- Paint it directly relative to target.dimen.x/y which has been computed at this point
-        local ix
-        if BD.mirroredUILayout() then
-            ix = - d_w + 1
-            -- Set alternate dimen to be marked as dirty to include this description in refresh
-            local x_overflow_left = x - target.dimen.x+ix -- positive if overflow
-            if x_overflow_left > 0 then
-                self.refresh_dimen = self[1].dimen:copy()
-                self.refresh_dimen.x = self.refresh_dimen.x - x_overflow_left
-                self.refresh_dimen.w = self.refresh_dimen.w + x_overflow_left
-            end
-        else
-            ix = target.dimen.w - 1
-            -- Set alternate dimen to be marked as dirty to include this description in refresh
-            local x_overflow_right = target.dimen.x+ix+d_w - x - self.dimen.w
-            if x_overflow_right > 0 then
-                self.refresh_dimen = self[1].dimen:copy()
-                self.refresh_dimen.w = self.refresh_dimen.w + x_overflow_right
-            end
-        end
-        local iy = 0
-        bb:paintBorder(target.dimen.x+ix, target.dimen.y+iy, d_w, d_h, 1)
-
     end
 end
 
@@ -888,7 +1041,7 @@ function MosaicMenu:_recalculateDimen()
 
     -- Create or replace corner_mark if needed
     -- 1/12 (larger) or 1/16 (smaller) of cover looks allright
-    local mark_size = math.floor(math.min(self.item_width, self.item_height) / 16)
+    local mark_size = math.floor(math.min(self.item_width, self.item_height) / 12)
     if mark_size ~= corner_mark_size then
         corner_mark_size = mark_size
         if corner_mark then
@@ -976,6 +1129,19 @@ function MosaicMenu:_updateItemsBuildUI()
         if not item_tmp.bookinfo_found and not item_tmp.is_directory and not item_tmp.file_deleted then
             -- Register this item for update
             table.insert(self.items_to_update, item_tmp)
+        elseif item_tmp.is_directory and #item_tmp.bookinfo_notfound_books > 0 then
+            -- Insert dummy menu items to get bookinfo extracted
+            for _, v in pairs(item_tmp.bookinfo_notfound_books) do
+                table.insert(self.items_to_update, MosaicMenuItem:new{
+                    height = self.item_height,
+                    width = self.item_width,
+                    entry = { file = v },
+                    menu = self,
+                    do_cover_image = self._do_cover_images,
+                    text = v,
+                    folder_self = item_tmp,
+                })
+            end
         end
     end
     table.insert(self.item_group, VerticalSpan:new{ width = self.item_margin }) -- bottom padding

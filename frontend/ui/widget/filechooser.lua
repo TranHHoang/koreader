@@ -9,6 +9,7 @@ local UIManager = require("ui/uimanager")
 local ffi = require("ffi")
 local lfs = require("libs/libkoreader-lfs")
 local ffiUtil = require("ffi/util")
+local random  = require("random")
 local T = ffiUtil.template
 local _ = require("gettext")
 local Screen = Device.screen
@@ -78,6 +79,9 @@ local FileChooser = Menu:extend{
     goto_letter = true,
 }
 
+FileChooser._thumbnails_map = {}
+random.seed()
+
 -- Cache of content we knew of for directories that are not readable
 -- (i.e. /storage/emulated/ on Android that we can meet when coming
 -- from readable /storage/emulated/0/ - so we know it contains "0/")
@@ -95,6 +99,56 @@ function FileChooser:show_file(filename)
         if filename:match(pattern) then return false end
     end
     return self.show_unsupported or self.file_filter == nil or self.file_filter(filename)
+end
+
+local function genDirHierarchy(list_fn, path, dir_hierarchy)
+    local files, dirs = {}, {}
+    list_fn(path, dirs, files)
+
+    if #files == 0 and #dirs == 0 then return end
+
+    dir_hierarchy[path] = {}
+    if #dirs == 0 then
+        for _, file in ipairs(files) do
+            table.insert(dir_hierarchy[path], file.fullpath)
+        end
+    else
+        if #files > 0 then
+            table.insert(dir_hierarchy[path], files[math.random(#files)].fullpath)
+        end
+
+        for _, dir in ipairs(dirs) do
+            table.insert(dir_hierarchy[path], dir.fullpath)
+            genDirHierarchy(list_fn, dir.fullpath, dir_hierarchy)
+        end
+    end
+end
+
+local function pickCovers(dir_hierarchy, path, at_most, pick_one, result)
+    local function shuffle(arr)
+        for i = 1, #arr - 1 do
+            local j = math.random(i, #arr)
+            arr[i], arr[j] = arr[j], arr[i]
+        end
+    end
+
+    if not dir_hierarchy[path] then return end
+    shuffle(dir_hierarchy[path])
+
+    -- If this folder only contains book, we only pick one cover
+    local only_contains_book = util.arrayAll(dir_hierarchy[path], function(dir)
+        return not dir_hierarchy[dir]
+    end)
+
+    for _, v in ipairs(dir_hierarchy[path]) do
+        if #result == at_most then break end
+        if dir_hierarchy[v] then
+            pickCovers(dir_hierarchy, v, at_most, true, result)
+        else
+            table.insert(result, v)
+            if pick_one or only_contains_book then break end
+        end
+    end
 end
 
 function FileChooser:init()
@@ -163,6 +217,19 @@ function FileChooser:init()
                 end
             end
         end
+    end
+
+    if util.isTableEmpty(FileChooser._thumbnails_map) then
+        -- Get thumbnails from subdirs
+        local dir_hierarchy = {}
+        genDirHierarchy(self.list, self.path, dir_hierarchy)
+        for dir, _ in pairs(dir_hierarchy) do
+            local files = {}
+            pickCovers(dir_hierarchy, dir, 4, false, files)
+            table.sort(files)
+            dir_hierarchy[dir] = files
+        end
+        FileChooser._thumbnails_map = dir_hierarchy
     end
 
     self.item_table = self:genItemTableFromPath(self.path)
@@ -257,7 +324,6 @@ end
 function FileChooser:genItemTableFromPath(path)
     local dirs = {}
     local files = {}
-    local up_folder_arrow = BD.mirroredUILayout() and BD.ltr("../ ⬆") or "⬆ ../"
 
     self.list(path, dirs, files)
 
@@ -267,19 +333,13 @@ function FileChooser:genItemTableFromPath(path)
         table.sort(dirs, sorting)
         table.sort(files, sorting)
     end
-    if path ~= "/" and not (G_reader_settings:isTrue("lock_home_folder") and
-                            path == G_reader_settings:readSetting("home_dir")) then
-        table.insert(dirs, 1, {name = ".."})
-    end
     if self.show_current_dir_for_hold then table.insert(dirs, 1, {name = "."}) end
 
     local item_table = {}
     for i, dir in ipairs(dirs) do
         local subdir_path = self.path.."/"..dir.name
         local text, bidi_wrap_func, istr
-        if dir.name == ".." then
-            text = up_folder_arrow
-        elseif dir.name == "." then -- possible with show_current_dir_for_hold
+        if dir.name == "." then -- possible with show_current_dir_for_hold
             text = _("Long-press to choose current folder")
         elseif dir.name == "./." then -- added as content of an unreadable directory
             text = _("Current folder not readable. Some content may not be shown.")
@@ -335,7 +395,6 @@ function FileChooser:genItemTableFromPath(path)
 
     if self.collate == "strcoll_mixed" then
         sorting = function(a, b)
-            if b.text == up_folder_arrow then return false end
             return ffiUtil.strcoll(a.text, b.text)
         end
         if self.reverse_collate then

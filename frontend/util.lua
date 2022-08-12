@@ -388,6 +388,11 @@ function util.tableSize(t)
     return count
 end
 
+function util.isTableEmpty(t)
+    for _ in pairs(t) do return false end
+    return true
+end
+
 --- Append all elements from t2 into t1.
 ---- @param t1 Lua table
 ---- @param t2 Lua table
@@ -460,6 +465,16 @@ function util.arrayContains(t, v, cb)
         end
     end
     return false
+end
+
+function util.arrayAll(t, cb)
+    cb = cb or function(v1, v2) return true end
+    for _k, _v in ipairs(t) do
+        if not cb(_v) then
+            return false
+        end
+    end
+    return true
 end
 
 --- Test whether array t contains a reference to array n (at any depth at or below m)

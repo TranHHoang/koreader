@@ -175,6 +175,10 @@ function CoverMenu:updateItems(select_number)
                         end
                     end
                     UIManager:setDirty(self.show_parent, refreshfunc)
+                    if item.folder_self then
+                        item.folder_self:update()
+                        UIManager:setDirty(item.folder_self, "ui", item.folder_self[1].dimen, item.folder_self.show_parent.dithered)
+                    end
                     table.remove(self.items_to_update, i)
                 else
                     logger.dbg("  not yet found", item.text)

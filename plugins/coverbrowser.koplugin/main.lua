@@ -676,10 +676,10 @@ function CoverBrowser:setupFileManagerDisplayMode(display_mode)
         -- Don't have "../" centered in empty directories
         FileChooser._do_center_partial_rows = false
         -- One could override default 3x3 grid here (put that as settings ?)
-        -- FileChooser.nb_cols_portrait = 4
-        -- FileChooser.nb_rows_portrait = 4
-        -- FileChooser.nb_cols_landscape = 6
-        -- FileChooser.nb_rows_landscape = 3
+        FileChooser.nb_cols_portrait = 5
+        FileChooser.nb_rows_portrait = 4
+        FileChooser.nb_cols_landscape = 6
+        FileChooser.nb_rows_landscape = 3
 
     elseif display_mode == "list_image_meta" or display_mode == "list_only_meta" or
         display_mode == "list_image_filename" then -- list modes
