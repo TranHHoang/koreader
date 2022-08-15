@@ -58,8 +58,13 @@ local DictQuickLookup = InputContainer:new{
 }
 
 local highlight_strings = {
-    highlight =_("ﭑ"), -- Highlight
+    highlight = _("ﭑ"), -- Highlight
     unhighlight = _("林"), -- Unhighlight
+}
+
+local save_vocab_strings = {
+    save = _(""),
+    remove = _(""),
 }
 
 function DictQuickLookup:canSearch()
@@ -388,6 +393,16 @@ function DictQuickLookup:init()
             },
         }
     else
+        local vocab_existed
+        local context = self.vocabs[self.word:lower()]
+        if not context then
+            vocab_existed = false
+        elseif type(context) == "string" then
+            vocab_existed = context == self.word_context
+        else
+            vocab_existed = util.arrayContains(context, self.word_context) ~= false
+        end
+
         local prev_dict_text = ""
         local next_dict_text = ""
         if BD.mirroredUILayout() then
@@ -441,6 +456,23 @@ function DictQuickLookup:init()
                         UIManager:scheduleIn(0.1, function()
                             self:lookupWikipedia(self.is_wiki) -- will get_fullpage if is_wiki
                         end)
+                    end,
+                },
+                {
+                    id = "savevocab",
+                    text = vocab_existed and save_vocab_strings.remove or save_vocab_strings.save, -- Save words to vocab builder settings
+                    callback = function()
+                        self.ui:handleEvent(Event:new("ToggleVocabulary", {
+                            text = self.word,
+                            context = self.word_context,
+                        }))
+
+                        local this = self.button_table:getButtonById("savevocab")
+                        if not this then return end
+
+                        vocab_existed = not vocab_existed
+                        this:setText(vocab_existed and save_vocab_strings.remove or save_vocab_strings.save, this.width)
+                        this:refresh()
                     end,
                 },
                 -- Rotate thru available wikipedia languages, or Search in book if dict window
@@ -1207,7 +1239,17 @@ function DictQuickLookup:lookupInputWord(hint)
                     end,
                 },
                 {
-                    text = _(""), -- Search wikipedia
+                    text = _(""), -- Search Wikipedia
+                    is_enter_default = self.is_wiki,
+                    callback = function()
+                        if self.input_dialog:getInputText() == "" then return end
+                        self.is_wiki = true
+                        self:closeInputDialog()
+                        self:inputLookup()
+                    end,
+                },
+                {
+                    text = _(""), -- Search Google
                     is_enter_default = self.is_wiki,
                     callback = function()
                         if self.input_dialog:getInputText() == "" then return end
