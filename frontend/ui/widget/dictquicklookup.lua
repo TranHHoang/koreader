@@ -447,7 +447,7 @@ function DictQuickLookup:init()
                     text_func = function()
                         if self.is_wiki then
                             -- @translators Full Wikipedia article.
-                            return C_("Button", "Wikipedia full")
+                            return C_("Button", "")
                         else
                             return _("")
                         end
