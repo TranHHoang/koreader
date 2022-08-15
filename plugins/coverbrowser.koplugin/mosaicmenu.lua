@@ -498,7 +498,7 @@ function MosaicMenuItem:bookCoverWidget(path, scale)
                     padding = 0,
                     bordersize = 1,
                     dim = self.file_deleted,
-                    color = self.file_deleted and Blitbuffer.COLOR_DARK_GRAY or Blitbuffer.COLOR_LIGHT_GRAY,
+                    color = Blitbuffer.COLOR_DARK_GRAY,
                     image,
                 }
             }
@@ -627,7 +627,7 @@ function MosaicMenuItem:update()
         -- Get cover images
         local files_count = util.tableSize(self.show_cover_files or {})
 
-        local available_height = 70
+        local available_height = 50
         local dir_font_size = 10
         local directory
         while true do
@@ -635,9 +635,9 @@ function MosaicMenuItem:update()
                 directory:free(true)
             end
             directory = TextBoxWidget:new{
-                text = (files_count == 0 or files_count > 1) and text or " "..util.splitToWords(self.mandatory)[1].." ",
+                text = text,
                 face = Font:getFace("infofont", dir_font_size),
-                width = (files_count == 0 or files_count > 1) and dimen.w or 40,
+                width = dimen.w,
                 height_adjust = true,
                 height_overflow_show_ellipsis = true,
                 alignment = "center",
@@ -660,46 +660,48 @@ function MosaicMenuItem:update()
         end
 
         local mainCover = self.show_cover_files and self.show_cover_files[1] and self:bookCoverWidget(self.show_cover_files[1], files_count > 1 and 0.5 or 1)
-        local subCover1 = self.show_cover_files and self.show_cover_files[2] and self:bookCoverWidget(self.show_cover_files[2], 0.5)
-        local subCover2 = self.show_cover_files and self.show_cover_files[3] and self:bookCoverWidget(self.show_cover_files[3], 0.5)
-        local subCover3 = self.show_cover_files and self.show_cover_files[4] and self:bookCoverWidget(self.show_cover_files[4], 0.5)
+        local subCovers = {}
+        for i = 2, 4 do
+            table.insert(subCovers, self.show_cover_files and self.show_cover_files[i] and self:bookCoverWidget(self.show_cover_files[i], 0.5))
+        end
 
         widget = FrameContainer:new{
-            width = dimen.w,
+            width = dimen.w - 4 * border_size,
             height = dimen.h,
             padding = 0,
-            bordersize = files_count == 0 and border_size or 0,
+            bordersize = border_size,
+            color = Blitbuffer.COLOR_WHITE,
             OverlapGroup:new{
-                dimen = dimen,
+                dimen = dimen_in,
                 mainCover and LeftContainer:new{
                     dimen = {
                         w = dimen_in.w,
-                        h = dimen_in.h / math.ceil(files_count / 2) + Screen:scaleBySize(1),
+                        h = dimen_in.h / math.ceil(files_count / 2),
                     },
                     mainCover,
                 } or WidgetContainer:new{},
-                subCover1 and RightContainer:new{
+                subCovers[1] and RightContainer:new{
                     dimen = {
                         w = dimen_in.w,
-                        h = dimen_in.h / math.ceil(files_count / 2) + Screen:scaleBySize(1),
+                        h = dimen_in.h / math.ceil(files_count / 2),
                     },
-                    subCover1,
+                    subCovers[1],
                 } or WidgetContainer:new{},
-                subCover2 and (files_count > 3 and LeftContainer or CenterContainer):new{
-                    dimen = {
-                        w = dimen_in.w,
-                        h = dimen_in.h * 1.5,
-                    },
-                    subCover2,
-                } or WidgetContainer:new{},
-                subCover3 and RightContainer:new{
+                subCovers[2] and (files_count > 3 and LeftContainer or CenterContainer):new{
                     dimen = {
                         w = dimen_in.w,
                         h = dimen_in.h * 1.5,
                     },
-                    subCover3,
+                    subCovers[2],
                 } or WidgetContainer:new{},
-                ((files_count == 0 or files_count > 1) and CenterContainer or RightContainer):new{
+                subCovers[3] and RightContainer:new{
+                    dimen = {
+                        w = dimen_in.w,
+                        h = dimen_in.h * 1.5,
+                    },
+                    subCovers[3],
+                } or WidgetContainer:new{},
+                CenterContainer:new{
                     dimen = dimen_in,
                     bordersize = Size.border.thin,
                     directory,
