@@ -976,7 +976,7 @@ end
 
 function ReaderDictionary:showDict(word, results, boxes, link, tweak_buttons_func)
     if results and results[1] then
-        logger.dbg("showing quick lookup window", #self.dict_window_list+1, ":", word, results, self.word_context)
+        logger.dbg("showing quick lookup window", #self.dict_window_list+1, ":", word, self.word_context)
         self.dict_window = DictQuickLookup:new{
             window_list = self.dict_window_list,
             ui = self.ui,
