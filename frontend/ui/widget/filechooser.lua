@@ -360,7 +360,7 @@ function FileChooser:genItemTableFromPath(path)
             bidi_wrap_func = bidi_wrap_func,
             mandatory = istr,
             path = subdir_path,
-            is_go_up = dir.name == ".."
+            is_go_up = false
         })
     end
 
@@ -439,8 +439,12 @@ function FileChooser:refreshPath()
     self:switchItemTable(nil, self:genItemTableFromPath(self.path), self.path_items[self.path], itemmatch)
 end
 
+function FileChooser:_onPathChanged(path)
+end
+
 function FileChooser:changeToPath(path, focused_path)
     path = ffiUtil.realpath(path)
+    self:_onPathChanged(path) -- Callback
     self.path = path
 
     if focused_path then
