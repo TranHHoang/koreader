@@ -444,7 +444,7 @@ function MosaicMenuItem:bookCoverWidget(path, scale)
     }
     local border_size = Size.border.thin
     local max_img_w = dimen.w
-    local max_img_h = dimen.h - border_size * 2
+    local max_img_h = dimen.h - 2*border_size
 
     local widget
 
@@ -489,18 +489,15 @@ function MosaicMenuItem:bookCoverWidget(path, scale)
             }
             image:_render()
             local image_size = image:getSize()
-            widget = CenterContainer:new{
-                dimen = dimen,
-                FrameContainer:new{
-                    width = image_size.w + 2*border_size,
-                    height = image_size.h + 2*border_size,
-                    margin = 0,
-                    padding = 0,
-                    bordersize = 1,
-                    dim = self.file_deleted,
-                    color = Blitbuffer.COLOR_DARK_GRAY,
-                    image,
-                }
+            widget = FrameContainer:new{
+                width = image_size.w + 2*border_size,
+                height = image_size.h + 2*border_size,
+                margin = 0,
+                padding = 0,
+                bordersize = 1,
+                dim = self.file_deleted,
+                color = Blitbuffer.COLOR_DARK_GRAY,
+                image,
             }
             -- Let menu know it has some item with images
             self.menu._has_cover_images = true
@@ -627,7 +624,7 @@ function MosaicMenuItem:update()
         -- Get cover images
         local files_count = util.tableSize(self.show_cover_files or {})
 
-        local available_height = 50
+        local available_height = 60
         local dir_font_size = 10
         local directory
         while true do
@@ -666,43 +663,43 @@ function MosaicMenuItem:update()
         end
 
         widget = FrameContainer:new{
-            width = dimen.w - 4 * border_size,
+            width = dimen.w,
             height = dimen.h,
             padding = 0,
-            bordersize = border_size,
-            color = Blitbuffer.COLOR_WHITE,
+            bordersize = mainCover and 0 or 1,
+            color = Blitbuffer.COLOR_DARK_GRAY,
             OverlapGroup:new{
-                dimen = dimen_in,
-                mainCover and LeftContainer:new{
+                dimen = dimen,
+                mainCover and (#subCovers == 0 and CenterContainer or LeftContainer):new{
                     dimen = {
-                        w = dimen_in.w,
+                        w = dimen.w,
                         h = dimen_in.h / math.ceil(files_count / 2),
                     },
                     mainCover,
                 } or WidgetContainer:new{},
                 subCovers[1] and RightContainer:new{
                     dimen = {
-                        w = dimen_in.w,
+                        w = dimen.w,
                         h = dimen_in.h / math.ceil(files_count / 2),
                     },
                     subCovers[1],
                 } or WidgetContainer:new{},
                 subCovers[2] and (files_count > 3 and LeftContainer or CenterContainer):new{
                     dimen = {
-                        w = dimen_in.w,
+                        w = dimen.w,
                         h = dimen_in.h * 1.5,
                     },
                     subCovers[2],
                 } or WidgetContainer:new{},
                 subCovers[3] and RightContainer:new{
                     dimen = {
-                        w = dimen_in.w,
+                        w = dimen.w,
                         h = dimen_in.h * 1.5,
                     },
                     subCovers[3],
                 } or WidgetContainer:new{},
                 CenterContainer:new{
-                    dimen = dimen_in,
+                    dimen = dimen,
                     bordersize = Size.border.thin,
                     directory,
                 },
