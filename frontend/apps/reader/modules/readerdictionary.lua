@@ -976,7 +976,7 @@ end
 
 function ReaderDictionary:showDict(word, results, boxes, link, tweak_buttons_func)
     if results and results[1] then
-        logger.dbg("showing quick lookup window", #self.dict_window_list+1, ":", word, results)
+        logger.dbg("showing quick lookup window", #self.dict_window_list+1, ":", word, results, self.word_context)
         self.dict_window = DictQuickLookup:new{
             window_list = self.dict_window_list,
             ui = self.ui,
@@ -993,8 +993,9 @@ function ReaderDictionary:showDict(word, results, boxes, link, tweak_buttons_fun
             results = results,
             word_boxes = boxes,
             preferred_dictionaries = self.preferred_dictionaries,
-            -- differentiate between dict and wiki
+            -- differentiate between dict, wiki and google
             is_wiki = self.is_wiki,
+            is_google = self.is_google,
             refresh_callback = function()
                 if self.view then
                     -- update info in footer (time, battery, etc)
@@ -1205,7 +1206,7 @@ function ReaderDictionary:onTogglePreferredDict(dict)
 end
 
 function ReaderDictionary:onToggleVocabulary(vocab)
-    local context = self.vocabs[vocab.text:lower()]
+    local context = self.vocabs[vocab.text]
     if not context then
         context = vocab.context
     elseif type(context) == "string" then
@@ -1231,7 +1232,7 @@ function ReaderDictionary:onToggleVocabulary(vocab)
         end
     end
 
-    self.vocabs[vocab.text:lower()] = context
+    self.vocabs[vocab.text] = context
     return true
 end
 

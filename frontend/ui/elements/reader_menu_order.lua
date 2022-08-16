@@ -190,6 +190,7 @@ local order = {
     search = {
         "dictionary",
         "wikipedia",
+        "googlesearch",
         -- "dictionary_lookup",
         -- "dictionary_lookup_history",
         "vocabbuilder",

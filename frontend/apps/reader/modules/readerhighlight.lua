@@ -133,7 +133,20 @@ function ReaderHighlight:init()
                 end,
             }
         end,
-        ["06_dictionary"] = function(this)
+        ["06_google"] = function(this)
+            return {
+                text = _(""),
+                callback = function()
+                    UIManager:scheduleIn(0.1, function()
+                        this:lookupGoogle()
+                        -- We don't call this:onClose(), we need the highlight
+                        -- to still be there, as we may Highlight it from the
+                        -- dict lookup widget.
+                    end)
+                end,
+            }
+        end,
+        ["07_dictionary"] = function(this)
             return {
                 text = _("﬜"), -- Dictionary
                 callback = function()
@@ -142,7 +155,7 @@ function ReaderHighlight:init()
                 end,
             }
         end,
-        ["07_translate"] = function(this, page, index)
+        ["08_translate"] = function(this, page, index)
             return {
                 text = _(""), -- Translate
                 callback = function()
@@ -157,7 +170,7 @@ function ReaderHighlight:init()
         end,
         -- buttons 08-11 are conditional ones, so the number of buttons can be even or odd
         -- let the Search button be the last, occasionally narrow or wide, less confusing
-        ["12_search"] = function(this)
+        ["13_search"] = function(this)
             return {
                 text = _(""), -- Search
                 callback = function()
@@ -173,7 +186,7 @@ function ReaderHighlight:init()
     -- Android devices
     if Device:canShareText() then
         local action = _("Share Text")
-        self:addToHighlightDialog("08_share_text", function(this)
+        self:addToHighlightDialog("09_share_text", function(this)
             return {
                 text = action,
                 callback = function()
@@ -184,11 +197,12 @@ function ReaderHighlight:init()
                 end,
             }
         end)
+    else
     end
 
     -- cre documents only
     if not self.document.info.has_pages then
-        self:addToHighlightDialog("09_view_html", function(this)
+        self:addToHighlightDialog("10_view_html", function(this)
             return {
                 text = _(""), -- View HTML
                 callback = function()
@@ -199,7 +213,7 @@ function ReaderHighlight:init()
     end
 
     -- User hyphenation dict
-    self:addToHighlightDialog("10_user_dict", function(this)
+    self:addToHighlightDialog("11_user_dict", function(this)
         return {
             text= _("Hyphenate"),
             show_in_highlight_dialog_func = function()
@@ -214,7 +228,7 @@ function ReaderHighlight:init()
     end)
 
     -- Links
-    self:addToHighlightDialog("11_follow_link", function(this)
+    self:addToHighlightDialog("12_follow_link", function(this)
         return {
             text = _("Follow Link"),
             show_in_highlight_dialog_func = function()
@@ -1764,6 +1778,12 @@ end
 function ReaderHighlight:lookupWikipedia()
     if self.selected_text then
         self.ui:handleEvent(Event:new("LookupWikipedia", cleanupSelectedText(self.selected_text.text)))
+    end
+end
+
+function ReaderHighlight:lookupGoogle()
+    if self.selected_text then
+        self.ui:handleEvent(Event:new("LookupGoogle", cleanupSelectedText(self.selected_text.text)))
     end
 end
 

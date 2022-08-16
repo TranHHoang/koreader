@@ -53,6 +53,7 @@ local ReaderTypography = require("apps/reader/modules/readertypography")
 local ReaderUserHyph = require("apps/reader/modules/readeruserhyph")
 local ReaderView = require("apps/reader/modules/readerview")
 local ReaderWikipedia = require("apps/reader/modules/readerwikipedia")
+local ReaderGoogleSearch = require("apps/reader/modules/readergooglesearch")
 local ReaderZooming = require("apps/reader/modules/readerzooming")
 local Screenshoter = require("ui/widget/screenshoter")
 local SettingsMigration = require("ui/data/settings_migration")
@@ -192,6 +193,13 @@ function ReaderUI:init()
     })
     -- wikipedia
     self:registerModule("wikipedia", ReaderWikipedia:new{
+        dialog = self.dialog,
+        view = self.view,
+        ui = self,
+        document = self.document,
+    })
+    -- google search
+    self:registerModule("googlesearch", ReaderGoogleSearch:new{
         dialog = self.dialog,
         view = self.view,
         ui = self,

@@ -55,6 +55,7 @@ local DictQuickLookup = InputContainer:new{
     -- refresh_callback will be called before we trigger full refresh in onSwipe
     refresh_callback = nil,
     html_dictionary_link_tapped_callback = nil,
+    vocabs = {},
 }
 
 local highlight_strings = {
@@ -459,20 +460,13 @@ function DictQuickLookup:init()
                     end,
                 },
                 {
-                    id = "savevocab",
-                    text = vocab_existed and save_vocab_strings.remove or save_vocab_strings.save, -- Save words to vocab builder settings
+                    id = "googlesearch",
+                    -- if dictionary result, do the same search on google
+                    text = "",
                     callback = function()
-                        self.ui:handleEvent(Event:new("ToggleVocabulary", {
-                            text = self.word,
-                            context = self.word_context,
-                        }))
-
-                        local this = self.button_table:getButtonById("savevocab")
-                        if not this then return end
-
-                        vocab_existed = not vocab_existed
-                        this:setText(vocab_existed and save_vocab_strings.remove or save_vocab_strings.save, this.width)
-                        this:refresh()
+                        UIManager:scheduleIn(0.1, function()
+                            self.ui:handleEvent(Event:new("LookupGoogle", self.word, self.word_boxes))
+                        end)
                     end,
                 },
                 -- Rotate thru available wikipedia languages, or Search in book if dict window
@@ -496,6 +490,24 @@ function DictQuickLookup:init()
                             self.ui:handleEvent(Event:new("HighlightSearch"))
                             self:onClose(true) -- don't unhighlight (or we might erase a search hit)
                         end
+                    end,
+                },
+                {
+                    id = "save_vocab",
+                    enabled = not self.is_wiki and not self.is_google,
+                    text = vocab_existed and save_vocab_strings.remove or save_vocab_strings.save, -- Save words to vocab builder settings
+                    callback = function()
+                        self.ui:handleEvent(Event:new("ToggleVocabulary", {
+                            text = self.word:lower(),
+                            context = self.word_context,
+                        }))
+
+                        local this = self.button_table:getButtonById("save_vocab")
+                        if not this then return end
+
+                        vocab_existed = not vocab_existed
+                        this:setText(vocab_existed and save_vocab_strings.remove or save_vocab_strings.save, this.width)
+                        this:refresh()
                     end,
                 },
                 {
