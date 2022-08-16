@@ -142,6 +142,7 @@ function FileManager:setupLayout()
         width = icon_size, -- our icons are square
         height = icon_size,
         padding_left = Size.padding.default,
+        padding_right = Size.padding.default,
         callback = function()
             self:onShowPlusMenu()
         end,
@@ -166,7 +167,7 @@ function FileManager:setupLayout()
                 max_width = (Screen:getWidth() - 2 * icon_size - separator:getSize().w * #paths) / (#paths - (paths[1] == "Home" and 1 or 0)),
                 bordersize = 0,
                 text_font_bold = false,
-                text_font_size = 16,
+                text_font_size = 18,
                 callback = function()
                     local path = table.concat({unpack(paths, 1, k)}, "/"):gsub("Home", home_dir)
                     self.file_chooser:changeToPath("/"..path)
