@@ -16,6 +16,7 @@ local T = require("ffi/util").template
 local _ = require("gettext")
 local C_ = _.pgettext
 local optionsutil = require("ui/data/optionsutil")
+local util = require("util")
 
 local ReaderFont = InputContainer:new{
     font_face = nil,
@@ -45,18 +46,29 @@ function ReaderFont:init()
         }
     end
     -- Build face_table for menu
-    self.face_table = {}
-    -- Font settings
-    table.insert(self.face_table, {
-        text = _("Font settings"),
-        sub_item_table = self:getFontSettingsTable(),
-        separator = true,
-    })
+    -- self.face_table = {}
+    -- Grouping fonts by system fonts and custom fonts
+    self.face_table = {
+        -- Font settings
+        {
+            text = _("Font settings"),
+            sub_item_table = self:getFontSettingsTable(),
+            separator = true,
+        },
+        {
+            text = _("System fonts"),
+            sub_item_table = {},
+        },
+        {
+            text = _("Custom fonts"),
+            sub_item_table = {},
+        }
+    }
     -- Font list
     local face_list = cre.getFontFaces()
     for k,v in ipairs(face_list) do
         local font_filename, font_faceindex, is_monospace = cre.getFontFaceFilenameAndFaceIndex(v)
-        table.insert(self.face_table, {
+        table.insert(util.stringStartsWith(font_filename, "./fonts/custom/") and self.face_table[3].sub_item_table or self.face_table[2].sub_item_table, {
             text_func = function()
                 -- defaults are hardcoded in credocument.lua
                 local default_font = G_reader_settings:readSetting("cre_font") or self.ui.document.default_font
