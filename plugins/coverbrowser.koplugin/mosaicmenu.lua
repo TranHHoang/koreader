@@ -362,6 +362,7 @@ local MosaicMenuItem = InputContainer:new{
     -- Folder self for updating layout
     bookinfo_notfound_books = {},
     folder_self = nil,
+    cover_image_specs = nil,
 }
 
 function MosaicMenuItem:init()
@@ -592,15 +593,15 @@ function MosaicMenuItem:update()
 
     local max_img_w = dimen.w - 2*border_size
     local max_img_h = dimen.h - 2*border_size
-    local cover_specs = {
-        sizetag = "M",
-        max_cover_w = max_img_w,
-        max_cover_h = max_img_h,
-    }
+    -- local cover_specs = {
+    --     sizetag = "M",
+    --     max_cover_w = max_img_w,
+    --     max_cover_h = max_img_h,
+    -- }
     -- Make it available to our menu, for batch extraction
     -- to know what size is needed for current view
     if self.do_cover_image then
-        self.menu.cover_specs = cover_specs
+        self.menu.cover_specs = self.cover_specs
     else
         self.menu.cover_specs = false
     end
@@ -880,7 +881,7 @@ function MosaicMenuItem:update()
             -- a new extraction will have to be made when one switch to image mode
             if self.do_cover_image then
                 -- Not in db, we're going to fetch some cover
-                self.cover_specs = cover_specs
+                -- self.cover_specs = self.cover_image_specs
             end
             -- Same as real FakeCover, but let it be squared (like a file)
             local hint = "…" -- display hint it's being loaded
@@ -1001,13 +1002,18 @@ local MosaicMenu = {}
 
 function MosaicMenu:_recalculateDimen()
     local portrait_mode = Screen:getWidth() <= Screen:getHeight()
+    local nb_spec_cols, nb_spec_rows = 0, 0
     -- 3 x 3 grid by default if not initially provided (4 x 2 in landscape mode)
     if portrait_mode then
         self.nb_cols = self.nb_cols_portrait or 3
         self.nb_rows = self.nb_rows_portrait or 3
+        nb_spec_cols = 4
+        nb_spec_rows = 3
     else
         self.nb_cols = self.nb_cols_landscape or 4
         self.nb_rows = self.nb_rows_landscape or 2
+        nb_spec_cols = 6
+        nb_spec_rows = 2
     end
     self.perpage = self.nb_rows * self.nb_cols
     self.page_num = math.ceil(#self.item_table / self.perpage)
@@ -1036,6 +1042,11 @@ function MosaicMenu:_recalculateDimen()
     self.item_dimen = Geom:new{
         w = self.item_width,
         h = self.item_height
+    }
+    self.cover_specs = {
+        sizetag = "M",
+        max_cover_w = math.floor((self.inner_dimen.h - self.others_height - (1+nb_spec_rows)*self.item_margin) / nb_spec_rows),
+        max_cover_h = math.floor((self.inner_dimen.w - (1+nb_spec_cols)*self.item_margin) / nb_spec_cols)
     }
 
     -- Create or replace corner_mark if needed
@@ -1118,6 +1129,7 @@ function MosaicMenu:_updateItemsBuildUI()
                 menu = self,
                 do_cover_image = self._do_cover_images,
                 do_hint_opened = self._do_hint_opened,
+                cover_specs = self.cover_specs,
             }
         table.insert(cur_row, item_tmp)
         table.insert(cur_row, HorizontalSpan:new({ width = self.item_margin }))
@@ -1137,6 +1149,7 @@ function MosaicMenu:_updateItemsBuildUI()
                     entry = { file = v },
                     menu = self,
                     do_cover_image = self._do_cover_images,
+                    cover_specs = self.cover_specs,
                     text = v,
                     folder_self = item_tmp,
                 })
