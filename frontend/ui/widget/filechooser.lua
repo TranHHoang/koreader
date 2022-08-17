@@ -232,7 +232,9 @@ function FileChooser:init()
         FileChooser._thumbnails_map = dir_hierarchy
     end
 
+    self:_setupGridLayout(self.path)
     self.item_table = self:genItemTableFromPath(self.path)
+
     Menu.init(self) -- call parent's init()
 end
 
@@ -439,12 +441,11 @@ function FileChooser:refreshPath()
     self:switchItemTable(nil, self:genItemTableFromPath(self.path), self.path_items[self.path], itemmatch)
 end
 
-function FileChooser:_onPathChanged(path)
+function FileChooser:_setupGridLayout(path)
 end
 
 function FileChooser:changeToPath(path, focused_path)
     path = ffiUtil.realpath(path)
-    self:_onPathChanged(path) -- Callback
     self.path = path
 
     if focused_path then

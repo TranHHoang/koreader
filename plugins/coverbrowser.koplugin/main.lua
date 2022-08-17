@@ -600,6 +600,7 @@ function CoverBrowser:refreshFileManagerInstance(cleanup, post_init)
     local fm = FileManager.instance
     if fm then
         local fc = fm.file_chooser
+        fc:_setupGridLayout(fc.path)
         if cleanup then -- clean instance properties we may have set
             if fc.onFileHold_orig then
                 -- remove our onFileHold that extended file_dialog with new buttons
@@ -624,11 +625,11 @@ function CoverBrowser:refreshFileManagerInstance(cleanup, post_init)
     end
 end
 
-function CoverBrowser._onPathChanged(file_chooser, path)
-    local file_count = 0
+function CoverBrowser._setupGridLayout(file_chooser, path)
     local dirs, files = {}, {}
     file_chooser.list(path, dirs, files, true)
-    file_count = #dirs + #files
+
+    local file_count = #dirs + #files
     if file_count > 12 then
         FileChooser.nb_cols_portrait = 5
         FileChooser.nb_rows_portrait = 4
@@ -639,10 +640,6 @@ function CoverBrowser._onPathChanged(file_chooser, path)
         FileChooser.nb_rows_portrait = 3
         FileChooser.nb_cols_landscape = 6
         FileChooser.nb_rows_landscape = 2
-    end
-
-    if (#file_chooser.item_table > 12 and file_count <= 12) or (#file_chooser.item_table <= 12 and file_count > 12) then
-        file_chooser:_recalculateDimen()
     end
 end
 
@@ -697,11 +694,7 @@ function CoverBrowser:setupFileManagerDisplayMode(display_mode)
         -- Don't have "../" centered in empty directories
         FileChooser._do_center_partial_rows = false
         -- One could override default 3x3 grid here (put that as settings ?)
-        FileChooser.nb_cols_portrait = 4
-        FileChooser.nb_rows_portrait = 3
-        FileChooser.nb_cols_landscape = 7
-        FileChooser.nb_rows_landscape = 3
-        FileChooser._onPathChanged = CoverBrowser._onPathChanged
+        FileChooser._setupGridLayout = CoverBrowser._setupGridLayout
 
     elseif display_mode == "list_image_meta" or display_mode == "list_only_meta" or
         display_mode == "list_image_filename" then -- list modes
