@@ -444,7 +444,7 @@ function MosaicMenuItem:bookCoverWidget(path, scale)
     }
     local border_size = Size.border.thin
     local max_img_w = dimen.w
-    local max_img_h = dimen.h - 2*border_size
+    local max_img_h = dimen.h
 
     local widget
 
@@ -490,8 +490,8 @@ function MosaicMenuItem:bookCoverWidget(path, scale)
             image:_render()
             local image_size = image:getSize()
             widget = FrameContainer:new{
-                width = image_size.w + 2*border_size,
-                height = image_size.h + 2*border_size,
+                width = image_size.w + border_size,
+                height = image_size.h + border_size,
                 margin = 0,
                 padding = 0,
                 bordersize = 1,
@@ -634,7 +634,7 @@ function MosaicMenuItem:update()
             directory = TextBoxWidget:new{
                 text = text,
                 face = Font:getFace("infofont", dir_font_size),
-                width = dimen.w,
+                width = dimen_in.w,
                 height_adjust = true,
                 height_overflow_show_ellipsis = true,
                 alignment = "center",
@@ -672,35 +672,35 @@ function MosaicMenuItem:update()
                 dimen = dimen,
                 mainCover and (#subCovers == 0 and CenterContainer or LeftContainer):new{
                     dimen = {
-                        w = dimen.w,
+                        w = dimen_in.w,
                         h = dimen_in.h / math.ceil(files_count / 2),
                     },
                     mainCover,
                 } or WidgetContainer:new{},
                 subCovers[1] and RightContainer:new{
                     dimen = {
-                        w = dimen.w,
+                        w = dimen_in.w,
                         h = dimen_in.h / math.ceil(files_count / 2),
                     },
                     subCovers[1],
                 } or WidgetContainer:new{},
                 subCovers[2] and (files_count > 3 and LeftContainer or CenterContainer):new{
                     dimen = {
-                        w = dimen.w,
+                        w = dimen_in.w,
                         h = dimen_in.h * 1.5,
                     },
                     subCovers[2],
                 } or WidgetContainer:new{},
                 subCovers[3] and RightContainer:new{
                     dimen = {
-                        w = dimen.w,
+                        w = dimen_in.w,
                         h = dimen_in.h * 1.5,
                     },
                     subCovers[3],
                 } or WidgetContainer:new{},
                 CenterContainer:new{
-                    dimen = dimen,
-                    bordersize = Size.border.thin,
+                    dimen = dimen_in,
+                    bordersize = 0,
                     directory,
                 },
             },
@@ -944,11 +944,11 @@ function MosaicMenuItem:paintTo(bb, x, y)
         local target =  self[1][1][1]
         local ix
         if BD.mirroredUILayout() then
-            ix = math.floor((self.width - target.dimen.w)/2)
+            ix = math.floor((self.width - target.dimen.w)/2) + 2
         else
-            ix = self.width - math.ceil((self.width - target.dimen.w)/2) - corner_mark:getSize().w + 1
+            ix = self.width - math.ceil((self.width - target.dimen.w)/2) - corner_mark:getSize().w + 2
         end
-        local iy = self.height - math.ceil((self.height - target.dimen.h)/2) - corner_mark:getSize().h - 1
+        local iy = self.height - math.ceil((self.height - target.dimen.h)/2) - corner_mark:getSize().h - 2
         -- math.ceil() makes it looks better than math.floor()
         corner_mark:paintTo(bb, x+ix, y+iy)
     end
