@@ -137,19 +137,19 @@ end
 
 function FileSearcher:onShowFileSearch(search_string)
     self.search_dialog = InputDialog:new{
-        title = _("Enter filename to search for"),
+        title = _("Enter a name to search for"),
         input = search_string or self.search_value,
         buttons = {
             {
                 {
-                    text = _("Cancel"),
+                    text = _("ﰸ Cancel"),
                     id = "close",
                     callback = function()
                         UIManager:close(self.search_dialog)
                     end,
                 },
                 {
-                    text = _("Home folder"),
+                    text = _(" Home"), -- Home folder
                     enabled = G_reader_settings:has("home_dir"),
                     callback = function()
                         self.search_value = self.search_dialog:getInputText()
@@ -159,7 +159,7 @@ function FileSearcher:onShowFileSearch(search_string)
                     end,
                 },
                 {
-                    text = _("Current folder"),
+                    text = _(" Current"),
                     is_enter_default = true,
                     callback = function()
                         self.search_value = self.search_dialog:getInputText()
