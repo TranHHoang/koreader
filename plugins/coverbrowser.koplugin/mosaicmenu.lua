@@ -593,11 +593,6 @@ function MosaicMenuItem:update()
 
     local max_img_w = dimen.w - 2*border_size
     local max_img_h = dimen.h - 2*border_size
-    -- local cover_specs = {
-    --     sizetag = "M",
-    --     max_cover_w = max_img_w,
-    --     max_cover_h = max_img_h,
-    -- }
     -- Make it available to our menu, for batch extraction
     -- to know what size is needed for current view
     if self.do_cover_image then
@@ -623,7 +618,17 @@ function MosaicMenuItem:update()
         text = BD.directory(text)
 
         -- Get cover images
-        local files_count = util.tableSize(self.show_cover_files or {})
+        local files_count = #self.show_cover_files
+        local is_series = false
+        if self.show_cover_files then
+            local bookinfo = BookInfoManager:getBookInfo(self.show_cover_files[1], self.do_cover_image)
+            is_series = bookinfo
+                and (bookinfo.series ~= nil
+                    and files_count == 1
+                    -- Immediate child of the current folder
+                    and self.show_cover_files[1]:match("(.*)/.*") == self.filepath)
+                or false
+        end
 
         local available_height = 60
         local dir_font_size = 10
@@ -633,9 +638,9 @@ function MosaicMenuItem:update()
                 directory:free(true)
             end
             directory = TextBoxWidget:new{
-                text = text,
+                text = is_series and util.splitToWords(self.mandatory)[1] or text,
                 face = Font:getFace("infofont", dir_font_size),
-                width = dimen_in.w,
+                width = is_series and Screen:scaleBySize(20) or dimen_in.w,
                 height_adjust = true,
                 height_overflow_show_ellipsis = true,
                 alignment = "center",
@@ -699,12 +704,12 @@ function MosaicMenuItem:update()
                     },
                     subCovers[3],
                 } or WidgetContainer:new{},
-                CenterContainer:new{
+                (is_series and RightContainer or CenterContainer):new{
                     dimen = dimen_in,
                     bordersize = 0,
                     directory,
                 },
-            },
+            }
         }
     else
         local is_file_selected = self.menu.filemanager and self.menu.filemanager.selected_files
@@ -876,13 +881,6 @@ function MosaicMenuItem:update()
                 -- it does not need to change, so avoid making the same FakeCover
                 return
             end
-            -- If we're in no image mode, don't save images in DB : people
-            -- who don't care about images will have a smaller DB, but
-            -- a new extraction will have to be made when one switch to image mode
-            if self.do_cover_image then
-                -- Not in db, we're going to fetch some cover
-                -- self.cover_specs = self.cover_image_specs
-            end
             -- Same as real FakeCover, but let it be squared (like a file)
             local hint = "…" -- display hint it's being loaded
             if self.file_deleted then -- unless file was deleted (can happen with History)
@@ -1007,12 +1005,12 @@ function MosaicMenu:_recalculateDimen()
     if portrait_mode then
         self.nb_cols = self.nb_cols_portrait or 3
         self.nb_rows = self.nb_rows_portrait or 3
-        nb_spec_cols = 4
+        nb_spec_cols = 3
         nb_spec_rows = 3
     else
         self.nb_cols = self.nb_cols_landscape or 4
         self.nb_rows = self.nb_rows_landscape or 2
-        nb_spec_cols = 6
+        nb_spec_cols = 4
         nb_spec_rows = 2
     end
     self.perpage = self.nb_rows * self.nb_cols

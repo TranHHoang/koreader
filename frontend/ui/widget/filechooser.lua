@@ -135,9 +135,9 @@ local function pickCovers(dir_hierarchy, path, at_most, pick_one, result)
     if not dir_hierarchy[path] then return end
     shuffle(dir_hierarchy[path])
 
-    -- If this folder only contains book, we only pick one cover
-    local only_contains_book = util.arrayAll(dir_hierarchy[path], function(dir)
-        return not dir_hierarchy[dir]
+    -- If this folder only contains books with series index: 01. ...
+    local only_contains_book_with_series = util.arrayAll(dir_hierarchy[path], function(p)
+        return not dir_hierarchy[p] and (select(2, util.splitFilePathName(p))):match("^%d%d. ")
     end)
 
     for _, v in ipairs(dir_hierarchy[path]) do
@@ -146,7 +146,7 @@ local function pickCovers(dir_hierarchy, path, at_most, pick_one, result)
             pickCovers(dir_hierarchy, v, at_most, true, result)
         else
             table.insert(result, v)
-            if pick_one or only_contains_book then break end
+            if pick_one or only_contains_book_with_series then break end
         end
     end
 end
