@@ -56,6 +56,10 @@ local MSC_RAW_GSENSOR_LANDSCAPE_LEFT            = 0x1a
 local MSC_RAW_GSENSOR_BACK                      = 0x1b
 local MSC_RAW_GSENSOR_FRONT                     = 0x1c
 
+-- Based on ABS_MT_TOOL_TYPE values on Elan panels
+local TOOL_TYPE_FINGER = 0
+local TOOL_TYPE_PEN    = 1
+
 -- For debug logging of ev.type
 local linux_evdev_type_map = {
     [C.EV_SYN] = "EV_SYN",
@@ -180,7 +184,7 @@ local Input = {
         [framebuffer.ORIENTATION_LANDSCAPE_ROTATED] = { Up = "Left", Right = "Up", Down = "Right", Left = "Down" }
     },
 
-    timer_callbacks = {},
+    timer_callbacks = nil, -- instance-specific table, because the object may get destroyed & recreated at runtime
     disable_double_tap = true,
     tap_interval_override = nil,
 
@@ -198,8 +202,9 @@ local Input = {
     -- touch state:
     main_finger_slot = 0,
     cur_slot = 0,
-    MTSlots = {},
-    ev_slots = {},
+    MTSlots = nil, -- table, object may be replaced at runtime
+    active_slots = nil, -- ditto
+    ev_slots = nil, -- table
     gesture_detector = nil,
 
     -- simple internal clipboard implementation, can be overidden to use system clipboard
@@ -223,6 +228,12 @@ function Input:new(o)
 end
 
 function Input:init()
+    -- Initialize instance-specific tables
+    -- NOTE: All of these arrays may be destroyed & recreated at runtime, so we don't want a parent/class object for those.
+    self.timer_callbacks = {}
+    self.MTSlots = {}
+    self.active_slots = {}
+
     -- Handle default finger slot
     self.cur_slot = self.main_finger_slot
     self.ev_slots = {
@@ -452,6 +463,7 @@ end
 
 function Input:handleKeyBoardEv(ev)
     -- Detect loss of contact for the "snow" protocol...
+    -- NOTE: Some ST devices may also behave similarly, but we handle those via ABS_PRESSURE
     if self.snow_protocol then
         if ev.code == C.BTN_TOUCH and ev.value == 0 then
             -- Kernel sends it after loss of contact for *all* slots,
@@ -477,6 +489,26 @@ function Input:handleKeyBoardEv(ev)
             end
 
             return
+        end
+    elseif self.wacom_protocol then
+        if ev.code == C.BTN_TOOL_PEN then
+            -- Always send pen data to slot 0
+            self:setupSlotData(0)
+            if ev.value == 1 then
+                self:setCurrentMtSlot("tool", TOOL_TYPE_PEN)
+            else
+                self:setCurrentMtSlot("tool", TOOL_TYPE_FINGER)
+            end
+        elseif ev.code == C.BTN_TOUCH then
+            -- Much like on snow, use this to detect contact down & lift,
+            -- as ABS_PRESSURE may be entirely omitted from hover events,
+            -- and ABS_DISTANCE is not very clear cut...
+            self:setupSlotData(0)
+            if ev.value == 1 then
+                self:setCurrentMtSlot("id", 0)
+            else
+                self:setCurrentMtSlot("id", -1)
+            end
         end
     end
 
@@ -540,14 +572,9 @@ function Input:handleKeyBoardEv(ev)
     -- quit on Alt + F4
     -- this is also emitted by the close event in SDL
     if self:isEvKeyPress(ev) and self.modifiers["Alt"] and keycode == "F4" then
-        local Device = require("frontend/device")
         local UIManager = require("ui/uimanager")
-
-        local save_quit = function()
-            Device:saveSettings()
-            UIManager:quit()
-        end
-        UIManager:broadcastEvent(Event:new("Exit", save_quit))
+        UIManager:broadcastEvent(Event:new("Close")) -- Tell all widgets to close.
+        UIManager:nextTick(function() UIManager:quit() end) -- Ensure the program closes in case of some lingering dialog.
     end
 
     -- handle modifier keys
@@ -680,44 +707,43 @@ attribute of the current slot.
 --]]
 function Input:handleTouchEv(ev)
     if ev.type == C.EV_ABS then
-        if #self.MTSlots == 0 then
-            table.insert(self.MTSlots, self:getMtSlot(self.cur_slot))
-        end
+        -- NOTE: Ideally, an input frame starts with either ABS_MT_SLOT or ABS_MT_TRACKING_ID,
+        --       but they *both* may be omitted if the last contact point just moved without lift.
+        --       The use of setCurrentMtSlotChecked instead of setCurrentMtSlot ensures
+        --       we actually setup the slot data storage and/or reference for the current slot in this case,
+        --       as the reference list is empty at the beginning of an input frame (c.f., Input:newFrame).
+        --       The most common platforms where you'll see this happen are:
+        --       * PocketBook, because of our InkView EVT_POINTERMOVE translation
+        --         (c.f., translateEvent @ ffi/input_pocketbook.lua).
+        --       * SDL, because of our SDL_MOUSEMOTION/SDL_FINGERMOTION translation
+        --         (c.f., waitForEvent @ ffi/SDL2_0.lua).
         if ev.code == C.ABS_MT_SLOT then
-            self:addSlotIfChanged(ev.value)
+            self:setupSlotData(ev.value)
         elseif ev.code == C.ABS_MT_TRACKING_ID then
             if self.snow_protocol then
-                -- We'll never get an ABS_MT_SLOT event,
-                -- instead we have a slot-like ABS_MT_TRACKING_ID value...
-                self:addSlotIfChanged(ev.value)
+                -- NOTE: We'll never get an ABS_MT_SLOT event, instead we have a slot-like ABS_MT_TRACKING_ID value...
+                --       This also means this may never be set to -1 on contact lift,
+                --       which is why we instead rely on EV_KEY:BTN_TOUCH:0 for that (c.f., handleKeyBoardEv).
+                self:setupSlotData(ev.value)
+            else
+                -- The Elan driver needlessly repeats unchanged ABS_MT_TRACKING_ID values,
+                -- which allows us to do this here instead of relying more aggressively on setCurrentMtSlotChecked.
+                if #self.MTSlots == 0 then
+                    self:addSlot(self.cur_slot)
+                end
             end
             self:setCurrentMtSlot("id", ev.value)
         elseif ev.code == C.ABS_MT_TOOL_TYPE then
             -- NOTE: On the Elipsa: Finger == 0; Pen == 1
             self:setCurrentMtSlot("tool", ev.value)
-        elseif ev.code == C.ABS_MT_POSITION_X then
-            self:setCurrentMtSlot("x", ev.value)
-        elseif ev.code == C.ABS_MT_POSITION_Y then
-            self:setCurrentMtSlot("y", ev.value)
+        elseif ev.code == C.ABS_MT_POSITION_X or ev.code == C.ABS_X then
+            self:setCurrentMtSlotChecked("x", ev.value)
+        elseif ev.code == C.ABS_MT_POSITION_Y or ev.code == C.ABS_Y then
+            self:setCurrentMtSlotChecked("y", ev.value)
         elseif self.pressure_event and ev.code == self.pressure_event and ev.value == 0 then
             -- Drop hovering *pen* events
             local tool = self:getCurrentMtSlotData("tool")
-            if tool and tool == 1 then
-                self:setCurrentMtSlot("id", -1)
-            end
-
-        -- code to emulate mt protocol on kobos
-        -- we "confirm" abs_x, abs_y only when pressure ~= 0
-        elseif ev.code == C.ABS_X then
-            self:setCurrentMtSlot("abs_x", ev.value)
-        elseif ev.code == C.ABS_Y then
-            self:setCurrentMtSlot("abs_y", ev.value)
-        elseif ev.code == C.ABS_PRESSURE then
-            if ev.value ~= 0 then
-                self:setCurrentMtSlot("id", 1)
-                self:confirmAbsxy()
-            else
-                self:cleanAbsxy()
+            if tool and tool == TOOL_TYPE_PEN then
                 self:setCurrentMtSlot("id", -1)
             end
         end
@@ -727,17 +753,18 @@ function Input:handleTouchEv(ev)
                 self:setMtSlot(MTSlot.slot, "timev", time.timeval(ev.time))
             end
             -- feed ev in all slots to state machine
-            local touch_ges = self.gesture_detector:feedEvent(self.MTSlots)
-            self.MTSlots = {}
-            if touch_ges then
+            local touch_gestures = self.gesture_detector:feedEvent(self.MTSlots)
+            self:newFrame()
+            local ges_evs = {}
+            for _, touch_ges in ipairs(touch_gestures) do
                 self:gestureAdjustHook(touch_ges)
-                return Event:new("Gesture",
-                    self.gesture_detector:adjustGesCoordinate(touch_ges)
-                )
+                table.insert(ges_evs, Event:new("Gesture", self.gesture_detector:adjustGesCoordinate(touch_ges)))
             end
+            return ges_evs
         end
     end
 end
+
 function Input:handleTouchEvPhoenix(ev)
     -- Hack on handleTouchEV for the Kobo Aura
     -- It seems to be using a custom protocol:
@@ -770,11 +797,8 @@ function Input:handleTouchEvPhoenix(ev)
     --            input_report_abs(elan_touch_data.input, C.ABS_MT_POSITION_Y, last_y2);
     --            input_mt_sync (elan_touch_data.input);
     if ev.type == C.EV_ABS then
-        if #self.MTSlots == 0 then
-            table.insert(self.MTSlots, self:getMtSlot(self.cur_slot))
-        end
         if ev.code == C.ABS_MT_TRACKING_ID then
-            self:addSlotIfChanged(ev.value)
+            self:setupSlotData(ev.value)
             self:setCurrentMtSlot("id", ev.value)
         elseif ev.code == C.ABS_MT_TOUCH_MAJOR and ev.value == 0 then
             self:setCurrentMtSlot("id", -1)
@@ -789,33 +813,32 @@ function Input:handleTouchEvPhoenix(ev)
                 self:setMtSlot(MTSlot.slot, "timev", time.timeval(ev.time))
             end
             -- feed ev in all slots to state machine
-            local touch_ges = self.gesture_detector:feedEvent(self.MTSlots)
-            self.MTSlots = {}
-            if touch_ges then
+            local touch_gestures = self.gesture_detector:feedEvent(self.MTSlots)
+            self:newFrame()
+            local ges_evs = {}
+            for _, touch_ges in ipairs(touch_gestures) do
                 self:gestureAdjustHook(touch_ges)
-                return Event:new("Gesture",
-                    self.gesture_detector:adjustGesCoordinate(touch_ges)
-                )
+                table.insert(ges_evs, Event:new("Gesture", self.gesture_detector:adjustGesCoordinate(touch_ges)))
             end
+            return ges_evs
         end
     end
 end
+
 function Input:handleTouchEvLegacy(ev)
-    -- Single Touch Protocol. Some devices emit both singletouch and multitouch events.
-    -- In those devices the 'handleTouchEv' function doesn't work as expected. Use this function instead.
+    -- Single Touch Protocol.
+    -- Some devices emit both singletouch and multitouch events,
+    -- on those devices, the 'handleTouchEv' function may not behave as expected. Use this one instead.
     if ev.type == C.EV_ABS then
-        if #self.MTSlots == 0 then
-            table.insert(self.MTSlots, self:getMtSlot(self.cur_slot))
-        end
         if ev.code == C.ABS_X then
-            self:setCurrentMtSlot("x", ev.value)
+            self:setCurrentMtSlotChecked("x", ev.value)
         elseif ev.code == C.ABS_Y then
-            self:setCurrentMtSlot("y", ev.value)
+            self:setCurrentMtSlotChecked("y", ev.value)
         elseif ev.code == C.ABS_PRESSURE then
             if ev.value ~= 0 then
-                self:setCurrentMtSlot("id", 1)
+                self:setCurrentMtSlotChecked("id", 1)
             else
-                self:setCurrentMtSlot("id", -1)
+                self:setCurrentMtSlotChecked("id", -1)
             end
         end
     elseif ev.type == C.EV_SYN then
@@ -825,14 +848,14 @@ function Input:handleTouchEvLegacy(ev)
             end
 
             -- feed ev in all slots to state machine
-            local touch_ges = self.gesture_detector:feedEvent(self.MTSlots)
-            self.MTSlots = {}
-            if touch_ges then
+            local touch_gestures = self.gesture_detector:feedEvent(self.MTSlots)
+            self:newFrame()
+            local ges_evs = {}
+            for _, touch_ges in ipairs(touch_gestures) do
                 self:gestureAdjustHook(touch_ges)
-                return Event:new("Gesture",
-                    self.gesture_detector:adjustGesCoordinate(touch_ges)
-                )
+                table.insert(ges_evs, Event:new("Gesture", self.gesture_detector:adjustGesCoordinate(touch_ges)))
             end
+            return ges_evs
         end
     end
 end
@@ -970,17 +993,28 @@ end
 
 -- helpers for touch event data management:
 
-function Input:setMtSlot(slot, key, val)
+function Input:initMtSlot(slot)
     if not self.ev_slots[slot] then
         self.ev_slots[slot] = {
             slot = slot
         }
     end
+end
 
+function Input:setMtSlot(slot, key, val)
     self.ev_slots[slot][key] = val
 end
 
 function Input:setCurrentMtSlot(key, val)
+    self:setMtSlot(self.cur_slot, key, val)
+end
+
+-- Same as above, but ensures the current slot actually has a live ref first
+function Input:setCurrentMtSlotChecked(key, val)
+    if #self.MTSlots == 0 then
+        self:addSlot(self.cur_slot)
+    end
+
     self:setMtSlot(self.cur_slot, key, val)
 end
 
@@ -1001,21 +1035,38 @@ function Input:getCurrentMtSlotData(key)
     return nil
 end
 
+function Input:newFrame()
+    -- Array of references to the data for each slot seen in this input frame
+    -- (Points to self.ev_slots, c.f., getMtSlot)
+    self.MTSlots = {}
+    -- Simple hash to keep track of which references we've inserted into self.MTSlots (keys are slot numbers)
+    self.active_slots = {}
+end
+
+function Input:addSlot(value)
+    self:initMtSlot(value)
+    table.insert(self.MTSlots, self:getMtSlot(value))
+    self.active_slots[value] = true
+    self.cur_slot = value
+end
+
 function Input:addSlotIfChanged(value)
     if self.cur_slot ~= value then
-        table.insert(self.MTSlots, self:getMtSlot(value))
-        self.cur_slot = value
+        -- We've already seen that slot in this frame, don't insert a duplicate reference!
+        if self.active_slots[value] then
+            self.cur_slot = value
+        else
+            self:addSlot(value)
+        end
     end
 end
 
-function Input:confirmAbsxy()
-    self:setCurrentMtSlot("x", self.ev_slots[self.cur_slot]["abs_x"])
-    self:setCurrentMtSlot("y", self.ev_slots[self.cur_slot]["abs_y"])
-end
-
-function Input:cleanAbsxy()
-    self:setCurrentMtSlot("abs_x", nil)
-    self:setCurrentMtSlot("abs_y", nil)
+function Input:setupSlotData(value)
+    if #self.MTSlots == 0 then
+        self:addSlot(value)
+    else
+        self:addSlotIfChanged(value)
+    end
 end
 
 function Input:isEvKeyPress(ev)
@@ -1051,9 +1102,9 @@ function Input:waitEvent(now, deadline)
     --                          Otherwise, errno is the actual error code from the backend (e.g., select's errno for the C backend).
     -- * nil: When something terrible happened (e.g., fatal poll/read failure). We abort in such cases.
     while true do
-        if #self.timer_callbacks > 0 then
+        if self.timer_callbacks[1] then
             -- If we have timers set, we need to honor them once we're done draining the input events.
-            while #self.timer_callbacks > 0 do
+            while self.timer_callbacks[1] do
                 -- Choose the earliest deadline between the next timer deadline, and our full timeout deadline.
                 local deadline_is_timer = false
                 local with_timerfd = false
@@ -1121,19 +1172,40 @@ function Input:waitEvent(now, deadline)
                     end
 
                     if consume_callback then
-                        local touch_ges = self.timer_callbacks[1].callback()
-                        table.remove(self.timer_callbacks, 1)
-                        -- If it was a timerfd, we also need to close the fd.
-                        -- NOTE: The fact that deadlines are sorted *should* ensure that the timerfd that expired
-                        --       is actually the first of the list without us having to double-check that...
+                        local touch_ges
+                        local timer_idx = 1
                         if timerfd then
-                            input.clearTimer(timerfd)
+                            -- If there's a deadline collision, make sure we call the callback that matches the timerfd returned.
+                            -- We'll handle the next one on the next iteration, as an expired timerfd will ensure
+                            -- that select will return immediately.
+                            for i, item in ipairs(self.timer_callbacks) do
+                                if item.timerfd == timerfd then
+                                    -- In the vast majority of cases, we should find our match on the first entry ;).
+                                    timer_idx = i
+                                    touch_ges = item.callback()
+                                    break
+                                end
+                            end
+                        else
+                            -- If there's a deadline collision, we'll just handle the next one on the next iteration,
+                            -- because the blown deadline means we'll have asked waitForEvent to return immediately.
+                            touch_ges = self.timer_callbacks[1].callback()
+                        end
+
+                        -- NOTE: If it was a timerfd, we *may* also need to close the fd.
+                        --       GestureDetector only calls Input:setTimeout for "hold" & "double_tap" gestures.
+                        --       For double taps, the callback itself doesn't interact with the timer_callbacks list,
+                        --       but for holds, it *will* call GestureDetector:clearState on "hold_release" (and *only* then),
+                        --       and *that* already takes care of pop'ping the (hold) timer and closing the fd,
+                        --       via Input:clearTimeout(slot, "hold")...
+                        if not touch_ges or touch_ges.ges ~= "hold_release" then
+                            -- That leaves explicit cleanup to every other case (i.e., nil or every other gesture)
+                            if timerfd then
+                                input.clearTimer(timerfd)
+                            end
+                            table.remove(self.timer_callbacks, timer_idx)
                         end
                         if touch_ges then
-                            -- The timers we'll encounter are for finalizing a hold or (if enabled) double tap gesture,
-                            -- as such, it makes no sense to try to detect *multiple* subsequent gestures.
-                            -- This is why we clear the full list of timers on the first match ;).
-                            self:clearTimeouts()
                             self:gestureAdjustHook(touch_ges)
                             return {
                                 Event:new("Gesture", self.gesture_detector:adjustGesCoordinate(touch_ges))
@@ -1250,10 +1322,13 @@ function Input:waitEvent(now, deadline)
                     table.insert(handled, handled_ev)
                 end
             elseif event.type == C.EV_ABS or event.type == C.EV_SYN then
-                local handled_ev = self:handleTouchEv(event)
-                -- We don't generate an Event for *every* input event, so, make sure we don't push nil values to the array
-                if handled_ev then
-                    table.insert(handled, handled_ev)
+                local handled_evs = self:handleTouchEv(event)
+                -- handleTouchEv only returns an array of Events once it gets a SYN_REPORT,
+                -- so more often than not, we just get a nil here ;).
+                if handled_evs then
+                    for _, handled_ev in ipairs(handled_evs) do
+                        table.insert(handled, handled_ev)
+                    end
                 end
             elseif event.type == C.EV_MSC then
                 local handled_ev = self:handleMiscEv(event)

@@ -84,12 +84,12 @@ local GestureDetector = {
     pending_hold_timer = {},
     track_ids = {},
     tev_stacks = {},
-    -- latest feeded touch event in each slots
+    -- latest touch events fed in each slot
     last_tevs = {},
     first_tevs = {},
     -- for multiswipe gestures
     multiswipe_directions = {},
-    -- detecting status on each slots
+    -- detecting status on each slot
     detectings = {},
     -- for single/double tap
     last_taps = {},
@@ -125,27 +125,30 @@ end
 
 --[[--
 Feeds touch events to state machine.
+
+Note that, in a single input frame, if the same slot gets multiple events, only the last one is kept.
+Every slot in the input frame is consumed, and that in FIFO order (slot order based on appearance in the frame).
 --]]
 function GestureDetector:feedEvent(tevs)
-    repeat
-        local tev = table.remove(tevs)
-        if tev then
-            local slot = tev.slot
-            if not self.states[slot] then
-                self:clearState(slot) -- initiate state
-            end
-            local ges = self.states[slot](self, tev)
-            if tev.id ~= -1 then
-                -- NOTE: tev is actually a simple reference to Input's self.ev_slots[slot],
-                --       which means self.last_tevs[slot] doesn't actually point to the *previous*
-                --       input frame for a given slot, but always points to the *current* input frame for that slot!
-                --       Compare to self.first_tevs below, which does create a copy...
-                self.last_tevs[slot] = tev
-            end
-            -- return no more than one gesture
-            if ges then return ges end
+    local gestures = {}
+    for _, tev in ipairs(tevs) do
+        local slot = tev.slot
+        if not self.states[slot] then
+            self:clearState(slot) -- initialize slot state
         end
-    until tev == nil
+        local ges = self.states[slot](self, tev)
+        if tev.id ~= -1 then
+            -- NOTE: tev is actually a simple reference to Input's self.ev_slots[slot],
+            --       which means self.last_tevs[slot] doesn't actually point to the *previous*
+            --       input frame for a given slot, but always points to the *current* input frame for that slot!
+            --       Compare to self.first_tevs below, which does create a copy...
+            self.last_tevs[slot] = tev
+        end
+        if ges then
+            table.insert(gestures, ges)
+        end
+    end
+    return gestures
 end
 
 function GestureDetector:deepCopyEv(tev)
@@ -395,8 +398,8 @@ function GestureDetector:tapState(tev)
         self:probeClockSource(tev.timev)
     end
 
-    logger.dbg("in tap state...")
     local slot = tev.slot
+    logger.dbg("slot", slot, "in tap state...")
     if tev.id == -1 then
         local s1 = self.input.main_finger_slot
         local s2 = self.input.main_finger_slot + 1
@@ -415,7 +418,8 @@ function GestureDetector:tapState(tev)
                 }
                 local tap_span = pos0:distance(pos1)
                 logger.dbg("two-finger tap detected with span", tap_span)
-                self:clearStates()
+                self:clearState(s1)
+                self:clearState(s2)
                 return {
                     ges = "two_finger_tap",
                     pos = pos0:midpoint(pos1),
@@ -563,8 +567,8 @@ function GestureDetector:handleNonTap(tev)
 end
 
 function GestureDetector:panState(tev)
-    logger.dbg("in pan state...")
     local slot = tev.slot
+    logger.dbg("slot", slot, "in pan state...")
     if tev.id == -1 then
         -- end of pan, signal swipe gesture if necessary
         if self:isSwipe(slot) then
@@ -572,7 +576,8 @@ function GestureDetector:panState(tev)
             local s2 = self.input.main_finger_slot + 1
             if self.detectings[s1] and self.detectings[s2] then
                 local ges_ev = self:handleTwoFingerPan(tev)
-                self:clearStates()
+                self:clearState(s1)
+                self:clearState(s2)
                 if ges_ev then
                     if ges_ev.ges == "two_finger_pan" then
                         ges_ev.ges = "two_finger_swipe"
@@ -807,7 +812,8 @@ function GestureDetector:handlePanRelease(tev)
     if self.detectings[s1] and self.detectings[s2] then
         logger.dbg("two finger pan release detected")
         pan_ev.ges = "two_finger_pan_release"
-        self:clearStates()
+        self:clearState(s1)
+        self:clearState(s2)
     else
         logger.dbg("pan release detected in slot", slot)
         self:clearState(slot)
@@ -816,8 +822,8 @@ function GestureDetector:handlePanRelease(tev)
 end
 
 function GestureDetector:holdState(tev, hold)
-    logger.dbg("in hold state...")
     local slot = tev.slot
+    logger.dbg("slot", slot, "in hold state...")
     -- When we switch to hold state, we pass an additional boolean param "hold".
     if tev.id ~= -1 and hold and self.last_tevs[slot].x and self.last_tevs[slot].y then
         self.states[slot] = self.holdState

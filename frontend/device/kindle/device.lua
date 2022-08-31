@@ -121,6 +121,26 @@ local function hasSpecialOffers()
     end
 end
 
+local function frameworkStopped()
+    if os.getenv("STOP_FRAMEWORK") == "yes" then
+        local haslipc, lipc = pcall(require, "liblipclua")
+        if not (haslipc and lipc) then
+            logger.warn("could not load liblibclua")
+            return
+        end
+        local lipc_handle = lipc.init("com.lab126.kaf")
+        if not lipc_handle then
+            logger.warn("could not get lipc handle")
+            return
+        end
+        local frameworkStarted = lipc_handle:register_int_property("frameworkStarted", "r")
+        frameworkStarted.value = 1
+        lipc_handle:set_string_property("com.lab126.blanket", "unload", "splash")
+        lipc_handle:set_string_property("com.lab126.blanket", "unload", "screensaver")
+        return lipc_handle
+    end
+end
+
 local Kindle = Generic:new{
     model = "Kindle",
     isKindle = yes,
@@ -150,6 +170,7 @@ local Kindle = Generic:new{
     canHWDither = no,
     -- The time the device went into suspend
     suspend_time = 0,
+    framework_lipc_handle = frameworkStopped()
 }
 
 function Kindle:initNetworkManager(NetworkMgr)
@@ -252,10 +273,12 @@ function Kindle:outofScreenSaver()
     if self.screen_saver_mode == true then
         if self:supportsScreensaver() then
             local Screensaver = require("ui/screensaver")
-            Screensaver:close()
-            -- And redraw everything in case the framework managed to screw us over...
-            local UIManager = require("ui/uimanager")
-            UIManager:nextTick(function() UIManager:setDirty("all", "full") end)
+            local widget_was_closed = Screensaver:close()
+            if widget_was_closed then
+                -- And redraw everything in case the framework managed to screw us over...
+                local UIManager = require("ui/uimanager")
+                UIManager:nextTick(function() UIManager:setDirty("all", "full") end)
+            end
         else
             -- Stop awesome again if need be...
             if os.getenv("AWESOME_STOPPED") == "yes" then
@@ -966,7 +989,10 @@ function KindleBasic3:init()
 
     Kindle.init(self)
 
-    self.input.snow_protocol = true -- cf. https://github.com/koreader/koreader/issues/5070
+    -- This device doesn't emit ABS_MT_TRACKING_ID:-1 events on contact lift,
+    -- so we have to rely on contact lift detection via BTN_TOUCH:0,
+    -- c.f., https://github.com/koreader/koreader/issues/5070
+    self.input.snow_protocol = true
     self.input.open(self.touch_dev)
     self.input.open("fake_events")
 end
@@ -995,6 +1021,10 @@ function KindleTouch:exit()
     if self:isMTK() then
         -- Disable the so-called "fast" mode
         self.screen:_MTK_ToggleFastMode(false)
+    end
+
+    if self.framework_lipc_handle then
+        self.framework_lipc_handle:close()
     end
 
     Generic.exit(self)
