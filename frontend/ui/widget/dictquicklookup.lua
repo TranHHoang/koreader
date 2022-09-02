@@ -32,6 +32,7 @@ local Input = Device.input
 local Screen = Device.screen
 local T = require("ffi/util").template
 local time = require("ui/time")
+local NetworkMgr = require("ui/network/manager")
 
 --[[
 Display quick lookup word definition
@@ -1149,6 +1150,9 @@ function DictQuickLookup:onClose(no_clear)
         UIManager:scheduleIn(0.5, function()
             self.highlight:clear(clear_id)
         end)
+    end
+    if self.is_google then
+        NetworkMgr:toggleWifiOff()
     end
     return true
 end

@@ -89,14 +89,13 @@ function ReaderGoogleSearch:lookupGoogle(text, boxes)
     if ok then
         local definition = ""
         for _, v in ipairs(result) do
-            definition = definition..T("— <small><i>%1</i></small><br/>%2 <br/>", v.title, v.htmlSnippet)
+            definition = definition..T("— %1\n", v.snippet)
         end
         definition = definition..""
         search_result = {
             dict = _("Google Search"),
             word = text,
             definition = definition,
-            is_html = true,
         }
     else
         -- dummy results
