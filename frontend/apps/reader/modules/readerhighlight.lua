@@ -955,7 +955,9 @@ function ReaderHighlight:onShowHighlightMenu(page, index)
         buttons = highlight_buttons,
         tap_close_callback = function() self:handleEvent(Event:new("Tap")) end,
     }
-    UIManager:show(self.highlight_dialog)
+    -- NOTE: Disable merging for this update,
+    --       or the buggy Sage kernel may alpha-blend it into the page (with a bogus alpha value, to boot)...
+    UIManager:show(self.highlight_dialog, "[ui]")
 end
 dbg:guard(ReaderHighlight, "onShowHighlightMenu",
     function(self)
@@ -1022,7 +1024,9 @@ function ReaderHighlight:onHold(arg, ges)
     -- check if we were holding on an image
     -- we provide want_frames=true, so we get a list of images for
     -- animated GIFs (supported by ImageViewer)
-    local image = self.ui.document:getImageFromPosition(self.hold_pos, true)
+    -- We provide accept_cre_scalable_image=true to get, if the image is a SVG image,
+    -- a function that ImageViewer can use to get a perfect bb at any scale factor.
+    local image = self.ui.document:getImageFromPosition(self.hold_pos, true, true)
     if image then
         logger.dbg("hold on image")
         local ImageViewer = require("ui/widget/imageviewer")
@@ -1378,6 +1382,7 @@ function ReaderHighlight:viewSelectionHTML(debug_view, no_css_files_buttons)
                                 justified = false,
                                 para_direction_rtl = false,
                                 auto_para_direction = false,
+                                add_default_buttons = true,
                                 buttons_table = {
                                     {{
                                         text = _("Prettify"),
@@ -1394,19 +1399,13 @@ function ReaderHighlight:viewSelectionHTML(debug_view, no_css_files_buttons)
                                             })
                                         end,
                                     }},
-                                    {{
-                                        text = _("Close"),
-                                        callback = function()
-                                            UIManager:close(cssviewer)
-                                        end,
-                                    }},
                                 }
                             }
                             UIManager:show(cssviewer)
                         end,
                         hold_callback = buttons_hold_callback,
                     }
-                    -- One button per row, too make room for the possibly long css filename
+                    -- One button per row, to make room for the possibly long css filename
                     table.insert(buttons_table, {button})
                 end
             end
@@ -1430,13 +1429,6 @@ function ReaderHighlight:viewSelectionHTML(debug_view, no_css_files_buttons)
                 end,
                 hold_callback = buttons_hold_callback,
             }})
-            table.insert(buttons_table, {{
-                text = _("Close"),
-                callback = function()
-                    UIManager:close(textviewer)
-                end,
-                hold_callback = buttons_hold_callback,
-            }})
             textviewer = TextViewer:new{
                 title = _("Selection HTML"),
                 text = html,
@@ -1444,6 +1436,8 @@ function ReaderHighlight:viewSelectionHTML(debug_view, no_css_files_buttons)
                 justified = false,
                 para_direction_rtl = false,
                 auto_para_direction = false,
+                add_default_buttons = true,
+                default_hold_callback = buttons_hold_callback,
                 buttons_table = buttons_table,
             }
             UIManager:show(textviewer)

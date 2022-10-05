@@ -1,5 +1,6 @@
 local Generic = require("device/generic/device")
 local time = require("ui/time")
+local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 
 local function yes() return true end
@@ -113,7 +114,6 @@ end
 Test if a kindle device has *received* Special Offers (FW < 5.x)
 --]]
 local function hasSpecialOffers()
-    local lfs = require("libs/libkoreader-lfs")
     if lfs.attributes("/mnt/us/system/.assets", "mode") == "directory" then
         return true
     else
@@ -204,10 +204,40 @@ function Kindle:supportsScreensaver()
     end
 end
 
+function Kindle:init()
+    -- Check if the device supports deep sleep/quick boot
+    if lfs.attributes("/sys/devices/platform/falconblk/uevent", "mode") == "file" then
+        -- Now, poke the appreg db to see if it's actually *enabled*...
+        -- NOTE: The setting is only available on registered devices, as such, it *can* be missing,
+        --       which is why we check for it existing and being *disabled*, as that ensures user interaction.
+        local SQ3 = require("lua-ljsqlite3/init")
+        local appreg = SQ3.open("/var/local/appreg.db", "ro")
+        local hibernation_disabled = tonumber(appreg:rowexec(
+            "SELECT EXISTS(SELECT value FROM properties WHERE handlerId = 'dcc' AND name = 'hibernate.enabled' AND value = 0);"
+        ))
+        -- Check the actual delay while we're there...
+        local hibernation_delay =
+            appreg:rowexec("SELECT value FROM properties WHERE handlerId = 'dcc' AND name = 'hibernate.s2h.rtc.secs'") or
+            appreg:rowexec("SELECT value FROM properties WHERE handlerId = 'dcd' AND name = 'hibernate.s2h.rtc.secs'") or
+            3600
+        appreg:close()
+        if hibernation_disabled == 1 then
+            self.canDeepSleep = false
+        else
+            self.canDeepSleep = true
+            self.hibernationDelay = tonumber(hibernation_delay)
+            logger.dbg("Kindle: Device supports hibernation, enters hibernation after", self.hibernationDelay, "seconds in suspend")
+        end
+    else
+        self.canDeepSleep = false
+    end
+
+    Generic.init(self)
+end
+
 function Kindle:setDateTime(year, month, day, hour, min, sec)
     if hour == nil or min == nil then return true end
 
-    local lfs = require("libs/libkoreader-lfs")
     -- Prefer using the setdate wrapper if possible, as it will poke the native UI, too.
     if lfs.attributes("/usr/sbin/setdate", "mode") == "file" then
         local t = os.date("*t") -- Start with now to make sure we have a full table
@@ -274,10 +304,36 @@ function Kindle:outofScreenSaver()
         if self:supportsScreensaver() then
             local Screensaver = require("ui/screensaver")
             local widget_was_closed = Screensaver:close()
+            local UIManager = require("ui/uimanager")
             if widget_was_closed then
                 -- And redraw everything in case the framework managed to screw us over...
-                local UIManager = require("ui/uimanager")
                 UIManager:nextTick(function() UIManager:setDirty("all", "full") end)
+            end
+
+            -- If the device supports deep sleep, and we woke up from hibernation (which kicks in at the 1H mark),
+            -- chuck an extra tiny refresh to get rid of the "waking up" banner if the above refresh was too early...
+            if self.canDeepSleep and self.last_suspend_time > time.s(self.hibernationDelay) then
+                if lfs.attributes("/var/local/system/powerd/hibernate_session_tracker", "mode") == "file" then
+                    local mtime = lfs.attributes("/var/local/system/powerd/hibernate_session_tracker", "modification")
+                    local now = os.time()
+                    if math.abs(now - mtime) <= 60 then
+                        -- That was less than a minute ago, assume we're golden.
+                        logger.dbg("Kindle: Woke up from hibernation")
+                        -- The banner on a 1236x1648 PW5 is 1235x125; we refresh the bottom 10% of the screen to be safe.
+                        local Geom = require("ui/geometry")
+                        local screen_height = self.screen:getHeight()
+                        local refresh_height = math.ceil(screen_height / 10)
+                        local refresh_region = Geom:new{
+                            x = 0,
+                            y = screen_height - 1 - refresh_height,
+                            w = self.screen:getWidth(),
+                            h = refresh_height
+                        }
+                        UIManager:scheduleIn(1.5, function()
+                            UIManager:setDirty("all", "ui", refresh_region)
+                        end)
+                    end
+                end
             end
         else
             -- Stop awesome again if need be...
@@ -310,6 +366,34 @@ end
 function Kindle:readyToSuspend()
     self.powerd:readyToSuspend()
     self.suspend_time = time.boottime_or_realtime_coarse()
+end
+
+function Kindle:setEventHandlers(UIManager)
+    UIManager.event_handlers.Suspend = function()
+        self.powerd:toggleSuspend()
+    end
+    UIManager.event_handlers.IntoSS = function()
+        self:_beforeSuspend()
+        self:intoScreenSaver()
+    end
+    UIManager.event_handlers.OutOfSS = function()
+        self:outofScreenSaver()
+        self:_afterResume()
+    end
+    UIManager.event_handlers.Charging = function()
+        self:_beforeCharging()
+        self:usbPlugIn()
+    end
+    UIManager.event_handlers.NotCharging = function()
+        self:usbPlugOut()
+        self:_afterNotCharging()
+    end
+    UIManager.event_handlers.WakeupFromSuspend = function()
+        self:wakeupFromSuspend()
+    end
+    UIManager.event_handlers.ReadyToSuspend = function()
+        self:readyToSuspend()
+    end
 end
 
 function Kindle:ambientBrightnessLevel()
@@ -515,6 +599,20 @@ local KindlePaperWhite5 = Kindle:new{
     canDoSwipeAnimation = yes,
 }
 
+local KindleScribe = Kindle:new{
+    model = "KindleScribe",
+    isMTK = yes,
+    isTouchDevice = yes,
+    hasFrontlight = yes,
+    hasNaturalLight = yes,
+    hasNaturalLightMixer = yes,
+    display_dpi = 300,
+    -- TBD
+    touch_dev = "/dev/input/by-path/platform-1001e000.i2c-event",
+    canHWDither = no,
+    canDoSwipeAnimation = yes,
+}
+
 function Kindle2:init()
     self.screen = require("ffi/framebuffer_einkfb"):new{device = self, debug = logger.dbg}
     self.powerd = require("device/kindle/powerd"):new{
@@ -583,11 +681,6 @@ function Kindle4:init()
     Kindle.init(self)
 end
 
--- luacheck: push
--- luacheck: ignore
-local ABS_MT_POSITION_X = 53
-local ABS_MT_POSITION_Y = 54
--- luacheck: pop
 function KindleTouch:init()
     self.screen = require("ffi/framebuffer_mxcfb"):new{device = self, debug = logger.dbg}
     self.powerd = require("device/kindle/powerd"):new{
@@ -1017,6 +1110,27 @@ function KindlePaperWhite5:init()
     self.input.open("fake_events")
 end
 
+function KindleScribe:init()
+    self.screen = require("ffi/framebuffer_mxcfb"):new{device = self, debug = logger.dbg}
+    -- TBD, assume PW5 for now
+    self.powerd = require("device/kindle/powerd"):new{
+        device = self,
+        fl_intensity_file = "/sys/class/backlight/fp9966-bl1/brightness",
+        warmth_intensity_file = "/sys/class/backlight/fp9966-bl0/brightness",
+        batt_capacity_file = "/sys/class/power_supply/bd71827_bat/capacity",
+        is_charging_file = "/sys/class/power_supply/bd71827_bat/charging",
+        batt_status_file = "/sys/class/power_supply/bd71827_bat/status",
+    }
+
+    -- Enable the so-called "fast" mode, so as to prevent the driver from silently promoting refreshes to REAGL.
+    self.screen:_MTK_ToggleFastMode(true)
+
+    Kindle.init(self)
+
+    self.input.open(self.touch_dev)
+    self.input.open("fake_events")
+end
+
 function KindleTouch:exit()
     if self:isMTK() then
         -- Disable the so-called "fast" mode
@@ -1056,6 +1170,7 @@ KindlePaperWhite4.exit = KindleTouch.exit
 KindleBasic3.exit = KindleTouch.exit
 KindleOasis3.exit = KindleTouch.exit
 KindlePaperWhite5.exit = KindleTouch.exit
+KindleScribe.exit = KindleTouch.exit
 
 function Kindle3:exit()
     -- send double menu key press events to trigger screen refresh
@@ -1082,7 +1197,7 @@ local kindle_sn = kindle_sn_fd:read("*line")
 kindle_sn_fd:close()
 -- NOTE: Attempt to sanely differentiate v1 from v2,
 --       c.f., https://github.com/NiLuJe/FBInk/commit/8a1161734b3f5b4461247af461d26987f6f1632e
-local kindle_sn_lead = string.sub(kindle_sn,1,1)
+local kindle_sn_lead = string.sub(kindle_sn, 1, 1)
 
 -- NOTE: Update me when new devices come out :)
 --       c.f., https://wiki.mobileread.com/wiki/Kindle_Serial_Numbers for identified variants
@@ -1109,7 +1224,8 @@ local pw4_set = Set { "0PP", "0T1", "0T2", "0T3", "0T4", "0T5", "0T6",
                   "16Q", "16R", "16S", "16T", "16U", "16V" }
 local kt4_set = Set { "10L", "0WF", "0WG", "0WH", "0WJ", "0VB" }
 local koa3_set = Set { "11L", "0WQ", "0WP", "0WN", "0WM", "0WL" }
-local pw5_set = Set { "1LG", "1Q0", "1PX", "1VD", "219", "21A", "2BH", "2BJ" }
+local pw5_set = Set { "1LG", "1Q0", "1PX", "1VD", "219", "21A", "2BH", "2BJ", "2DK" }
+local scribe_set = Set { "22D", "25T", "23A", "2AQ", "2AP", "1XH", "22C" }
 
 if kindle_sn_lead == "B" or kindle_sn_lead == "9" then
     local kindle_devcode = string.sub(kindle_sn, 3, 4)
@@ -1154,8 +1270,10 @@ else
         return KindleOasis3
     elseif pw5_set[kindle_devcode_v2] then
         return KindlePaperWhite5
+    elseif scribe_set[kindle_devcode_v2] then
+        return KindleScribe
     end
 end
 
-local kindle_sn_prefix = string.sub(kindle_sn,1,6)
-error("unknown Kindle model: "..kindle_sn_prefix)
+local kindle_sn_prefix = string.sub(kindle_sn, 1, 6)
+error("unknown Kindle model: " .. kindle_sn_prefix)

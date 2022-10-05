@@ -64,6 +64,7 @@ function VirtualKey:init()
     elseif self.keyboard.utf8mode_keys[self.label] ~= nil then
         self.key_chars = self:genKeyboardLayoutKeyChars()
         self.callback = function ()
+            self.keyboard:onSwitchingKeyboardLayout()
             local current = G_reader_settings:readSetting("keyboard_layout")
             local default = G_reader_settings:readSetting("keyboard_layout_default")
             local keyboard_layouts = G_reader_settings:readSetting("keyboard_layouts", {})
@@ -86,6 +87,7 @@ function VirtualKey:init()
             self.keyboard:setKeyboardLayout(next_layout)
         end
         self.hold_callback = function()
+            self.keyboard:onSwitchingKeyboardLayout()
             if util.tableSize(self.key_chars) > 5 then -- 2 or more layouts enabled
                 self.popup = VirtualKeyPopup:new{
                     parent_key = self,
@@ -100,6 +102,7 @@ function VirtualKey:init()
         end
         self.hold_cb_is_popup = true
         self.swipe_callback = function(ges)
+            self.keyboard:onSwitchingKeyboardLayout()
             local key_function = self.key_chars[ges.direction.."_func"]
             if key_function then
                 key_function()
@@ -316,24 +319,28 @@ function VirtualKey:genKeyboardLayoutKeyChars()
 end
 
 -- NOTE: We currently don't ever set want_flash to true (c.f., our invert method).
-function VirtualKey:update_keyboard(want_flash, want_fast)
-    -- NOTE: We mainly use "fast" when inverted & "ui" when not, with a cherry on top:
-    --       we flash the *full* keyboard instead when we release a hold.
+function VirtualKey:update_keyboard(want_flash, want_a2)
+    -- NOTE: We use "a2" for the highlights.
+    --       We flash the *full* keyboard when we release a hold.
     if want_flash then
         UIManager:setDirty(self.keyboard, function()
             return "flashui", self.keyboard[1][1].dimen
         end)
     else
         local refresh_type = "ui"
-        if want_fast then
-            refresh_type = "fast"
+        if want_a2 then
+            refresh_type = "a2"
         end
         -- Only repaint the key itself, not the full board...
         UIManager:widgetRepaint(self[1], self[1].dimen.x, self[1].dimen.y)
-        UIManager:setDirty(nil, function()
-            logger.dbg("update key region", self[1].dimen)
-            return refresh_type, self[1].dimen
-        end)
+        logger.dbg("update key", self.key)
+        UIManager:setDirty(nil, refresh_type, self[1].dimen)
+
+        -- NOTE: On MTK, we'd have to forcibly stall a bit for the highlights to actually show.
+        --[[
+        UIManager:forceRePaint()
+        UIManager:yieldToEPDC(3000)
+        --]]
     end
 end
 
@@ -446,7 +453,7 @@ function VirtualKey:invert(invert, hold)
     else
         self[1].inner_bordersize = 0
     end
-    self:update_keyboard(hold, false)
+    self:update_keyboard(hold, true)
 end
 
 VirtualKeyPopup = FocusManager:new{
@@ -760,10 +767,12 @@ local VirtualKeyboard = FocusManager:new{
         ko_KR = "ko_KR_keyboard",
         ru = "ru_keyboard",
         tr = "tr_keyboard",
+        zh = "zh_keyboard",
     },
 
     lang_has_submenu = {
         ja = true,
+        zh = true,
     },
 }
 
@@ -1033,6 +1042,11 @@ end
 
 function VirtualKeyboard:goToStartOfLine()
     self.inputbox:goToStartOfLine()
+end
+
+-- Some keyboard with intermediate state (ie. zh) may need to be notified
+function VirtualKeyboard:onSwitchingKeyboardLayout()
+    if self.inputbox.onSwitchingKeyboardLayout then self.inputbox:onSwitchingKeyboardLayout() end
 end
 
 function VirtualKeyboard:goToEndOfLine()

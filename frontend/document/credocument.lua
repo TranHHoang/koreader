@@ -9,6 +9,7 @@ local Screen = require("device").screen
 local buffer = require("string.buffer")
 local ffi = require("ffi")
 local C = ffi.C
+local cre -- Delayed loading
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 local lru = require("ffi/lru")
@@ -107,7 +108,7 @@ end
 
 function CreDocument:engineInit()
     if not engine_initialized then
-        require "libs/libkoreader-cre"
+        cre = require("libs/libkoreader-cre")
         -- initialize cache
         self:cacheInit()
 
@@ -116,9 +117,9 @@ function CreDocument:engineInit()
 
         -- we need to initialize the CRE font list
         local fonts = FontList:getFontList()
-        for _k, _v in ipairs(fonts) do
-            if not _v:find("/urw/") and not _v:find("/nerdfonts/symbols.ttf") then
-                local ok, err = pcall(cre.registerFont, _v)
+        for k, v in ipairs(fonts) do
+            if not v:find("/urw/") and not v:find("/nerdfonts/symbols.ttf") then
+                local ok, err = pcall(cre.registerFont, v)
                 if not ok then
                     logger.err("failed to register crengine font:", err)
                 end
@@ -138,6 +139,8 @@ function CreDocument:engineInit()
 
         engine_initialized = true
     end
+
+    return cre
 end
 
 function CreDocument:init()
@@ -164,7 +167,7 @@ function CreDocument:init()
     end
 
     -- This mode must be the same as the default one set as ReaderView.view_mode
-    self._view_mode = DCREREADER_VIEW_MODE == "scroll" and self.SCROLL_VIEW_MODE or self.PAGE_VIEW_MODE
+    self._view_mode = G_defaults:readSetting("DCREREADER_VIEW_MODE") == "scroll" and self.SCROLL_VIEW_MODE or self.PAGE_VIEW_MODE
 
     local ok
     ok, self._document = pcall(cre.newDocView, CanvasContext:getWidth(), CanvasContext:getHeight(), self._view_mode)
@@ -290,7 +293,7 @@ function CreDocument:render()
     -- This is now configurable and done by ReaderRolling:
     -- -- set visible page count in landscape
     -- if math.max(CanvasContext:getWidth(), CanvasContext:getHeight()) / CanvasContext:getDPI()
-    --     < DCREREADER_TWO_PAGE_THRESHOLD then
+    --     < G_defaults:readSetting("DCREREADER_TWO_PAGE_THRESHOLD") then
     --     self:setVisiblePageCount(1)
     -- end
     logger.dbg("CreDocument: rendering document...")
@@ -539,13 +542,39 @@ function CreDocument:getCoverPageImage()
     end
 end
 
-function CreDocument:getImageFromPosition(pos, want_frames)
-    local data, size = self._document:getImageDataFromPosition(pos.x, pos.y)
+function CreDocument:getImageFromPosition(pos, want_frames, accept_cre_scalable_image)
+    local data, size, cre_img = self._document:getImageDataFromPosition(pos.x, pos.y, accept_cre_scalable_image)
     if data and size then
         logger.dbg("CreDocument: got image data from position", data, size)
         local image = RenderImage:renderImageData(data, size, want_frames)
         C.free(data) -- free the userdata we got from crengine
         return image
+    end
+    if cre_img then
+        -- The image is a scalable image (SVG), and we got an image object from crengine, that
+        -- can draw itself at any requested scale factor: returns a function, that will be used
+        -- by ImageViewer to get the perfect bb.
+        return function(scale, w, h)
+            logger.dbg("CreImage: scaling for", scale, w, h)
+            if not cre_img then
+                return
+            end
+            if scale == false then -- used to signal we are done with the object
+                cre_img:free()
+                cre_img = false
+                return
+            end
+            -- scale will be used if non-0, otherwise the bb will be made to fit in w/h,
+            -- keeping the original aspect ratio
+            local image_data, image_w, image_h, image_scale = cre_img:renderScaled(scale, w, h)
+            if image_data then
+                -- This data is held in the cre_img object, so this bb is only
+                -- valid as long as this object is alive, and until the next
+                -- call to this function that will replace this data.
+                local bb = Blitbuffer.new(image_w, image_h, Blitbuffer.TYPE_BBRGB32, image_data)
+                return bb, image_scale
+            end
+        end
     end
 end
 
@@ -990,6 +1019,28 @@ function CreDocument:setupFallbackFontFaces()
     self._document:setStringProperty("crengine.font.fallback.faces", s_fallbacks)
 end
 
+function CreDocument:setFontFamilyFontFaces(font_family_fonts, ignore_font_names)
+    if not font_family_fonts then
+        font_family_fonts = {}
+    end
+    -- crengine expects font names concatenated in the order they appear in the
+    -- enum css_font_family_t (include/cssdef.h) (with css_ff_inherit ignored,
+    -- the first slot carries ignore_font_names if not empty
+    local fonts = {}
+    table.insert(fonts, ignore_font_names and "not-empty" or "")
+    table.insert(fonts, font_family_fonts["serif"] or "")
+    table.insert(fonts, font_family_fonts["sans-serif"] or "")
+    table.insert(fonts, font_family_fonts["cursive"] or "")
+    table.insert(fonts, font_family_fonts["fantasy"] or "")
+    table.insert(fonts, font_family_fonts["monospace"] or "")
+    table.insert(fonts, font_family_fonts["math"] or "")
+    table.insert(fonts, font_family_fonts["emoji"] or "")
+    table.insert(fonts, font_family_fonts["fangsong"] or "")
+    local s_font_family_faces = table.concat(fonts, "|")
+    logger.dbg("CreDocument: set font-family font faces:", s_font_family_faces)
+    self._document:setStringProperty("crengine.font.family.faces", s_font_family_faces)
+end
+
 -- To use the new crengine language typography facilities (hyphenation, line breaking,
 -- OpenType fonts locl letter forms...)
 function CreDocument:setTextMainLang(lang)
@@ -1402,6 +1453,7 @@ function CreDocument:register(registry)
     registry:addProvider("prc", "application/vnd.palm", self)
     registry:addProvider("rtf", "application/rtf", self, 90)
     registry:addProvider("rtf.zip", "application/rtf+zip", self, 90) -- Alternative mimetype for OPDS.
+    registry:addProvider("svg", "image/svg+xml", self, 90)
     registry:addProvider("tcr", "application/tcr", self)
     registry:addProvider("txt", "text/plain", self, 90)
     registry:addProvider("txt.zip", "application/zip", self, 90)

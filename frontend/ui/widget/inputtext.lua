@@ -12,7 +12,6 @@ local ScrollTextWidget = require("ui/widget/scrolltextwidget")
 local Size = require("ui/size")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local UIManager = require("ui/uimanager")
-local Utf8Proc = require("ffi/utf8proc")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local dbg = require("dbg")
 local util = require("util")
@@ -140,7 +139,9 @@ if Device:isTouchDevice() or Device:hasDPad() then
                     self.is_keyboard_hidden = false
                 end
             end
-            if #self.charlist > 0 then -- Avoid cursor moving within a hint.
+            -- zh keyboard with candidates shown here has _frame_textwidget.dimen = nil.
+            -- Check to avoid crash.
+            if #self.charlist > 0 and self._frame_textwidget.dimen then -- Avoid cursor moving within a hint.
                 local textwidget_offset = self.margin + self.bordersize + self.padding
                 local x = ges.pos.x - self._frame_textwidget.dimen.x - textwidget_offset
                 local y = ges.pos.y - self._frame_textwidget.dimen.y - textwidget_offset
@@ -189,6 +190,7 @@ if Device:isTouchDevice() or Device:hasDPad() then
                     width = math.floor(math.min(Screen:getWidth(), Screen:getHeight()) * 0.8),
                     height = math.floor(math.max(Screen:getWidth(), Screen:getHeight()) * 0.4),
                     justified = false,
+                    modal = true,
                     stop_events_propagation = true,
                     buttons_table = {
                         {
@@ -757,36 +759,6 @@ function InputText:getStringPos(left_delimiter, right_delimiter, char_pos)
         end
     end
     return start_pos, end_pos
-end
-
---- Search for a string.
--- if start_pos not set, starts a search from the next to cursor position
--- returns first found position or 0 if not found
-function InputText:searchString(str, case_sensitive, start_pos)
-    local str_charlist = util.splitToChars(str)
-    local str_len = #str_charlist
-    local char_pos, found = 0, 0
-    start_pos = start_pos and (start_pos - 1) or self.charpos
-    for i = start_pos, #self.charlist - str_len do
-        for j = 1, str_len do
-            local char_txt = self.charlist[i + j]
-            local char_str = str_charlist[j]
-            if not case_sensitive then
-                char_txt = Utf8Proc.lowercase(util.fixUtf8(char_txt, "?"))
-                char_str = Utf8Proc.lowercase(util.fixUtf8(char_str, "?"))
-            end
-            if char_txt ~= char_str then
-                found = 0
-                break
-            end
-            found = found + 1
-        end
-        if found == str_len then
-            char_pos = i + 1
-            break
-        end
-    end
-    return char_pos
 end
 
 --- Return the character at the given offset. If is_absolute is truthy then the

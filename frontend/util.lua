@@ -3,6 +3,8 @@ This module contains miscellaneous helper functions for the KOReader frontend.
 ]]
 
 local BaseUtil = require("ffi/util")
+local Utf8Proc = require("ffi/utf8proc")
+local lfs = require("libs/libkoreader-lfs")
 local _ = require("gettext")
 local C_ = _.pgettext
 local T = BaseUtil.template
@@ -331,7 +333,7 @@ function util.tableEquals(o1, o2, ignore_mt)
     if not ignore_mt then
         local mt1 = getmetatable(o1)
         if mt1 and mt1.__eq then
-            --compare using built in method
+            -- Compare using built in method
             return o1 == o2
         end
     end
@@ -769,6 +771,97 @@ function util.getFilesystemType(path)
     return type
 end
 
+-- For documentation purposes, here's a battle-tested shell version of calcFreeMem,
+-- our simplified Lua version follows...
+--[[
+    if grep -q 'MemAvailable' /proc/meminfo ; then
+        # We'll settle for 85% of available memory to leave a bit of breathing room
+        tmpfs_size="$(awk '/MemAvailable/ {printf "%d", $2 * 0.85}' /proc/meminfo)"
+    elif grep -q 'Inactive(file)' /proc/meminfo ; then
+        # Basically try to emulate the kernel's computation, c.f., https://unix.stackexchange.com/q/261247
+        # Again, 85% of available memory
+        tmpfs_size="$(awk -v low=$(grep low /proc/zoneinfo | awk '{k+=$2}END{printf "%d", k}') \
+            '{a[$1]=$2}
+            END{
+                printf "%d", (a["MemFree:"]+a["Active(file):"]+a["Inactive(file):"]+a["SReclaimable:"]-(12*low))*0.85;
+            }' /proc/meminfo)"
+    else
+        # Ye olde crap workaround of Free + Buffers + Cache...
+        # Take it with a grain of salt, and settle for 80% of that...
+        tmpfs_size="$(awk \
+            '{a[$1]=$2}
+            END{
+                printf "%d", (a["MemFree:"]+a["Buffers:"]+a["Cached:"])*0.80;
+            }' /proc/meminfo)"
+    fi
+--]]
+
+--- Computes the currently available memory
+---- @treturn tuple of ints: memavailable, memtotal (or nil, nil on unsupported platforms).
+function util:calcFreeMem()
+    local memtotal, memfree, memavailable, buffers, cached
+
+    local meminfo = io.open("/proc/meminfo", "r")
+    if meminfo then
+        for line in meminfo:lines() do
+            if not memtotal then
+                memtotal = line:match("^MemTotal:%s-(%d+) kB")
+                if memtotal then
+                    -- Next!
+                    goto continue
+                end
+            end
+
+            if not memfree then
+                memfree = line:match("^MemFree:%s-(%d+) kB")
+                if memfree then
+                    -- Next!
+                    goto continue
+                end
+            end
+
+            if not memavailable then
+                memavailable = line:match("^MemAvailable:%s-(%d+) kB")
+                if memavailable then
+                    -- Best case scenario, we're done :)
+                    break
+                end
+            end
+
+            if not buffers then
+                buffers = line:match("^Buffers:%s-(%d+) kB")
+                if buffers then
+                    -- Next!
+                    goto continue
+                end
+            end
+
+            if not cached then
+                cached = line:match("^Cached:%s-(%d+) kB")
+                if cached then
+                    -- Ought to be the last entry we care about, we're done
+                    break
+                end
+            end
+
+            ::continue::
+        end
+        meminfo:close()
+    else
+        -- Not on Linux?
+        return nil, nil
+    end
+
+    if memavailable then
+        -- Leave a bit of margin, and report 85% of that...
+        return math.floor(memavailable * 0.85) * 1024, memtotal * 1024
+    else
+        -- Crappy Free + Buffers + Cache version, because the zoneinfo approach is a tad hairy...
+        -- So, leave an even larger margin, and only report 75% of that...
+        return math.floor((memfree + buffers + cached) * 0.75) * 1024, memtotal * 1024
+    end
+end
+
 --- Recursively scan directory for files inside
 -- @string path
 -- @func callback(fullpath, name, attr)
@@ -796,7 +889,6 @@ end
 ---- @string path
 ---- @treturn bool
 function util.isEmptyDir(path)
-    local lfs = require("libs/libkoreader-lfs")
     -- lfs.dir will crash rather than return nil if directory doesn't exist O_o
     local ok, iter, dir_obj = pcall(lfs.dir, path)
     if not ok then return end
@@ -823,7 +915,6 @@ end
 ---- @string path
 ---- @treturn bool
 function util.pathExists(path)
-    local lfs = require("libs/libkoreader-lfs")
     return lfs.attributes(path, "mode") ~= nil
 end
 
@@ -841,7 +932,6 @@ function util.makePath(path)
         return nil, err.." (creating "..path..")"
     end
 
-    local lfs = require("libs/libkoreader-lfs")
     return lfs.mkdir(path)
 end
 
@@ -849,7 +939,6 @@ end
 -- @string path of the file to remove
 -- @treturn bool true on success; nil, err_message on error
 function util.removeFile(file)
-    local lfs = require("libs/libkoreader-lfs")
     if file and lfs.attributes(file, "mode") == "file" then
         return os.remove(file)
     elseif file then
@@ -874,7 +963,6 @@ function util.diskUsage(dir)
         end
     end
     local err = { total = nil, used = nil, available = nil }
-    local lfs = require("libs/libkoreader-lfs")
     if not dir or lfs.attributes(dir, "mode") ~= "directory" then return err end
     local usage = doCommand(dir)
     if not usage then return err end
@@ -1279,8 +1367,8 @@ function util.shell_escape(args)
     return table.concat(escaped_args, " ")
 end
 
---- Clear all the elements from a table without reassignment.
---- @table t the table to be cleared
+--- Clear all the elements from an array without reassignment.
+--- @table t the array to be cleared
 function util.clearTable(t)
     local c = #t
     for i = 0, c do t[i] = nil end
@@ -1327,7 +1415,7 @@ function util.checkLuaSyntax(lua_text)
     end
     -- Replace: [string "blah blah..."]:3: '=' expected near '123'
     -- with: Line 3: '=' expected near '123'
-    err = err:gsub("%[string \".-%\"]:", "Line ")
+    err = err and err:gsub("%[string \".-%\"]:", "Line ")
     return err
 end
 
@@ -1347,6 +1435,41 @@ end
 -- @treturn bool true on success
 function util.stringEndsWith(str, ending)
    return ending == "" or str:sub(-#ending) == ending
+end
+
+--- Search a string in a text.
+-- @string or table txt Text (char list) to search in
+-- @string str String to search for
+-- @boolean case_sensitive
+-- @number start_pos Position number in text to start search from
+-- @treturn number Position number or 0 if not found
+function util.stringSearch(txt, str, case_sensitive, start_pos)
+    if not case_sensitive then
+        str = Utf8Proc.lowercase(util.fixUtf8(str, "?"))
+    end
+    local txt_charlist = type(txt) == "table" and txt or util.splitToChars(txt)
+    local str_charlist = util.splitToChars(str)
+    local str_len = #str_charlist
+    local char_pos, found = 0, 0
+    for i = start_pos - 1, #txt_charlist - str_len do
+        for j = 1, str_len do
+            local char_txt = txt_charlist[i + j]
+            local char_str = str_charlist[j]
+            if not case_sensitive then
+                char_txt = Utf8Proc.lowercase(util.fixUtf8(char_txt, "?"))
+            end
+            if char_txt ~= char_str then
+                found = 0
+                break
+            end
+            found = found + 1
+        end
+        if found == str_len then
+            char_pos = i + 1
+            break
+        end
+    end
+    return char_pos
 end
 
 local WrappedFunction_mt = {

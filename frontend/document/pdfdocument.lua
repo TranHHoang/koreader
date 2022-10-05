@@ -74,8 +74,8 @@ function PdfDocument:convertKoptToReflowableFontSize(font_size)
         return size * default_font_size
     elseif G_reader_settings:readSetting("kopt_font_size") then
         return G_reader_settings:readSetting("kopt_font_size") * default_font_size
-    elseif DKOPTREADER_CONFIG_FONT_SIZE then
-        return DKOPTREADER_CONFIG_FONT_SIZE * default_font_size
+    elseif G_defaults:readSetting("DKOPTREADER_CONFIG_FONT_SIZE") then
+        return G_defaults:readSetting("DKOPTREADER_CONFIG_FONT_SIZE") * default_font_size
     else
         return default_font_size
     end
@@ -389,7 +389,7 @@ function PdfDocument:register(registry)
     registry:addProvider("png", "image/png", self, 90)
     registry:addProvider("pnm", "image/x‑portable‑bitmap", self, 90)
     registry:addProvider("ppm", "image/x‑portable‑bitmap", self, 90)
-    registry:addProvider("svg", "image/svg+xml", self, 90)
+    registry:addProvider("svg", "image/svg+xml", self, 80)
     registry:addProvider("tif", "image/tiff", self, 90)
     registry:addProvider("tiff", "image/tiff", self, 90)
     -- Windows Media Photo == JPEG XR

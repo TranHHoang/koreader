@@ -22,6 +22,8 @@ local ButtonDialogTitle = InputContainer:new{
     title_face = Font:getFace("x_smalltfont"),
     title_padding = Size.padding.large,
     title_margin = Size.margin.title,
+    width = nil,
+    width_factor = nil, -- number between 0 and 1, factor to the smallest of screen width and height
     use_info_style = true, -- set to false to have bold font style of the title
     info_face = Font:getFace("infofont"),
     info_padding = Size.padding.default,
@@ -32,6 +34,14 @@ local ButtonDialogTitle = InputContainer:new{
 }
 
 function ButtonDialogTitle:init()
+    self.screen_width = Screen:getWidth()
+    self.screen_height = Screen:getHeight()
+    if not self.width then
+        if not self.width_factor then
+            self.width_factor = 0.9 -- default if no width specified
+        end
+        self.width = math.floor(math.min(self.screen_width, self.screen_height) * self.width_factor)
+    end
     if self.dismissable then
         if Device:hasKeys() then
             local close_keys = Device:hasFewKeys() and { "Back", "Left" } or Device.input.group.Back
@@ -46,13 +56,19 @@ function ButtonDialogTitle:init()
                     range = Geom:new {
                         x = 0,
                         y = 0,
-                        w = Screen:getWidth(),
-                        h = Screen:getHeight(),
+                        w = self.screen_width,
+                        h = self.screen_height,
                     }
                 }
             }
         end
     end
+    self.button_table = ButtonTable:new{
+        width = self.width,
+        buttons = self.buttons,
+        zero_sep = true,
+        show_parent = self,
+    }
     self[1] = CenterContainer:new{
         dimen = Screen:getSize(),
         MovableContainer:new{
@@ -65,17 +81,13 @@ function ButtonDialogTitle:init()
                         bordersize = 0,
                         TextBoxWidget:new{
                             text = self.title,
-                            width = math.floor(math.min(Screen:getWidth(), Screen:getHeight()) * 0.8),
+                            width = math.floor(self.width * 0.9),
                             face = self.use_info_style and self.info_face or self.title_face,
                             alignment = self.title_align or "left",
                         },
                     },
                     VerticalSpan:new{ width = Size.span.vertical_default },
-                    ButtonTable:new{
-                        buttons = self.buttons,
-                        zero_sep = true,
-                        show_parent = self,
-                    },
+                    self.button_table,
                 },
                 background = Blitbuffer.COLOR_WHITE,
                 bordersize = Size.border.window,

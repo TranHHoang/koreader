@@ -119,7 +119,7 @@ function CoverMenu:updateItems(select_number)
     self.show_parent.dithered = self._has_cover_images
     UIManager:setDirty(self.show_parent, function()
         local refresh_dimen =
-            old_dimen and old_dimen:combine(self.dimen)
+        old_dimen and old_dimen:combine(self.dimen)
             or self.dimen
         return "ui", refresh_dimen, self.show_parent.dithered
     end)
@@ -133,7 +133,7 @@ function CoverMenu:updateItems(select_number)
     if #self.items_to_update > 0 then
         -- Prepare for background info extraction job
         local files_to_index = {} -- table of {filepath, cover_specs}
-        for i=1, #self.items_to_update do
+        for i = 1, #self.items_to_update do
             table.insert(files_to_index, {
                 filepath = self.items_to_update[i].filepath,
                 cover_specs = self.items_to_update[i].cover_specs
@@ -148,7 +148,7 @@ function CoverMenu:updateItems(select_number)
                     UIManager:unschedule(self.items_update_action)
                     self.items_update_action = nil
                 end
-                UIManager:show(InfoMessage:new{
+                UIManager:show(InfoMessage:new {
                     text = _("Start-up of background extraction job failed.\nPlease restart KOReader or your device.")
                 })
             end
@@ -177,7 +177,8 @@ function CoverMenu:updateItems(select_number)
                     UIManager:setDirty(self.show_parent, refreshfunc)
                     if item.folder_self then
                         item.folder_self:update()
-                        UIManager:setDirty(item.folder_self, "ui", item.folder_self[1].dimen, item.folder_self.show_parent.dithered)
+                        UIManager:setDirty(item.folder_self, "ui", item.folder_self[1].dimen,
+                            item.folder_self.show_parent.dithered)
                     end
                     table.remove(self.items_to_update, i)
                 else
@@ -199,32 +200,32 @@ function CoverMenu:updateItems(select_number)
         UIManager:scheduleIn(1, self.items_update_action)
     end
 
-    -- (We may not need to do the following if we extend onFileHold
+    -- (We may not need to do the following if we extend showFileDialog
     -- code in filemanager.lua to check for existence and call a
     -- method: self:getAdditionalButtons() to add our buttons
     -- to its own set.)
 
-    -- We want to add some buttons to the onFileHold popup. This function
+    -- We want to add some buttons to the showFileDialog popup. This function
     -- is dynamically created by FileManager:init(), and we don't want
-    -- to override this... So, here, when we see the onFileHold function,
+    -- to override this... So, here, when we see the showFileDialog function,
     -- we replace it by ours.
-    -- (FileManager may replace file_chooser.onFileHold after we've been called once, so we need
+    -- (FileManager may replace file_chooser.showFileDialog after we've been called once, so we need
     -- to replace it again if it is not ours)
-    if not self.onFileHold_ours -- never replaced
-            or self.onFileHold ~= self.onFileHold_ours then -- it is no more ours
+    if not self.showFileDialog_ours -- never replaced
+        or self.showFileDialog ~= self.showFileDialog_ours then -- it is no more ours
         -- We need to do it at nextTick, once FileManager has instantiated
         -- its FileChooser completely
         UIManager:nextTick(function()
             -- Store original function, so we can call it
-            self.onFileHold_orig = self.onFileHold
+            self.showFileDialog_orig = self.showFileDialog
 
             -- Replace it with ours
             -- This causes luacheck warning: "shadowing upvalue argument 'self' on line 34".
-            -- Ignoring it (as done in filemanager.lua for the same onFileHold)
-            self.onFileHold = function(self, file) -- luacheck: ignore
+            -- Ignoring it (as done in filemanager.lua for the same showFileDialog)
+            self.showFileDialog = function(self, file) -- luacheck: ignore
                 -- Call original function: it will create a ButtonDialogTitle
                 -- and store it as self.file_dialog, and UIManager:show() it.
-                self.onFileHold_orig(self, file)
+                self.showFileDialog_orig(self, file)
 
                 local bookinfo = BookInfoManager:getBookInfo(file)
                 if not bookinfo or bookinfo._is_directory then
@@ -242,15 +243,10 @@ function CoverMenu:updateItems(select_number)
                 -- And clear the rendering stack to avoid inheriting its dirty/refresh queue
                 UIManager:clearRenderStack()
 
-                -- Replace Book information callback to use directly our bookinfo
-                orig_buttons[4][2].callback = function()
-                    FileManagerBookInfo:show(file, bookinfo)
-                    UIManager:close(self.file_dialog)
-                end
-
-                -- Fudge the "Reset settings" button ([1][3]) callback to also trash the cover_info_cache
-                local orig_purge_callback = orig_buttons[1][3].callback
-                orig_buttons[1][3].callback = function()
+                -- Fudge the "Reset settings" button callback to also trash the cover_info_cache
+                local button = self.file_dialog.button_table:getButtonById("reset_settings")
+                local orig_purge_callback = button.callback
+                button.callback = function()
                     -- Wipe the cache
                     if self.cover_info_cache and self.cover_info_cache[file] then
                         self.cover_info_cache[file] = nil
@@ -259,63 +255,14 @@ function CoverMenu:updateItems(select_number)
                     orig_purge_callback()
                 end
 
+                -- Replace the "Book information" button callback to use directly our bookinfo
+                button = self.file_dialog.button_table:getButtonById("book_information")
+                button.callback = function()
+                    FileManagerBookInfo:show(file, bookinfo)
+                    UIManager:close(self.file_dialog)
+                end
+
                 -- Add some new buttons to original buttons set
-                table.insert(orig_buttons[5], 1,
-                    { -- Mark the book as read/unread
-                        text_func = function()
-                            -- If the book has a cache entry, it means it has a sidecar file, and it *may* have the info we need.
-                            local status
-                            if self.cover_info_cache and self.cover_info_cache[file] then
-                                local _, _, c_status = unpack(self.cover_info_cache[file])
-                                status = c_status
-                            end
-                            -- NOTE: status may still be nil if the BookStatus widget was never opened in this book.
-                            --       For our purposes, we assume this means reading or on hold, which is just fine.
-                            -- NOTE: This also means we assume "on hold" means reading, meaning it'll be flipped to "finished",
-                            --       which I'm personally okay with, too.
-                            --       c.f., BookStatusWidget:generateSwitchGroup for the three possible constant values.
-                            return status == "complete" and _("Mark as reading") or _("牢 Mark as read")
-                        end,
-                        enabled = true,
-                        callback = function()
-                            local status
-                            if self.cover_info_cache and self.cover_info_cache[file] then
-                                local c_pages, c_percent_finished, c_status = unpack(self.cover_info_cache[file])
-                                status = c_status == "complete" and "reading" or "complete"
-                                -- Update the cache, even if it had a nil status before
-                                self.cover_info_cache[file] = {c_pages, c_percent_finished, status}
-                            else
-                                -- We assumed earlier an empty status meant "reading", so, flip that to "complete"
-                                status = "complete"
-                            end
-
-                            -- In case the book doesn't have a sidecar file, this'll create it
-                            local docinfo = DocSettings:open(file)
-                            if docinfo.data.summary and docinfo.data.summary.status then
-                                -- Book already had the full BookStatus table in its sidecar, easy peasy!
-                                docinfo.data.summary.status = status
-                            else
-                                -- No BookStatus table, create a minimal one...
-                                if docinfo.data.summary then
-                                    -- Err, a summary table with no status entry? Should never happen...
-                                    local summary = { status = status }
-                                    -- Append the status entry to the existing summary...
-                                    util.tableMerge(docinfo.data.summary, summary)
-                                else
-                                    -- No summary table at all, create a minimal one
-                                    local summary = { status = status }
-                                    docinfo:saveSetting("summary", summary)
-                                end
-                            end
-                            docinfo:flush()
-
-                            UIManager:close(self.file_dialog)
-                            self:updateItems()
-                        end,
-                    }
-                )
-
-                -- Keep on adding new buttons
                 table.insert(orig_buttons, {
                     { -- Allow user to view real size cover in ImageViewer
                         text = _("  Full size cover"),
@@ -328,14 +275,14 @@ function CoverMenu:updateItems(select_number)
                                 end
                                 local cover_bb = document:getCoverPageImage()
                                 if cover_bb then
-                                    local imgviewer = ImageViewer:new{
+                                    local imgviewer = ImageViewer:new {
                                         image = cover_bb,
                                         with_title_bar = false,
                                         fullscreen = true,
                                     }
                                     UIManager:show(imgviewer)
                                 else
-                                    UIManager:show(InfoMessage:new{
+                                    UIManager:show(InfoMessage:new {
                                         text = _("No cover image available."),
                                     })
                                 end
@@ -349,7 +296,7 @@ function CoverMenu:updateItems(select_number)
                         enabled = bookinfo.description and true or false,
                         callback = function()
                             local description = util.htmlToPlainTextIfHtml(bookinfo.description)
-                            local textviewer = TextViewer:new{
+                            local textviewer = TextViewer:new {
                                 title = _("Description:"),
                                 text = description,
                             }
@@ -383,6 +330,57 @@ function CoverMenu:updateItems(select_number)
                     },
                 })
                 table.insert(orig_buttons, {
+                    { -- Mark the book as read/unread
+                        text_func = function()
+                            -- If the book has a cache entry, it means it has a sidecar file, and it *may* have the info we need.
+                            local status
+                            if self.cover_info_cache and self.cover_info_cache[file] then
+                                local _, _, c_status = unpack(self.cover_info_cache[file])
+                                status = c_status
+                            end
+                            -- NOTE: status may still be nil if the BookStatus widget was never opened in this book.
+                            --       For our purposes, we assume this means reading or on hold, which is just fine.
+                            -- NOTE: This also means we assume "on hold" means reading, meaning it'll be flipped to "finished",
+                            --       which I'm personally okay with, too.
+                            --       c.f., BookStatusWidget:generateSwitchGroup for the three possible constant values.
+                            return status == "complete" and _("Mark as reading") or _("Mark as read")
+                        end,
+                        callback = function()
+                            local status
+                            if self.cover_info_cache and self.cover_info_cache[file] then
+                                local c_pages, c_percent_finished, c_status = unpack(self.cover_info_cache[file])
+                                status = c_status == "complete" and "reading" or "complete"
+                                -- Update the cache, even if it had a nil status before
+                                self.cover_info_cache[file] = { c_pages, c_percent_finished, status }
+                            else
+                                -- We assumed earlier an empty status meant "reading", so, flip that to "complete"
+                                status = "complete"
+                            end
+
+                            -- In case the book doesn't have a sidecar file, this'll create it
+                            local docinfo = DocSettings:open(file)
+                            if docinfo.data.summary and docinfo.data.summary.status then
+                                -- Book already had the full BookStatus table in its sidecar, easy peasy!
+                                docinfo.data.summary.status = status
+                            else
+                                -- No BookStatus table, create a minimal one...
+                                if docinfo.data.summary then
+                                    -- Err, a summary table with no status entry? Should never happen...
+                                    local summary = { status = status }
+                                    -- Append the status entry to the existing summary...
+                                    util.tableMerge(docinfo.data.summary, summary)
+                                else
+                                    -- No summary table at all, create a minimal one
+                                    local summary = { status = status }
+                                    docinfo:saveSetting("summary", summary)
+                                end
+                            end
+                            docinfo:flush()
+
+                            UIManager:close(self.file_dialog)
+                            self:updateItems()
+                        end,
+                    },
                     { -- Allow a new extraction (multiple interruptions, book replaced)...
                         text = _("累 Refresh cached book information"),
                         enabled = bookinfo and true or false,
@@ -400,7 +398,7 @@ function CoverMenu:updateItems(select_number)
 
                 -- Create the new ButtonDialogTitle, and let UIManager show it
                 local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
-                self.file_dialog = ButtonDialogTitle:new{
+                self.file_dialog = ButtonDialogTitle:new {
                     title = orig_title,
                     title_align = orig_title_align,
                     buttons = orig_buttons,
@@ -410,13 +408,13 @@ function CoverMenu:updateItems(select_number)
             end
 
             -- Remember our function
-            self.onFileHold_ours = self.onFileHold
+            self.showFileDialog_ours = self.showFileDialog
         end)
     end
     Menu.mergeTitleBarIntoLayout(self)
 end
 
--- Similar to onFileHold setup just above, but for History,
+-- Similar to showFileDialog setup just above, but for History,
 -- which is plugged in main.lua _FileManagerHistory_updateItemTable()
 function CoverMenu:onHistoryMenuHold(item)
     -- Call original function: it will create a ButtonDialog
@@ -458,14 +456,14 @@ function CoverMenu:onHistoryMenuHold(item)
                     end
                     local cover_bb = document:getCoverPageImage()
                     if cover_bb then
-                        local imgviewer = ImageViewer:new{
+                        local imgviewer = ImageViewer:new {
                             image = cover_bb,
                             with_title_bar = false,
                             fullscreen = true,
                         }
                         UIManager:show(imgviewer)
                     else
-                        UIManager:show(InfoMessage:new{
+                        UIManager:show(InfoMessage:new {
                             text = _("No cover image available."),
                         })
                     end
@@ -479,7 +477,7 @@ function CoverMenu:onHistoryMenuHold(item)
             enabled = bookinfo.description and true or false,
             callback = function()
                 local description = util.htmlToPlainTextIfHtml(bookinfo.description)
-                local textviewer = TextViewer:new{
+                local textviewer = TextViewer:new {
                     title = _("Description:"),
                     text = description,
                 }
@@ -526,7 +524,7 @@ function CoverMenu:onHistoryMenuHold(item)
 
     -- Create the new ButtonDialog, and let UIManager show it
     local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
-    self.histfile_dialog = ButtonDialogTitle:new{
+    self.histfile_dialog = ButtonDialogTitle:new {
         title = orig_title,
         title_align = orig_title_align,
         buttons = orig_buttons,
@@ -535,7 +533,7 @@ function CoverMenu:onHistoryMenuHold(item)
     return true
 end
 
--- Similar to onFileHold setup just above, but for Collections,
+-- Similar to showFileDialog setup just above, but for Collections,
 -- which is plugged in main.lua _FileManagerCollections_updateItemTable()
 function CoverMenu:onCollectionsMenuHold(item)
     -- Call original function: it will create a ButtonDialog
@@ -577,14 +575,14 @@ function CoverMenu:onCollectionsMenuHold(item)
                     end
                     local cover_bb = document:getCoverPageImage()
                     if cover_bb then
-                        local imgviewer = ImageViewer:new{
+                        local imgviewer = ImageViewer:new {
                             image = cover_bb,
                             with_title_bar = false,
                             fullscreen = true,
                         }
                         UIManager:show(imgviewer)
                     else
-                        UIManager:show(InfoMessage:new{
+                        UIManager:show(InfoMessage:new {
                             text = _("No cover image available."),
                         })
                     end
@@ -598,7 +596,7 @@ function CoverMenu:onCollectionsMenuHold(item)
             enabled = bookinfo.description and true or false,
             callback = function()
                 local description = util.htmlToPlainTextIfHtml(bookinfo.description)
-                local textviewer = TextViewer:new{
+                local textviewer = TextViewer:new {
                     title = _("Description:"),
                     text = description,
                 }
@@ -644,7 +642,7 @@ function CoverMenu:onCollectionsMenuHold(item)
     })
     -- Create the new ButtonDialog, and let UIManager show it
     local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
-    self.collfile_dialog = ButtonDialogTitle:new{
+    self.collfile_dialog = ButtonDialogTitle:new {
         title = orig_title,
         title_align = orig_title_align,
         buttons = orig_buttons,
@@ -724,7 +722,7 @@ function CoverMenu:tapPlus()
 
     -- Create the new ButtonDialogTitle, and let UIManager show it
     local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
-    self.file_dialog = ButtonDialogTitle:new{
+    self.file_dialog = ButtonDialogTitle:new {
         title = orig_title,
         title_align = orig_title_align,
         buttons = orig_buttons,

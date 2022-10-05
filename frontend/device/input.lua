@@ -341,17 +341,17 @@ function Input:adjustTouchScale(ev, by)
     end
 end
 
-function Input:adjustTouchMirrorX(ev, width)
+function Input:adjustTouchMirrorX(ev, max_x)
     if ev.type == C.EV_ABS
     and (ev.code == C.ABS_X or ev.code == C.ABS_MT_POSITION_X) then
-        ev.value = width - ev.value
+        ev.value = max_x - ev.value
     end
 end
 
-function Input:adjustTouchMirrorY(ev, height)
+function Input:adjustTouchMirrorY(ev, max_y)
     if ev.type == C.EV_ABS
     and (ev.code == C.ABS_Y or ev.code == C.ABS_MT_POSITION_Y) then
-        ev.value = height - ev.value
+        ev.value = max_y - ev.value
     end
 end
 
@@ -454,7 +454,7 @@ end
 -- Reset the gesture parsing state to a blank slate
 function Input:resetState()
     if self.gesture_detector then
-        self.gesture_detector:clearStates()
+        self.gesture_detector:dropContacts()
         -- Resets the clock source probe
         self.gesture_detector:resetClockSource()
     end
@@ -839,6 +839,19 @@ function Input:handleTouchEvLegacy(ev)
                 self:setCurrentMtSlotChecked("id", 1)
             else
                 self:setCurrentMtSlotChecked("id", -1)
+
+                -- On Kobo Mk. 3 devices, the frame that reports a contact lift *actually* does the coordinates transform for us...
+                -- Unfortunately, our own transforms are not stateful, so, just revert 'em here,
+                -- since we can't simply avoid not doing 'em for that frame...
+                -- c.f., https://github.com/koreader/koreader/issues/2128#issuecomment-1236289909 for logs on a Touch B
+                -- NOTE: We can afford to do this here instead of on SYN_REPORT because the kernel *always*
+                --       reports ABS_PRESSURE after ABS_X/ABS_Y.
+                if self.touch_kobo_mk3_protocol then
+                    local y = 599 - self:getCurrentMtSlotData("x") -- Mk. 3 devices are all 600x800, so just hard-code it here.
+                    local x = self:getCurrentMtSlotData("y")
+                    self:setCurrentMtSlot("x", x)
+                    self:setCurrentMtSlot("y", y)
+                end
             end
         end
     elseif ev.type == C.EV_SYN then
@@ -1139,7 +1152,9 @@ function Input:waitEvent(now, deadline)
                         -- Deadline hasn't been blown yet, honor it.
                         poll_timeout = poll_deadline - now
                     else
-                        -- We've already blown the deadline: make select return immediately (most likely straight to timeout)
+                        -- We've already blown the deadline: make select return immediately (most likely straight to timeout).
+                        -- NOTE: With the timerfd backend, this is sometimes a tad optimistic,
+                        --       as we may in fact retry for a few iterations while waiting for the timerfd to actually expire.
                         poll_timeout = 0
                     end
                 end
@@ -1192,19 +1207,14 @@ function Input:waitEvent(now, deadline)
                             touch_ges = self.timer_callbacks[1].callback()
                         end
 
-                        -- NOTE: If it was a timerfd, we *may* also need to close the fd.
-                        --       GestureDetector only calls Input:setTimeout for "hold" & "double_tap" gestures.
-                        --       For double taps, the callback itself doesn't interact with the timer_callbacks list,
-                        --       but for holds, it *will* call GestureDetector:clearState on "hold_release" (and *only* then),
-                        --       and *that* already takes care of pop'ping the (hold) timer and closing the fd,
-                        --       via Input:clearTimeout(slot, "hold")...
-                        if not touch_ges or touch_ges.ges ~= "hold_release" then
-                            -- That leaves explicit cleanup to every other case (i.e., nil or every other gesture)
-                            if timerfd then
-                                input.clearTimer(timerfd)
-                            end
-                            table.remove(self.timer_callbacks, timer_idx)
+                        -- Cleanup after the timer callback.
+                        -- GestureDetector has guards in place to avoid double frees in case the callback itself
+                        -- affected the timerfd or timer_callbacks list (e.g., by dropping a contact).
+                        if timerfd then
+                            input.clearTimer(timerfd)
                         end
+                        table.remove(self.timer_callbacks, timer_idx)
+
                         if touch_ges then
                             self:gestureAdjustHook(touch_ges)
                             return {
@@ -1277,7 +1287,6 @@ function Input:waitEvent(now, deadline)
                 -- NOTE: This is rather spammy and computationally intensive,
                 --       and we can't conditionally prevent evalutation of function arguments,
                 --       so, just hide the whole thing behind a branch ;).
-                DEBUG:logEv(event)
                 if event.type == C.EV_KEY then
                     logger.dbg(string.format(
                         "key event => code: %d (%s), value: %s, time: %d.%06d",

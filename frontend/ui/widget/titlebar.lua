@@ -15,6 +15,8 @@ local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local Screen = Device.screen
 
+local DGENERIC_ICON_SIZE = G_defaults:readSetting("DGENERIC_ICON_SIZE")
+
 local TitleBar = OverlapGroup:extend{
     width = nil, -- default to screen width
     fullscreen = false, -- larger font and small adjustments if fullscreen
@@ -286,7 +288,7 @@ function TitleBar:init()
         end
         local line_widget = LineWidget:new{
             dimen = Geom:new{ w = self.width, h = Size.line.thick },
-            background = self.bottom_line_color;
+            background = self.bottom_line_color
         }
         if self.bottom_line_h_padding then
             line_widget.dimen.w = line_widget.dimen.w - 2 * self.bottom_line_h_padding

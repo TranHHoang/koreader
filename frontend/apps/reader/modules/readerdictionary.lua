@@ -16,7 +16,10 @@ local NetworkMgr = require("ui/network/manager")
 local SortWidget = require("ui/widget/sortwidget")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
+local ffi = require("ffi")
+local C = ffi.C
 local ffiUtil  = require("ffi/util")
+local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 local time = require("ui/time")
 local util  = require("util")
@@ -104,7 +107,7 @@ function ReaderDictionary:init()
     if self.ui then
         self.ui.menu:registerToMainMenu(self)
     end
-    self.data_dir = STARDICT_DATA_DIR or
+    self.data_dir = G_defaults:readSetting("STARDICT_DATA_DIR") or
         os.getenv("STARDICT_DATA_DIR") or
         DataStorage:getDataDir() .. "/data/dict"
 
@@ -132,7 +135,7 @@ function ReaderDictionary:init()
             if f then
                 local content = f:read("*all")
                 f:close()
-                local dictname = content:match("\nbookname=(.-)\n")
+                local dictname = content:match("\nbookname=(.-)\r?\n")
                 local is_html = content:find("sametypesequence=h", 1, true) ~= nil
                 -- sdcv won't use dict that don't have a bookname=
                 if dictname then
@@ -792,7 +795,16 @@ function ReaderDictionary:rawSdcv(words, dict_names, fuzzy_search, lookup_progre
         -- definition found, sdcv will output some message on stderr, and
         -- let stdout empty) by appending an "echo":
         cmd = cmd .. "; echo"
+        -- NOTE: Bionic doesn't support rpath, but does honor LD_LIBRARY_PATH...
+        --       Give it a shove so it can actually find the STL.
+        if Device:isAndroid() then
+            C.setenv("LD_LIBRARY_PATH", "./libs", 1)
+        end
         local completed, results_str = Trapper:dismissablePopen(cmd, lookup_progress_msg)
+        if Device:isAndroid() then
+            -- NOTE: It's unset by default, so this is perfectly fine.
+            C.unsetenv("LD_LIBRARY_PATH")
+        end
         lookup_cancelled = not completed
         if results_str and results_str ~= "\n" then -- \n is when lookup was cancelled
             -- sdcv can return multiple results if we passed multiple words to
@@ -1066,7 +1078,6 @@ function ReaderDictionary:downloadDictionaryPrep(dict, size)
     local dummy, filename = util.splitFilePathName(dict.url)
     local download_location = string.format("%s/%s", self.data_dir, filename)
 
-    local lfs = require("libs/libkoreader-lfs")
     if lfs.attributes(download_location) then
         UIManager:show(ConfirmBox:new{
             text =  _("File already exists. Overwrite?"),
@@ -1119,14 +1130,16 @@ function ReaderDictionary:downloadDictionary(dict, download_location, continue)
     end
 
     socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
-    local c = socket.skip(1, http.request{
+    local code, headers, status = socket.skip(1, http.request{
         url     = dict.url,
         sink    = ltn12.sink.file(io.open(download_location, "w")),
     })
     socketutil:reset_timeout()
-    if c == 200 then
+    if code == 200 then
         logger.dbg("file downloaded to", download_location)
     else
+        logger.dbg("ReaderDictionary: Request failed:", status or code)
+        logger.dbg("ReaderDictionary: Response headers:", headers)
         UIManager:show(InfoMessage:new{
             text = _("Could not save file to:\n") .. BD.filepath(download_location),
             --timeout = 3,
