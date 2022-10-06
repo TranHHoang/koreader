@@ -112,9 +112,8 @@ local Font = {
         [5] = "NotoSansArabicUI-Regular.ttf",
         [6] = "NotoSansDevanagariUI-Regular.ttf",
         [7] = "NotoSansBengaliUI-Regular.ttf",
-        [8] = "NotoSansNerd-Regular.ttf",
-        [9] = "freefont/FreeSans.ttf",
-        [10] = "freefont/FreeSerif.ttf",
+        [8] = "freefont/FreeSans.ttf",
+        [9] = "freefont/FreeSerif.ttf",
     },
     -- Additional fallback fonts are managed by frontend/ui/elements/font_ui_fallbacks.lua
     -- Add any after NotoSansCJKsc (because CJKsc has better symbols, and has 'locl' OTF
@@ -131,7 +130,7 @@ local Font = {
 
 if G_reader_settings and G_reader_settings:has("font_ui_fallbacks") then
     local additional_fallbacks = G_reader_settings:readSetting("font_ui_fallbacks")
-    for i=#additional_fallbacks, 1, -1 do
+    for i = #additional_fallbacks, 1, -1 do
         table.insert(Font.fallbacks, Font.additional_fallback_insert_indice, additional_fallbacks[i])
     end
     logger.dbg("updated Font.fallbacks:", Font.fallbacks)
@@ -158,7 +157,7 @@ end
 -- Synthetized bold strength can be tuned:
 -- local bold_strength_factor = 1   -- really too bold
 -- local bold_strength_factor = 1/2 -- bold enough
-local bold_strength_factor = 3/8 -- as crengine, lighter
+local bold_strength_factor = 3 / 8 -- as crengine, lighter
 
 -- Add some properties to a face object as needed
 local _completeFaceProperties = function(face_obj)
@@ -198,7 +197,7 @@ local _getFallbackFont = function(face_obj, num)
             -- fallback, drawn with synthetized bold (often, bold fonts
             -- have less glyphs than their regular counterpart).
             if face_obj.is_real_bold or face_obj.wants_bold == true then
-                                -- (not if wants_bold==Font.FORCE_SYNTHETIZED_BOLD)
+                -- (not if wants_bold==Font.FORCE_SYNTHETIZED_BOLD)
                 local bold_variant_name = Font:getBoldVariantName(fontname)
                 if bold_variant_name then
                     -- There is a bold variant of that fallback font, that we can use
@@ -254,7 +253,7 @@ function Font:getFace(font, size, faceindex)
 
     -- Make a hash from the realname (many fonts in our fontmap use
     -- the same font file: have them share their glyphs cache)
-    local hash = realname..size
+    local hash = realname .. size
     if faceindex then
         hash = hash .. "/" .. faceindex
     end
@@ -272,7 +271,7 @@ function Font:getFace(font, size, faceindex)
         end
     else
         -- Build face if not found
-        local builtin_font_location = FontList.fontdir.."/"..realname
+        local builtin_font_location = FontList.fontdir .. "/" .. realname
         local ok, face = pcall(Freetype.newFace, builtin_font_location, size, faceindex)
 
         -- Not all fonts are bundled on all platforms because they come with the system.
@@ -389,7 +388,7 @@ function Font:getAdjustedFace(face, bold)
     -- so let's make a shallow clone of this face_obj, and have it cached.
     -- (Different hash if real bold accepted or not, as the fallback
     -- fonts list may then be different.)
-    local hash = face.hash..(bold == Font.FORCE_SYNTHETIZED_BOLD and "synthbold" or "realbold")
+    local hash = face.hash .. (bold == Font.FORCE_SYNTHETIZED_BOLD and "synthbold" or "realbold")
     local face_obj = self.faces[hash]
     if face_obj then
         return face_obj, bold
@@ -407,7 +406,7 @@ function Font:getAdjustedFace(face, bold)
         hb_features = face.hb_features,
         is_real_bold = nil,
         wants_bold = bold, -- true or Font.FORCE_SYNTHETIZED_BOLD, used
-                           -- to pick the appropritate fallback fonts
+        -- to pick the appropritate fallback fonts
     }
     face_obj.getFallbackFont = function(num)
         return _getFallbackFont(face_obj, num)
