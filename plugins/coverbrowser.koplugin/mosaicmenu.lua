@@ -25,6 +25,7 @@ local UnderlineContainer = require("ui/widget/container/underlinecontainer")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
+local AlphaContainer = require("ui/widget/container/alphacontainer")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 local util = require("util")
@@ -630,7 +631,7 @@ function MosaicMenuItem:update()
                 or false
         end
 
-        local available_height = 60
+        local available_height = 100
         local dir_font_size = 10
         local directory
         while true do
@@ -641,6 +642,7 @@ function MosaicMenuItem:update()
                 text = is_series and util.splitToWords(self.mandatory)[1] or text,
                 face = Font:getFace("infofont", dir_font_size),
                 width = is_series and Screen:scaleBySize(20) or dimen_in.w,
+                line_height = 0.6,
                 height_adjust = true,
                 height_overflow_show_ellipsis = true,
                 alignment = "center",
@@ -679,35 +681,38 @@ function MosaicMenuItem:update()
                 mainCover and (#subCovers == 0 and CenterContainer or LeftContainer):new{
                     dimen = {
                         w = dimen_in.w,
-                        h = dimen_in.h / math.ceil(files_count / 2),
+                        h = dimen_in.h / math.ceil(files_count / 2) + (#subCovers > 2 and Screen:scaleBySize(12) or 0),
                     },
                     mainCover,
                 } or WidgetContainer:new{},
                 subCovers[1] and RightContainer:new{
                     dimen = {
                         w = dimen_in.w,
-                        h = dimen_in.h / math.ceil(files_count / 2),
+                        h = dimen_in.h / math.ceil(files_count / 2) + (#subCovers > 2 and Screen:scaleBySize(12) or 0),
                     },
                     subCovers[1],
                 } or WidgetContainer:new{},
                 subCovers[2] and (files_count > 3 and LeftContainer or CenterContainer):new{
                     dimen = {
                         w = dimen_in.w,
-                        h = dimen_in.h * 1.5,
+                        h = dimen_in.h * 1.5 - (#subCovers > 2 and Screen:scaleBySize(10) or 0),
                     },
                     subCovers[2],
                 } or WidgetContainer:new{},
                 subCovers[3] and RightContainer:new{
                     dimen = {
                         w = dimen_in.w,
-                        h = dimen_in.h * 1.5,
+                        h = dimen_in.h * 1.5 - (#subCovers > 2 and Screen:scaleBySize(10) or 0),
                     },
                     subCovers[3],
                 } or WidgetContainer:new{},
                 (is_series and RightContainer or CenterContainer):new{
                     dimen = dimen_in,
                     bordersize = 0,
-                    directory,
+                    AlphaContainer:new{
+                        alpha = 0.9,
+                        directory,
+                    },
                 },
             }
         }
