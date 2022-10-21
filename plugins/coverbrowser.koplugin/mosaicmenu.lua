@@ -681,28 +681,28 @@ function MosaicMenuItem:update()
                 mainCover and (#subCovers == 0 and CenterContainer or LeftContainer):new{
                     dimen = {
                         w = dimen_in.w,
-                        h = dimen_in.h / math.ceil(files_count / 2) + (#subCovers > 2 and Screen:scaleBySize(12) or 0),
+                        h = dimen_in.h / math.ceil(files_count / 2) + (#subCovers > 2 and Screen:scaleBySize(8) or 0),
                     },
                     mainCover,
                 } or WidgetContainer:new{},
                 subCovers[1] and RightContainer:new{
                     dimen = {
                         w = dimen_in.w,
-                        h = dimen_in.h / math.ceil(files_count / 2) + (#subCovers > 2 and Screen:scaleBySize(12) or 0),
+                        h = dimen_in.h / math.ceil(files_count / 2) + (#subCovers > 2 and Screen:scaleBySize(8) or 0),
                     },
                     subCovers[1],
                 } or WidgetContainer:new{},
                 subCovers[2] and (files_count > 3 and LeftContainer or CenterContainer):new{
                     dimen = {
                         w = dimen_in.w,
-                        h = dimen_in.h * 1.5 - (#subCovers > 2 and Screen:scaleBySize(10) or 0),
+                        h = dimen_in.h * 1.5 - (#subCovers > 2 and Screen:scaleBySize(8) or 0),
                     },
                     subCovers[2],
                 } or WidgetContainer:new{},
                 subCovers[3] and RightContainer:new{
                     dimen = {
                         w = dimen_in.w,
-                        h = dimen_in.h * 1.5 - (#subCovers > 2 and Screen:scaleBySize(10) or 0),
+                        h = dimen_in.h * 1.5 - (#subCovers > 2 and Screen:scaleBySize(8) or 0),
                     },
                     subCovers[3],
                 } or WidgetContainer:new{},
@@ -952,7 +952,7 @@ function MosaicMenuItem:paintTo(bb, x, y)
         else
             ix = self.width - math.ceil((self.width - target.dimen.w)/2) - corner_mark:getSize().w + 2
         end
-        local iy = self.height - math.ceil((self.height - target.dimen.h)/2) - corner_mark:getSize().h - 2
+        local iy = self.height - math.ceil((self.height - target.dimen.h)/2) - corner_mark:getSize().h - 3
         -- math.ceil() makes it looks better than math.floor()
         corner_mark:paintTo(bb, x+ix, y+iy)
     end
