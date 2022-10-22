@@ -18,6 +18,7 @@ require("ffi/posix_h")
 
 local function yes() return true end
 local function no() return false end
+local function NOP() return end
 
 local function koboEnableWifi(toggle)
     if toggle == true then
@@ -80,8 +81,8 @@ local function writeToSys(val, file)
         logger.err("Cannot open file `" .. file .. "`:", ffi.string(C.strerror(ffi.errno())))
         return
     end
-    local bytes = #val + 1 -- + LF
-    local nw = C.write(fd, val .. "\n", bytes)
+    local bytes = #val
+    local nw = C.write(fd, val, bytes)
     if nw == -1 then
         logger.err("Cannot write `" .. val .. "` to file `" .. file .. "`:", ffi.string(C.strerror(ffi.errno())))
     end
@@ -131,7 +132,7 @@ local function getRTCName()
     end
 end
 
-local Kobo = Generic:new{
+local Kobo = Generic:extend{
     model = "Kobo",
     isKobo = yes,
     isTouchDevice = yes, -- all of them are
@@ -192,21 +193,21 @@ local Kobo = Generic:new{
 }
 
 -- Kobo Touch A/B:
-local KoboTrilogyAB = Kobo:new{
+local KoboTrilogyAB = Kobo:extend{
     model = "Kobo_trilogy_AB",
     touch_kobo_mk3_protocol = true,
     hasKeys = yes,
     hasMultitouch = no,
 }
 -- Kobo Touch C:
-local KoboTrilogyC = Kobo:new{
+local KoboTrilogyC = Kobo:extend{
     model = "Kobo_trilogy_C",
     hasKeys = yes,
     hasMultitouch = no,
 }
 
 -- Kobo Mini:
-local KoboPixie = Kobo:new{
+local KoboPixie = Kobo:extend{
     model = "Kobo_pixie",
     display_dpi = 200,
     hasMultitouch = no,
@@ -215,7 +216,7 @@ local KoboPixie = Kobo:new{
 }
 
 -- Kobo Aura One:
-local KoboDaylight = Kobo:new{
+local KoboDaylight = Kobo:extend{
     model = "Kobo_daylight",
     hasFrontlight = yes,
     touch_phoenix_protocol = true,
@@ -229,8 +230,10 @@ local KoboDaylight = Kobo:new{
 }
 
 -- Kobo Aura H2O:
-local KoboDahlia = Kobo:new{
+local KoboDahlia = Kobo:extend{
     model = "Kobo_dahlia",
+    canToggleChargingLED = yes,
+    led_uses_channel_3 = true,
     hasFrontlight = yes,
     touch_phoenix_protocol = true,
     -- There's no slot 0, the first finger gets assigned slot 1, and the second slot 2.
@@ -243,7 +246,7 @@ local KoboDahlia = Kobo:new{
 }
 
 -- Kobo Aura HD:
-local KoboDragon = Kobo:new{
+local KoboDragon = Kobo:extend{
     model = "Kobo_dragon",
     hasFrontlight = yes,
     hasMultitouch = no,
@@ -251,7 +254,7 @@ local KoboDragon = Kobo:new{
 }
 
 -- Kobo Glo:
-local KoboKraken = Kobo:new{
+local KoboKraken = Kobo:extend{
     model = "Kobo_kraken",
     hasFrontlight = yes,
     hasMultitouch = no,
@@ -259,7 +262,7 @@ local KoboKraken = Kobo:new{
 }
 
 -- Kobo Aura:
-local KoboPhoenix = Kobo:new{
+local KoboPhoenix = Kobo:extend{
     model = "Kobo_phoenix",
     hasFrontlight = yes,
     touch_phoenix_protocol = true,
@@ -273,7 +276,7 @@ local KoboPhoenix = Kobo:new{
 }
 
 -- Kobo Aura H2O2:
-local KoboSnow = Kobo:new{
+local KoboSnow = Kobo:extend{
     model = "Kobo_snow",
     hasFrontlight = yes,
     touch_snow_protocol = true,
@@ -289,7 +292,7 @@ local KoboSnow = Kobo:new{
 
 -- Kobo Aura H2O2, Rev2:
 --- @fixme Check if the Clara fix actually helps here... (#4015)
-local KoboSnowRev2 = Kobo:new{
+local KoboSnowRev2 = Kobo:extend{
     model = "Kobo_snow_r2",
     isMk7 = yes,
     hasFrontlight = yes,
@@ -303,7 +306,7 @@ local KoboSnowRev2 = Kobo:new{
 }
 
 -- Kobo Aura second edition:
-local KoboStar = Kobo:new{
+local KoboStar = Kobo:extend{
     model = "Kobo_star",
     hasFrontlight = yes,
     touch_phoenix_protocol = true,
@@ -311,7 +314,7 @@ local KoboStar = Kobo:new{
 }
 
 -- Kobo Aura second edition, Rev 2:
-local KoboStarRev2 = Kobo:new{
+local KoboStarRev2 = Kobo:extend{
     model = "Kobo_star_r2",
     isMk7 = yes,
     hasFrontlight = yes,
@@ -320,7 +323,7 @@ local KoboStarRev2 = Kobo:new{
 }
 
 -- Kobo Glo HD:
-local KoboAlyssum = Kobo:new{
+local KoboAlyssum = Kobo:extend{
     model = "Kobo_alyssum",
     hasFrontlight = yes,
     touch_phoenix_protocol = true,
@@ -329,14 +332,14 @@ local KoboAlyssum = Kobo:new{
 }
 
 -- Kobo Touch 2.0:
-local KoboPika = Kobo:new{
+local KoboPika = Kobo:extend{
     model = "Kobo_pika",
     touch_phoenix_protocol = true,
     main_finger_slot = 1,
 }
 
 -- Kobo Clara HD:
-local KoboNova = Kobo:new{
+local KoboNova = Kobo:extend{
     model = "Kobo_nova",
     isMk7 = yes,
     canToggleChargingLED = yes,
@@ -362,7 +365,7 @@ local KoboNova = Kobo:new{
 --       i.e., this will affect KSM users.
 --       c.f., https://github.com/koreader/koreader/pull/4414#issuecomment-449652335
 --       There's also a CM_ROTARY_ENABLE command, but which seems to do as much nothing as the STATUS one...
-local KoboFrost = Kobo:new{
+local KoboFrost = Kobo:extend{
     model = "Kobo_frost",
     isMk7 = yes,
     canToggleChargingLED = yes,
@@ -387,7 +390,7 @@ local KoboFrost = Kobo:new{
 
 -- Kobo Libra:
 -- NOTE: Assume the same quirks as the Forma apply.
-local KoboStorm = Kobo:new{
+local KoboStorm = Kobo:extend{
     model = "Kobo_storm",
     isMk7 = yes,
     canToggleChargingLED = yes,
@@ -418,7 +421,7 @@ local KoboStorm = Kobo:new{
 
 -- Kobo Nia:
 --- @fixme: Mostly untested, assume it's Clara-ish for now.
-local KoboLuna = Kobo:new{
+local KoboLuna = Kobo:extend{
     model = "Kobo_luna",
     isMk7 = yes,
     canToggleChargingLED = yes,
@@ -428,7 +431,7 @@ local KoboLuna = Kobo:new{
 }
 
 -- Kobo Elipsa
-local KoboEuropa = Kobo:new{
+local KoboEuropa = Kobo:extend{
     model = "Kobo_europa",
     isSunxi = yes,
     hasEclipseWfm = yes,
@@ -448,7 +451,7 @@ local KoboEuropa = Kobo:new{
 }
 
 -- Kobo Sage
-local KoboCadmus = Kobo:new{
+local KoboCadmus = Kobo:extend{
     model = "Kobo_cadmus",
     isSunxi = yes,
     hasEclipseWfm = yes,
@@ -481,7 +484,7 @@ local KoboCadmus = Kobo:new{
 }
 
 -- Kobo Libra 2:
-local KoboIo = Kobo:new{
+local KoboIo = Kobo:extend{
     model = "Kobo_io",
     isMk7 = yes,
     hasEclipseWfm = yes,
@@ -513,7 +516,7 @@ local KoboIo = Kobo:new{
 }
 
 -- Kobo Clara 2E:
-local KoboGoldfinch = Kobo:new{
+local KoboGoldfinch = Kobo:extend{
     model = "Kobo_goldfinch",
     isMk7 = yes,
     hasEclipseWfm = yes,
@@ -682,15 +685,15 @@ function Kobo:init()
     self.default_cpu_governor = getCPUGovernor(self.cpu_governor_knob)
     -- NOP unsupported methods
     if not self.default_cpu_governor then
-        self.performanceCPUGovernor = function() end
-        self.defaultCPUGovernor = function() end
+        self.performanceCPUGovernor = NOP
+        self.defaultCPUGovernor = NOP
     end
 
     -- And while we're on CPU-related endeavors...
     self.cpu_count = self:isSMP() and getCPUCount() or 1
     -- NOP unsupported methods
     if self.cpu_count == 1 then
-        self.enableCPUCores = function() end
+        self.enableCPUCores = NOP
     end
 
     -- Automagically set this so we never have to remember to do it manually ;p
@@ -742,6 +745,7 @@ function Kobo:init()
         dodgy_rtc = dodgy_rtc,
     }
 
+    -- Let generic properly setup the standard stuff
     Generic.init(self)
 
     -- Various HW Buttons, Switches & Synthetic NTX events
@@ -768,14 +772,23 @@ function Kobo:init()
     -- See if the device supports key repeat
     if not self:getKeyRepeat() then
         -- NOP unsupported methods
-        self.disableKeyRepeat = function() end
-        self.restoreKeyRepeat = function() end
+        self.disableKeyRepeat = NOP
+        self.restoreKeyRepeat = NOP
+    end
+
+    -- Detect the NTX charging LED sysfs knob
+    if util.pathExists("/sys/devices/platform/ntx_led/lit") then
+        self.ntx_lit_sysfs_knob = "/sys/devices/platform/ntx_led/lit"
+    elseif util.pathExists("/sys/devices/platform/pmic_light.1/lit") then
+        self.ntx_lit_sysfs_knob = "/sys/devices/platform/pmic_light.1/lit"
+    else
+        self.canToggleChargingLED = no
     end
 
     -- NOP unsupported methods
     if not self:canToggleChargingLED() then
-        self.toggleChargingLED = function() end
-        self.setupChargingLED = function() end
+        self.toggleChargingLED = NOP
+        self.setupChargingLED = NOP
     end
 
     -- We have no way of querying the current state of the charging LED, so, start from scratch.
@@ -917,12 +930,13 @@ function Kobo:getFirmwareVersion()
     local version_str = version_file:read("*line")
     version_file:close()
 
-    local i = 0
-    for field in ffiUtil.gsplit(version_str, ",", false, false) do
-        i = i + 1
-        if (i == 3) then
-             self.firmware_rev = field
+    local i = 1
+    for field in version_str:gmatch("([^,]+)") do
+        if i == 3 then
+            self.firmware_rev = field
+            break
         end
+        i = i + 1
     end
 end
 
@@ -1015,8 +1029,16 @@ function Kobo:standby(max_duration)
 
     if ret then
         logger.info("Kobo standby: zZz zZz zZz zZz... And woke up!")
+        if G_reader_settings:isTrue("pm_debug_entry_failure") then
+            -- NOTE: This is a debug option where we coopt the charging LED, hence us not using setupChargingLED here.
+            --       (It's called on resume anyway).
+            self:toggleChargingLED(false)
+        end
     else
         logger.warn("Kobo standby: the kernel refused to enter standby!")
+        if G_reader_settings:isTrue("pm_debug_entry_failure") then
+            self:toggleChargingLED(true)
+        end
     end
 
     if max_duration then
@@ -1119,10 +1141,16 @@ function Kobo:suspend()
 
     if ret then
         logger.info("Kobo suspend: ZzZ ZzZ ZzZ... And woke up!")
+        if G_reader_settings:isTrue("pm_debug_entry_failure") then
+            self:toggleChargingLED(false)
+        end
     else
         logger.warn("Kobo suspend: the kernel refused to enter suspend!")
         -- Reset state-extended back to 0 since we are giving up.
         writeToSys("0", "/sys/power/state-extended")
+        if G_reader_settings:isTrue("pm_debug_entry_failure") then
+            self:toggleChargingLED(true)
+        end
     end
 
     -- NOTE: Ideally, we'd need a way to warn the user that suspending
@@ -1227,6 +1255,17 @@ function Kobo:toggleChargingLED(toggle)
     if toggle == nil then
         return
     end
+    -- Don't do anything if the state is already correct
+    -- NOTE: What happens to the LED when attempting/successfully entering PM is... kind of a mess.
+    --       On a H2O, even *attempting* to enter PM will kill the light (and it'll stay off).
+    --       On a Forma, a failed attempt will *not* affect the light, but a successful one *will* kill it,
+    --       be that standby or suspend, but it'll be restored on wakeup...
+    --       On sunxi, PM appears to have zero effect on the LED.
+    if self.charging_led_state == toggle then
+        return
+    end
+    self.charging_led_state = toggle
+    logger.dbg("Kobo: Turning the charging LED", toggle and "on" or "off")
 
     -- NOTE: While most/all Kobos actually have a charging LED, and it can usually be fiddled with in a similar fashion,
     --       we've seen *extremely* weird behavior in the past when playing with it on older devices (c.f., #5479).
@@ -1234,9 +1273,9 @@ function Kobo:toggleChargingLED(toggle)
     --       (when it does, it's an option in the Energy saving settings),
     --       which is why we also limit ourselves to "true" on devices where this was tested.
     -- c.f., drivers/misc/ntx_misc_light.c
-    local f = io.open("/sys/devices/platform/ntx_led/lit", "we")
-    if not f then
-        logger.err("cannot open /sys/devices/platform/ntx_led/lit for writing!")
+    local fd = C.open(self.ntx_lit_sysfs_knob, bit.bor(C.O_WRONLY, C.O_CLOEXEC)) -- procfs/sysfs, we shouldn't need O_TRUNC
+    if fd == -1 then
+        logger.err("Cannot open file `" .. self.ntx_lit_sysfs_knob .. "`:", ffi.string(C.strerror(ffi.errno())))
         return false
     end
 
@@ -1246,42 +1285,20 @@ function Kobo:toggleChargingLED(toggle)
     if toggle == true then
         -- NOTE: Technically, Nickel forces a toggle off before that, too.
         --       But since we do that on startup, it shouldn't be necessary here...
-        if self.led_uses_channel_3 then
-            f:write("ch 3")
-            f:flush()
-            f:write("cur 1")
-            f:flush()
-            f:write("dc 63")
-            f:flush()
+        for ch = self.led_uses_channel_3 and 3 or 4, 4 do
+            C.write(fd, "ch " .. tostring(ch), 4)
+            C.write(fd, "cur 1", 5)
+            C.write(fd, "dc 63", 5)
         end
-        f:write("ch 4")
-        f:flush()
-        f:write("cur 1")
-        f:flush()
-        f:write("dc 63")
-        f:flush()
     else
-        f:write("ch 3")
-        f:flush()
-        f:write("cur 1")
-        f:flush()
-        f:write("dc 0")
-        f:flush()
-        f:write("ch 4")
-        f:flush()
-        f:write("cur 1")
-        f:flush()
-        f:write("dc 0")
-        f:flush()
-        f:write("ch 5")
-        f:flush()
-        f:write("cur 1")
-        f:flush()
-        f:write("dc 0")
-        f:flush()
+        for ch = 3, 5 do
+            C.write(fd, "ch " .. tostring(ch), 4)
+            C.write(fd, "cur 1", 5)
+            C.write(fd, "dc 0", 4)
+        end
     end
 
-    f:close()
+    C.close(fd)
 end
 
 -- Return the highest core number
@@ -1300,7 +1317,7 @@ end
 
 function Kobo:enableCPUCores(amount)
     -- CPU0 is *always* online ;).
-    for n=1, self.cpu_count do
+    for n = 1, self.cpu_count do
         local path = "/sys/devices/system/cpu/cpu" .. n .. "/online"
         local up
         if n >= amount then
@@ -1309,11 +1326,7 @@ function Kobo:enableCPUCores(amount)
             up = "1"
         end
 
-        local f = io.open(path, "we")
-        if f then
-            f:write(up)
-            f:close()
-        end
+        writeToSys(up, path)
     end
 end
 

@@ -16,7 +16,7 @@ local Screen = Device.screen
 
 local DEFAULT_FULL_REFRESH_COUNT = 6
 
--- there is only one instance of this
+-- This is a singleton
 local UIManager = {
     -- trigger a full refresh when counter reaches FULL_REFRESH_COUNT
     FULL_REFRESH_COUNT =
@@ -60,9 +60,8 @@ function UIManager:init()
     }
     self.poweroff_action = function()
         self._entered_poweroff_stage = true
-        Device.orig_rotation_mode = Device.screen:getRotationMode()
+        logger.info("Powering off the device...")
         self:broadcastEvent(Event:new("Close"))
-        Screen:setRotationMode(Screen.ORIENTATION_PORTRAIT)
         local Screensaver = require("ui/screensaver")
         Screensaver:setup("poweroff", _("Powered off"))
         Screensaver:show()
@@ -74,9 +73,8 @@ function UIManager:init()
     end
     self.reboot_action = function()
         self._entered_poweroff_stage = true
-        Device.orig_rotation_mode = Device.screen:getRotationMode()
+        logger.info("Rebooting the device...")
         self:broadcastEvent(Event:new("Close"))
-        Screen:setRotationMode(Screen.ORIENTATION_PORTRAIT)
         local Screensaver = require("ui/screensaver")
         Screensaver:setup("reboot", _("Rebooting…"))
         Screensaver:show()
@@ -229,39 +227,27 @@ end
 
 -- Schedule an execution task; task queue is in ascending order
 function UIManager:schedule(sched_time, action, ...)
-    local p, s, e = 1, 1, #self._task_queue
-    if e ~= 0 then
-        -- Do a binary insert.
-        repeat
-            p = bit.rshift(e + s, 1) -- Not necessary to use (s + (e -s) / 2) here!
-            local p_time = self._task_queue[p].time
-            if sched_time > p_time then
-                if s == e then
-                    p = e + 1
-                    break
-                elseif s + 1 == e then
-                    s = e
-                else
-                    s = p
-                end
-            elseif sched_time < p_time then
-                if s == p then
-                    break
-                end
-                e = p
-            else
-                -- For fairness, it's better to make sure p+1 is strictly less than p.
-                -- Might want to revisit that in the future.
-                break
-            end
-        until e < s
+    local lo, hi = 1, #self._task_queue
+    -- Rightmost binary insertion
+    while lo <= hi do
+        -- NOTE: We should be (mostly) free from overflow here, thanks to LuaJIT's BitOp semantics.
+        --       For more fun details about this particular overflow,
+        --       c.f., https://ai.googleblog.com/2006/06/extra-extra-read-all-about-it-nearly.html
+        -- NOTE: For more fun reading about the binary search algo in general,
+        --       c.f., https://reprog.wordpress.com/2010/04/19/are-you-one-of-the-10-percent/
+        local mid = bit.rshift(lo + hi, 1)
+        local mid_time = self._task_queue[mid].time
+        if sched_time >= mid_time then
+            lo = mid + 1
+        else
+            hi = mid - 1
+        end
     end
 
-    table.insert(self._task_queue, p, {
+    table.insert(self._task_queue, lo, {
         time = sched_time,
         action = action,
-        argc = select("#", ...),
-        args = {...},
+        args = table.pack(...),
     })
     self._task_queue_dirty = true
 end
@@ -487,7 +473,9 @@ UIManager:setDirty(self.widget, function() return "ui", self.someelement.dimen e
 @bool refreshdither `true` if widget requires dithering (optional)
 ]]
 function UIManager:setDirty(widget, refreshtype, refreshregion, refreshdither)
+    local widget_name
     if widget then
+        widget_name = widget.name or widget.id or tostring(widget)
         if widget == "all" then
             -- special case: set all top-level widgets as being "dirty".
             for _, window in ipairs(self._window_stack) do
@@ -513,7 +501,7 @@ function UIManager:setDirty(widget, refreshtype, refreshregion, refreshdither)
                 local w = self._window_stack[i].widget
                 if handle_alpha then
                     self._dirty[w] = true
-                    logger.dbg("setDirty: Marking as dirty widget:", w.name or w.id or tostring(w), "because it's below translucent widget:", widget.name or widget.id or tostring(widget))
+                    logger.dbg("setDirty: Marking as dirty widget:", w.name or w.id or tostring(w), "because it's below translucent widget:", widget_name)
                     -- Stop flagging widgets at the uppermost one that covers the full screen
                     if w.covers_fullscreen then
                         break
@@ -561,16 +549,16 @@ function UIManager:setDirty(widget, refreshtype, refreshregion, refreshdither)
             -- NOTE: It's too early to tell what the function will return (especially the region), because the widget hasn't been painted yet.
             --       Consuming the lambda now also appears have nasty side-effects that render it useless later, subtly breaking a whole lot of things...
             --       Thankfully, we can track them in _refresh()'s logging very soon after that...
-            logger.dbg("setDirty via a func from widget", widget and (widget.name or widget.id or tostring(widget)) or "nil")
+            logger.dbg("setDirty via a func from widget", widget_name)
         end
     else
         -- otherwise, enqueue refresh
         self:_refresh(refreshtype, refreshregion, refreshdither)
         if dbg.is_on then
             if refreshregion then
-                logger.dbg("setDirty", refreshtype and refreshtype or "nil", "from widget", widget and (widget.name or widget.id or tostring(widget)) or "nil", "w/ region", refreshregion.x, refreshregion.y, refreshregion.w, refreshregion.h, refreshdither and "AND w/ HW dithering" or "")
+                logger.dbg("setDirty", refreshtype, "from widget", widget_name, "w/ region", refreshregion.x, refreshregion.y, refreshregion.w, refreshregion.h, "dithering:", refreshdither)
             else
-                logger.dbg("setDirty", refreshtype and refreshtype or "nil", "from widget", widget and (widget.name or widget.id or tostring(widget)) or "nil", "w/ NO region", refreshdither and "AND w/ HW dithering" or "")
+                logger.dbg("setDirty", refreshtype, "from widget", widget_name, "w/ NO region; dithering:", refreshdither)
             end
         end
     end
@@ -772,22 +760,29 @@ which itself will take care of propagating an event to its members.
 @param event an @{ui.event.Event|Event} object
 ]]
 function UIManager:sendEvent(event)
-    if not self._window_stack[1] then
-        -- No widgets in the stack!
-        return
+    local top_widget
+    local checked_widgets = {}
+    -- Toast widgets, which, by contract, must be at the top of the window stack, never stop event propagation.
+    for i = #self._window_stack, 1, -1 do
+        local widget = self._window_stack[i].widget
+        -- Whether it's a toast or not, we'll call handleEvent now,
+        -- so we'll want to skip it during the table walk later.
+        checked_widgets[widget] = true
+        if widget.toast then
+            -- We never stop event propagation on toasts, but we still want to send the event to them.
+            -- (In particular, because we want them to close on user input).
+            widget:handleEvent(event)
+        else
+            -- The first widget to consume events as designed is the topmost non-toast one
+            top_widget = widget
+            break
+        end
     end
 
-    -- The top widget gets to be the first to get the event
-    local top_widget = self._window_stack[#self._window_stack].widget
-
-    -- A toast widget gets closed by any event, and lets the event be handled by a lower widget.
-    -- (Notification is our only widget flagged as such).
-    while top_widget.toast do -- close them all
-        self:close(top_widget)
-        if not self._window_stack[1] then
-            return
-        end
-        top_widget = self._window_stack[#self._window_stack].widget
+    -- Extremely unlikely, but we can't exclude the possibility of *everything* being a toast ;).
+    -- In which case, the event has nowhere else to go, so, we're done.
+    if not top_widget then
+        return
     end
 
     if top_widget:handleEvent(event) then
@@ -795,7 +790,9 @@ function UIManager:sendEvent(event)
     end
     if top_widget.active_widgets then
         for _, active_widget in ipairs(top_widget.active_widgets) do
-            if active_widget:handleEvent(event) then return end
+            if active_widget:handleEvent(event) then
+                return
+            end
         end
     end
 
@@ -806,14 +803,14 @@ function UIManager:sendEvent(event)
     --       which relies on a hash check of already processed widgets (LuaJIT actually hashes the table's GC reference),
     --       rather than a simple loop counter, and will in fact iterate *at least* #items ^ 2 times.
     --       Thankfully, that list should be very small, so the overhead should be minimal.
-    local checked_widgets = {top_widget}
     local i = #self._window_stack
     while i > 0 do
         local widget = self._window_stack[i].widget
         if not checked_widgets[widget] then
             checked_widgets[widget] = true
             -- Widget's active widgets have precedence to handle this event
-            -- NOTE: ReaderUI & FileManager have their registered modules referenced as such.
+            -- NOTE: ReaderUI & FileManager *may* optionally register their modules as such
+            --       (currently, they only do that for the Screenshot module).
             if widget.active_widgets then
                 for _, active_widget in ipairs(widget.active_widgets) do
                     if active_widget:handleEvent(event) then
@@ -828,6 +825,8 @@ function UIManager:sendEvent(event)
                     return
                 end
             end
+            -- As mentioned above, event handlers might have shown/closed widgets,
+            -- so all bets are off on our old window tally being accurate, so let's take it from the top again ;).
             i = #self._window_stack
         else
             i = i - 1
@@ -892,7 +891,7 @@ function UIManager:_checkTasks()
             -- NOTE: Said task's action might modify _task_queue.
             --       To avoid race conditions and catch new upcoming tasks during this call,
             --       we repeatedly check the head of the queue (c.f., #1758).
-            task.action(unpack(task.args, 1, task.argc))
+            task.action(unpack(task.args))
         else
             -- As the queue is sorted in ascending order, it's safe to assume all items are currently future tasks.
             wait_until = task_time
@@ -1081,7 +1080,7 @@ function UIManager:_refresh(mode, region, dither)
     end
 
     -- if we've stopped hitting collisions, enqueue the refresh
-    logger.dbg("_refresh: Enqueued", mode, "update for region", region.x, region.y, region.w, region.h, dither and "w/ HW dithering" or "")
+    logger.dbg("_refresh: Enqueued", mode, "update for region", region.x, region.y, region.w, region.h, "dithering:", dither)
     table.insert(self._refresh_stack, {mode = mode, region = region, dither = dither})
 end
 

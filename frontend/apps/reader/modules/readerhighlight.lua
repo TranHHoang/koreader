@@ -20,8 +20,7 @@ local C_ = _.pgettext
 local T = require("ffi/util").template
 local Screen = Device.screen
 
-local ReaderHighlight = InputContainer:new{
-}
+local ReaderHighlight = InputContainer:extend{}
 
 local function inside_box(pos, box)
     if pos then
@@ -2047,8 +2046,8 @@ end
 function ReaderHighlight:onMoveHighlightIndicator(args)
     if self.view.visible_area and self._current_indicator_pos then
         local dx, dy, quick_move = unpack(args)
-        local quick_move_distance_dx = self.view.visible_area.w / 5 -- quick move distance: fifth of visible_area
-        local quick_move_distance_dy = self.view.visible_area.h / 5
+        local quick_move_distance_dx = self.view.visible_area.w * (1/5) -- quick move distance: fifth of visible_area
+        local quick_move_distance_dy = self.view.visible_area.h * (1/5)
         -- single move distance, small and capable to move on word with small font size and narrow line height
         local move_distance = Size.item.height_default / 4
         local rect = self._current_indicator_pos:copy()

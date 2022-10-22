@@ -13,10 +13,10 @@ local Screen = Device.screen
 local _ = require("gettext")
 local T = require("ffi/util").template
 
-local ReaderMenu = InputContainer:new{
+local ReaderMenu = InputContainer:extend{
     tab_item_table = nil,
-    menu_items = {},
-    registered_widgets = {},
+    menu_items = nil, -- table, mandatory
+    registered_widgets = nil, -- array
 }
 
 function ReaderMenu:init()
@@ -433,10 +433,10 @@ function ReaderMenu:_getTabIndexFromLocation(ges)
     if not ges then
         return self.last_tab_index
     -- if the start position is far right
-    elseif ges.pos.x > 2 * Screen:getWidth() / 3 then
+    elseif ges.pos.x > Screen:getWidth() * (2/3) then
         return BD.mirroredUILayout() and 1 or #self.tab_item_table
     -- if the start position is far left
-    elseif ges.pos.x < Screen:getWidth() / 3 then
+    elseif ges.pos.x < Screen:getWidth() * (1/3) then
         return BD.mirroredUILayout() and #self.tab_item_table or 1
     -- if center return the last index
     else

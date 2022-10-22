@@ -37,7 +37,7 @@ local article_id_prefix = "[w-id_"
 local article_id_postfix = "] "
 local failed, skipped, downloaded = 1, 2, 3
 
-local Wallabag = WidgetContainer:new{
+local Wallabag = WidgetContainer:extend{
     name = "wallabag",
 }
 
@@ -1061,7 +1061,7 @@ Restart KOReader after editing the config file.]]), BD.dirpath(DataStorage:getSe
                 {
                     text = _("Apply"),
                     callback = function()
-                        local myfields = MultiInputDialog:getFields()
+                        local myfields = self.settings_dialog:getFields()
                         self.server_url    = myfields[1]
                         self.client_id     = myfields[2]
                         self.client_secret = myfields[3]
@@ -1104,7 +1104,7 @@ function Wallabag:editClientSettings()
                 {
                     text = _("Apply"),
                     callback = function()
-                        local myfields = MultiInputDialog:getFields()
+                        local myfields = self.client_settings_dialog:getFields()
                         self.articles_per_sync = math.max(1, tonumber(myfields[1]) or self.articles_per_sync)
                         self:saveSettings(myfields)
                         self.client_settings_dialog:onClose()

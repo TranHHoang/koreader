@@ -7,11 +7,10 @@ local LuaSettings = require("luasettings")
 local dump = require("dump")
 local ffiutil = require("ffi/util")
 local util = require("util")
-local isAndroid, android = pcall(require, "android")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 
-local LuaDefaults = LuaSettings:new{
+local LuaDefaults = LuaSettings:extend{
     ro = nil, -- will contain the defaults.lua k/v pairs (const)
     rw = nil, -- will only contain non-defaults user-modified k/v pairs
 }
@@ -19,7 +18,9 @@ local LuaDefaults = LuaSettings:new{
 --- Opens a settings file.
 function LuaDefaults:open(path)
     local file_path = path or DataStorage:getDataDir() .. "/defaults.custom.lua"
-    local new = {file = file_path}
+    local new = LuaDefaults:extend{
+        file = file_path,
+    }
     local ok, stored
 
     -- File being absent and returning an empty table is a use case,
@@ -30,34 +31,27 @@ function LuaDefaults:open(path)
     if ok and stored then
         new.rw = stored
     else
-        if existing then logger.warn("Failed reading", new.file, "(probably corrupted).") end
+        if existing then logger.warn("LuaDefaults: Failed reading", new.file, "(probably corrupted).") end
         -- Fallback to .old if it exists
         ok, stored = pcall(dofile, new.file..".old")
         if ok and stored then
-            if existing then logger.warn("read from backup file", new.file..".old") end
+            if existing then logger.warn("LuaDefaults: read from backup file", new.file..".old") end
             new.rw = stored
         else
-            if existing then logger.warn("no usable backup file for", new.file, "to read from") end
+            if existing then logger.warn("LuaDefaults: no usable backup file for", new.file, "to read from") end
             new.rw = {}
         end
     end
 
     -- The actual defaults file, on the other hand, is set in stone.
-    -- We just have to deal with some platform shenanigans...
-    local defaults_path = DataStorage:getDataDir() .. "/defaults.lua"
-    if isAndroid then
-        defaults_path = android.dir .. "/defaults.lua"
-    elseif os.getenv("APPIMAGE") then
-        defaults_path = "defaults.lua"
-    end
-    ok, stored = pcall(dofile, defaults_path)
+    ok, stored = pcall(dofile, "defaults.lua")
     if ok and stored then
         new.ro = stored
     else
-        error("Failed reading " .. defaults_path)
+        error("Failed reading defaults.lua")
     end
 
-    return setmetatable(new, {__index = LuaDefaults})
+    return new
 end
 
 --- Reads a setting, optionally initializing it to a default.
@@ -161,11 +155,10 @@ function LuaDefaults:flush()
     if not self.file then return end
     local directory_updated = false
     if lfs.attributes(self.file, "mode") == "file" then
-        -- As an additional safety measure (to the ffiutil.fsync* calls
-        -- used below), we only backup the file to .old when it has
-        -- not been modified in the last 60 seconds. This should ensure
-        -- in the case the fsync calls are not supported that the OS
-        -- may have itself sync'ed that file content in the meantime.
+        -- As an additional safety measure (to the ffiutil.fsync* calls used below),
+        -- we only backup the file to .old when it has not been modified in the last 60 seconds.
+        -- This should ensure in the case the fsync calls are not supported
+        -- that the OS may have itself sync'ed that file content in the meantime.
         local mtime = lfs.attributes(self.file, "modification")
         if mtime < os.time() - 60 then
             os.rename(self.file, self.file .. ".old")
@@ -174,7 +167,6 @@ function LuaDefaults:flush()
     end
     local f_out = io.open(self.file, "w")
     if f_out ~= nil then
-        os.setlocale('C', 'numeric')
         f_out:write("-- we can read Lua syntax here!\nreturn ")
         f_out:write(dump(self.rw, nil, true))
         f_out:write("\n")

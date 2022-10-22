@@ -1,13 +1,9 @@
 #!./luajit
 
 -- Enforce line-buffering for stdout (this is the default if it points to a tty, but we redirect to a file on most platforms).
-local ffi = require("ffi")
-local C = ffi.C
-ffi.cdef[[
-extern struct _IO_FILE *stdout;
-void setlinebuf(struct _IO_FILE *);
-]]
-C.setlinebuf(C.stdout)
+io.stdout:setvbuf("line")
+-- Enforce a reliable locale for numerical representations
+os.setlocale("C", "numeric")
 
 io.write([[
 ---------------------------------------------

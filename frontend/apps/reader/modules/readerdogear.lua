@@ -2,13 +2,13 @@ local BD = require("ui/bidi")
 local Device = require("device")
 local Geom = require("ui/geometry")
 local IconWidget = require("ui/widget/iconwidget")
-local InputContainer = require("ui/widget/container/inputcontainer")
 local RightContainer = require("ui/widget/container/rightcontainer")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
+local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local Screen = Device.screen
 
-local ReaderDogear = InputContainer:new{}
+local ReaderDogear = WidgetContainer:extend{}
 
 function ReaderDogear:init()
     -- This image could be scaled for DPI (with scale_for_dpi=true, scale_factor=0.7),
@@ -17,8 +17,8 @@ function ReaderDogear:init()
     -- to not overwrite the book text.
     -- For other documents, there is no easy way to know if valuable content
     -- may be hidden by the icon (kopt's page_margin is quite obscure).
-    self.dogear_min_size = math.ceil(math.min(Screen:getWidth(), Screen:getHeight()) / 40)
-    self.dogear_max_size = math.ceil(math.min(Screen:getWidth(), Screen:getHeight()) / 32)
+    self.dogear_min_size = math.ceil(math.min(Screen:getWidth(), Screen:getHeight()) * (1/40))
+    self.dogear_max_size = math.ceil(math.min(Screen:getWidth(), Screen:getHeight()) * (1/32))
     self.dogear_size = nil
     self.dogear_y_offset = 0
     self.top_pad = nil

@@ -518,7 +518,9 @@ function Dispatcher:_addToOrder(location, settings, item)
                 end
             end
         else
-            table.insert(location[settings].settings.order, item)
+            if not util.arrayContains(location[settings].settings.order, item) then
+                table.insert(location[settings].settings.order, item)
+            end
         end
     end
 end
@@ -851,19 +853,21 @@ function Dispatcher:addSubMenu(caller, menu, location, settings)
             and location[settings].settings.show_as_quickmenu
         end,
         callback = function()
-            if location[settings] and location[settings].settings then
-                if location[settings].settings.show_as_quickmenu then
-                    location[settings].settings.show_as_quickmenu = nil
-                    if next(location[settings].settings) == nil then
-                        location[settings].settings = nil
+            if location[settings] then
+                if location[settings].settings then
+                    if location[settings].settings.show_as_quickmenu then
+                        location[settings].settings.show_as_quickmenu = nil
+                        if next(location[settings].settings) == nil then
+                            location[settings].settings = nil
+                        end
+                    else
+                        location[settings].settings.show_as_quickmenu = true
                     end
                 else
-                    location[settings].settings.show_as_quickmenu = true
+                    location[settings].settings = {["show_as_quickmenu"] = true}
                 end
-            else
-                location[settings].settings = {["show_as_quickmenu"] = true}
+                caller.updated = true
             end
-            caller.updated = true
         end,
     })
     table.insert(menu, {

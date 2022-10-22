@@ -168,7 +168,7 @@ function OPDSBrowser:addNewCatalog()
                     callback = function()
                         self.add_server_dialog:onClose()
                         UIManager:close(self.add_server_dialog)
-                        self:addServerFromInput(MultiInputDialog:getFields())
+                        self:addServerFromInput(self.add_server_dialog:getFields())
                     end
                 },
             },
@@ -219,7 +219,7 @@ function OPDSBrowser:editCalibreServer()
                     callback = function()
                         self.add_server_dialog:onClose()
                         UIManager:close(self.add_server_dialog)
-                        self:editCalibreFromInput(MultiInputDialog:getFields())
+                        self:editCalibreFromInput(self.add_server_dialog:getFields())
                     end
                 },
             },
@@ -393,7 +393,7 @@ end
 function OPDSBrowser:getCatalog(item_url, username, password)
     local ok, catalog = pcall(self.parseFeed, self, item_url, username, password)
     if not ok and catalog then
-        logger.info("Cannot get catalog info from", item_url or "nil", catalog)
+        logger.info("Cannot get catalog info from", item_url, catalog)
         UIManager:show(InfoMessage:new{
             text = T(_("Cannot get catalog info from %1"), (item_url and BD.url(item_url) or "nil")),
         })
@@ -504,12 +504,22 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url, username, passwo
                             title = link.title,
                         })
                     elseif link.rel == self.stream_rel then
+                        -- This for loop iterates through all keys in a
+                        --   Entry and looks for the count tag, then stores
+                        --   That key to use for updating the table value.
+                        local count_key = ""
+                        for k, v in pairs(link) do
+                            if string.sub(k, -6) == ":count" then
+                                count_key = k
+                                break
+                            end
+                        end
                         table.insert(item.acquisitions, {
                             type = link.type,
                             href = build_href(link.href),
                             title = link.title,
                             stream = true,
-                            count = tonumber(link["pse:count"] or "1"),
+                            count = tonumber(link[count_key] or "1"),
                         })
                     elseif link.rel == self.thumbnail_rel then
                         item.thumbnail = build_href(link.href)
@@ -882,7 +892,7 @@ function OPDSBrowser:showDownloads(item)
 end
 
 function OPDSBrowser:browse(browse_url, username, password)
-    logger.dbg("Browse OPDS url", browse_url or "nil")
+    logger.dbg("Browse OPDS url", browse_url)
     table.insert(self.paths, {
         url = browse_url,
         username = username,
@@ -1012,7 +1022,7 @@ function OPDSBrowser:editOPDSServer(item)
                     callback = function()
                         self.edit_server_dialog:onClose()
                         UIManager:close(self.edit_server_dialog)
-                        self:editServerFromInput(item, MultiInputDialog:getFields())
+                        self:editServerFromInput(item, self.edit_server_dialog:getFields())
                     end
                 },
             },

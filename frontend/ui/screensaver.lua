@@ -17,6 +17,8 @@ local SpinWidget = require("ui/widget/spinwidget")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local TopContainer = require("ui/widget/container/topcontainer")
 local UIManager = require("ui/uimanager")
+local VerticalGroup = require("ui/widget/verticalgroup")
+local VerticalSpan = require("ui/widget/verticalspan")
 local ffiUtil = require("ffi/util")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
@@ -54,14 +56,28 @@ end
 
 local Screensaver = {
     screensaver_provider = {
+        gif  = true,
         jpg  = true,
         jpeg = true,
         png  = true,
-        gif  = true,
+        svg  = true,
         tif  = true,
         tiff = true,
+        webp = true,
     },
     default_screensaver_message = _("Sleeping"),
+
+    -- State values
+    show_message = nil,
+    screensaver_type = nil,
+    prefix = nil,
+    event_message = nil,
+    overlay_message = nil,
+    screensaver_background = nil,
+    image = nil,
+    image_file = nil,
+    delayed_close = nil,
+    screensaver_widget = nil,
 }
 
 -- Remind emulator users that Power is bound to F2
@@ -192,7 +208,7 @@ function Screensaver:expandSpecial(message, fallback)
     return ret
 end
 
-local function addOverlayMessage(widget, text)
+local function addOverlayMessage(widget, widget_height, text)
     local FrameContainer = require("ui/widget/container/framecontainer")
     local RightContainer = require("ui/widget/container/rightcontainer")
     local Size = require("ui/size")
@@ -220,6 +236,15 @@ local function addOverlayMessage(widget, text)
         margin = 0,
         textw,
     }
+    -- If our host widget is already at the top, we'll position ourselves below it.
+    if widget_height then
+        textw = VerticalGroup:new{
+            VerticalSpan:new{
+                width = widget_height,
+            },
+            textw,
+        }
+    end
     textw = RightContainer:new{
         dimen = {
             w = screen_w,
@@ -444,7 +469,7 @@ function Screensaver:withBackground()
     return self.screensaver_background ~= "none"
 end
 
-function Screensaver:setup(event, fallback_message)
+function Screensaver:setup(event, event_message)
     self.show_message = G_reader_settings:isTrue("screensaver_show_message")
     self.screensaver_type = G_reader_settings:readSetting("screensaver_type")
     local screensaver_img_background = G_reader_settings:readSetting("screensaver_img_background")
@@ -452,16 +477,15 @@ function Screensaver:setup(event, fallback_message)
 
     -- These 2 (optional) parameters are to support poweroff and reboot actions on Kobo (c.f., UIManager)
     self.prefix = event and event .. "_" or "" -- "", "poweroff_" or "reboot_"
-    self.fallback_message = fallback_message
-    self.overlay_message = nil
+    self.event_message = event_message
     if G_reader_settings:has(self.prefix .. "screensaver_type") then
         self.screensaver_type = G_reader_settings:readSetting(self.prefix .. "screensaver_type")
     else
         if event and G_reader_settings:isFalse("screensaver_hide_fallback_msg") then
-            -- Display the provided fallback_message over the screensaver,
+            -- Display the provided event_message over the screensaver,
             -- so the user can distinguish between suspend (no overlay),
             -- and reboot/poweroff (overlaid message).
-            self.overlay_message = self.fallback_message
+            self.overlay_message = self.event_message
         end
     end
 
@@ -651,6 +675,7 @@ function Screensaver:show()
         background = nil
     end
 
+    local message_height
     if self.show_message then
         -- Handle user settings & fallbacks, with that prefix mess on top...
         local screensaver_message
@@ -658,15 +683,21 @@ function Screensaver:show()
             screensaver_message = G_reader_settings:readSetting(self.prefix .. "screensaver_message")
         else
             if G_reader_settings:has("screensaver_message") then
-                -- We prefer the global user setting to the event's fallback message.
                 screensaver_message = G_reader_settings:readSetting("screensaver_message")
             else
-                screensaver_message = self.fallback_message or self.default_screensaver_message
+                -- In the absence of a custom message, use the event message if any, barring that, use the default message.
+                if self.event_message then
+                    screensaver_message = self.event_message
+                    -- The overlay is only ever populated with the event message, and we only want to show it once ;).
+                    self.overlay_message = nil
+                else
+                    screensaver_message = self.default_screensaver_message
+                end
             end
         end
         -- NOTE: Only attempt to expand if there are special characters in the message.
         if screensaver_message:find("%%") then
-            screensaver_message = self:expandSpecial(screensaver_message, self.fallback_message or self.default_screensaver_message)
+            screensaver_message = self:expandSpecial(screensaver_message, self.event_message or self.default_screensaver_message)
         end
 
         local message_pos
@@ -710,10 +741,12 @@ function Screensaver:show()
                     alignment = "center",
                 }
             }
-        end
 
-        -- No overlay needed as we just displayed *a* message (not necessarily the event's, though).
-        self.overlay_message = nil
+            -- Forward the height of the top message to the overlay widget
+            if message_pos == "top" then
+                message_height = message_widget[1]:getSize().h
+            end
+        end
 
         -- Check if message_widget should be overlaid on another widget
         if message_widget then
@@ -735,7 +768,7 @@ function Screensaver:show()
     end
 
     if self.overlay_message then
-        widget = addOverlayMessage(widget, self.overlay_message)
+        widget = addOverlayMessage(widget, message_height, self.overlay_message)
     end
 
     if widget then
@@ -797,7 +830,7 @@ function Screensaver:cleanup()
     self.show_message = nil
     self.screensaver_type = nil
     self.prefix = nil
-    self.fallback_message = nil
+    self.event_message = nil
     self.overlay_message = nil
     self.screensaver_background = nil
 
