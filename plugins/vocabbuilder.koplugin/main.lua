@@ -67,9 +67,9 @@ local function resetButtonOnLookupWindow()
                 end
                 return
             end
-            table.insert(buttons, 1, {{
+            table.insert(buttons[1], #buttons[1], {
                 id = "vocabulary",
-                text = _("Add to vocabulary builder"),
+                text = _(""), -- Add to vocabulary builder
                 font_bold = false,
                 callback = function()
                     local book_title = obj.ui.doc_settings and obj.ui.doc_settings:readSetting("doc_props").title or _("Dictionary lookup")
@@ -83,13 +83,13 @@ local function resetButtonOnLookupWindow()
                     obj.ui:handleEvent(Event:new("WordLookedUp", obj.word, book_title, true)) -- is_manual: true
                     local button = obj.button_table.button_by_id["vocabulary"]
                     if button then
-                        button:disable()
+                        button:setText("", button.width) -- Added
                         UIManager:setDirty(obj, function()
                             return "ui", button.dimen
                         end)
                     end
                 end
-            }})
+            })
         end
     else
         DictQuickLookUp.tweak_buttons_func = nil
@@ -1013,6 +1013,12 @@ local VocabularyBuilderWidget = FocusManager:extend{
 }
 
 function VocabularyBuilderWidget:init()
+    if self.document then
+        DB:showWordsFromBook(self.document:getProps().title)
+    else
+        DB:showWordsFromBook(nil)
+    end
+
     self.item_table = self:reload_items_callback()
     self.layout = {}
 
@@ -1511,7 +1517,8 @@ function VocabBuilder:addToMainMenu(menu_items)
                 select_items_callback = function(obj, start_idx, end_idx)
                     DB:select_items(obj, start_idx, end_idx)
                 end,
-                reload_items_callback = reload_items
+                reload_items_callback = reload_items,
+                document = self.document,
             }
 
             UIManager:show(self.builder_widget)

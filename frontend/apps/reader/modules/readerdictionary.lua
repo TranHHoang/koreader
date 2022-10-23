@@ -411,32 +411,16 @@ function ReaderDictionary:addToMainMenu(menu_items)
 end
 
 function ReaderDictionary:onLookupWord(word, is_sane, boxes, highlight, link, tweak_buttons_func)
-    local text = type(word) == "table" and word.text or word
-    logger.dbg("dict lookup word:", text, boxes)
+    logger.dbg("dict lookup word:", word, boxes)
     -- escape quotes and other funny characters in word
-    text = self:cleanSelection(text, is_sane)
-    logger.dbg("dict stripped word:", text)
+    word = self:cleanSelection(word, is_sane)
+    logger.dbg("dict stripped word:", word)
 
     self.highlight = highlight
 
-    -- Grab the word's context if possible
-    if type(word) == "table" then
-        local pos0, pos1 = word.pos0, word.pos1
-        -- Get 5 previous words and 5 next words
-        for _ = 1, 5 do
-            local tmp_pos0 = self.ui.document:getPrevVisibleWordStart(pos0)
-            if tmp_pos0 then pos0 = tmp_pos0 end
-
-            local tmp_pos1 = self.ui.document:getNextVisibleWordEnd(pos1)
-            if tmp_pos1 then pos1 = tmp_pos1 end
-        end
-
-        self.word_context = self:cleanSelection(self.ui.document:getTextFromXPointers(pos0, pos1), true)
-    end
-
     -- Wrapped through Trapper, as we may be using Trapper:dismissablePopen() in it
     Trapper:wrap(function()
-        self:stardictLookup(text, self.enabled_dict_names, not self.disable_fuzzy_search, boxes, link, tweak_buttons_func)
+        self:stardictLookup(word, self.enabled_dict_names, not self.disable_fuzzy_search, boxes, link, tweak_buttons_func)
     end)
     return true
 end
@@ -993,11 +977,8 @@ function ReaderDictionary:showDict(word, results, boxes, link, tweak_buttons_fun
             highlight = self.highlight,
             tweak_buttons_func = tweak_buttons_func,
             dialog = self.dialog,
-            -- Vocabulary list
-            vocabs = self.vocabs,
             -- original lookup word
             word = word,
-            word_context = self.word_context,
             -- selected link, if any
             selected_link = link,
             results = results,
@@ -1163,7 +1144,6 @@ end
 
 function ReaderDictionary:onReadSettings(config)
     self.preferred_dictionaries = config:readSetting("preferred_dictionaries") or {}
-    self.vocabs = config:readSetting("vocabularies", {})
     if #self.preferred_dictionaries == 0 then
         -- Legacy setting, when only one dict could be set as default/first to show
         local default_dictionary = config:readSetting("default_dictionary")
@@ -1186,7 +1166,6 @@ function ReaderDictionary:onSaveSettings()
     if self.ui.doc_settings then
         self.ui.doc_settings:saveSetting("preferred_dictionaries", self.preferred_dictionaries)
         self.ui.doc_settings:saveSetting("disable_fuzzy_search", self.disable_fuzzy_search)
-        self.ui.doc_settings:saveSetting("vocabularies", self.vocabs)
     end
 end
 
@@ -1212,37 +1191,6 @@ function ReaderDictionary:onTogglePreferredDict(dict)
         timeout = 2,
     })
     self:updateSdcvDictNamesOptions()
-    return true
-end
-
-function ReaderDictionary:onToggleVocabulary(vocab)
-    local context = self.vocabs[vocab.text]
-    if not context then
-        context = vocab.context
-    elseif type(context) == "string" then
-        if context == vocab.context then
-            context = nil
-        else
-            context = {
-                context,
-                vocab.context,
-            }
-        end
-    else
-        local pos = util.arrayContains(context, vocab.context)
-        if pos then
-            table.remove(context, pos)
-            if #context == 0 then
-                context = nil
-            elseif #context == 1 then
-                context = context[1]
-            end
-        else
-            table.insert(context, vocab.context)
-        end
-    end
-
-    self.vocabs[vocab.text] = context
     return true
 end
 

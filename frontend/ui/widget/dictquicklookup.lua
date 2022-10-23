@@ -65,13 +65,8 @@ local DictQuickLookup = InputContainer:extend{
 }
 
 local highlight_strings = {
-    highlight = _("ﭑ"), -- Highlight
+    highlight =_("ﭑ"), -- Highlight
     unhighlight = _("林"), -- Unhighlight
-}
-
-local save_vocab_strings = {
-    save = _(""),
-    remove = _(""),
 }
 
 function DictQuickLookup:canSearch()
@@ -403,16 +398,6 @@ function DictQuickLookup:init()
             },
         }
     else
-        local vocab_existed
-        local context = self.vocabs[self.word:lower()]
-        if not context then
-            vocab_existed = false
-        elseif type(context) == "string" then
-            vocab_existed = context == self.word_context
-        else
-            vocab_existed = util.arrayContains(context, self.word_context) ~= false
-        end
-
         local prev_dict_text = ""
         local next_dict_text = ""
         if BD.mirroredUILayout() then
@@ -499,24 +484,6 @@ function DictQuickLookup:init()
                             self.ui:handleEvent(Event:new("HighlightSearch"))
                             self:onClose(true) -- don't unhighlight (or we might erase a search hit)
                         end
-                    end,
-                },
-                {
-                    id = "save_vocab",
-                    enabled = not self.is_wiki and not self.is_google,
-                    text = vocab_existed and save_vocab_strings.remove or save_vocab_strings.save, -- Save words to vocab builder settings
-                    callback = function()
-                        self.ui:handleEvent(Event:new("ToggleVocabulary", {
-                            text = self.word:lower(),
-                            context = self.word_context,
-                        }))
-
-                        local this = self.button_table:getButtonById("save_vocab")
-                        if not this then return end
-
-                        vocab_existed = not vocab_existed
-                        this:setText(vocab_existed and save_vocab_strings.remove or save_vocab_strings.save, this.width)
-                        this:refresh()
                     end,
                 },
                 {
@@ -1273,7 +1240,7 @@ function DictQuickLookup:lookupInputWord(hint)
                     end,
                 },
                 {
-                    text = _(""), -- Search Wikipedia
+                    text = _(""), -- Search wikipedia
                     is_enter_default = self.is_wiki,
                     callback = function()
                         if self.input_dialog:getInputText() == "" then return end
@@ -1284,10 +1251,10 @@ function DictQuickLookup:lookupInputWord(hint)
                 },
                 {
                     text = _(""), -- Search Google
-                    is_enter_default = self.is_wiki,
+                    is_enter_default = self.is_google,
                     callback = function()
                         if self.input_dialog:getInputText() == "" then return end
-                        self.is_wiki = true
+                        self.is_google = true
                         self:closeInputDialog()
                         self:inputLookup()
                     end,

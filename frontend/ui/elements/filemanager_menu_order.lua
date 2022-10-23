@@ -111,6 +111,7 @@ local order = {
         "menu_activate",
     },
     tools = {
+        "vocabbuilder",
         "calibre",
         "exporter",
         "statistics",

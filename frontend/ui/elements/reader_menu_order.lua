@@ -161,6 +161,7 @@ local order = {
         "long_press",
     },
     tools = {
+        "vocabbuilder",
         "read_timer",
         "calibre",
         "exporter",
@@ -193,7 +194,6 @@ local order = {
         "googlesearch",
         -- "dictionary_lookup",
         -- "dictionary_lookup_history",
-        "vocabbuilder",
         -- "dictionary_settings",
         -- "----------------------------",
         -- "wikipedia_lookup",

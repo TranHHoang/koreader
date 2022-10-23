@@ -315,6 +315,16 @@ function VocabularyBuilder:hasFilteredBook()
     return has_filter ~= 0
 end
 
+function VocabularyBuilder:showWordsFromBook(book_title)
+    local conn = SQ3.open(db_location)
+    if book_title then
+        conn:exec(string.format("UPDATE title SET filter = (name = '%s')", book_title))
+    else
+        conn:exec("UPDATE title SET filter = true")
+    end
+    conn:close()
+end
+
 function VocabularyBuilder:remove(item)
     local conn = SQ3.open(db_location)
     local stmt = conn:prepare("DELETE FROM vocabulary WHERE word = ? ;")
