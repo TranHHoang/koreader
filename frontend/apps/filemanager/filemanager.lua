@@ -142,8 +142,6 @@ function FileManager:setupLayout()
         bordersize = 0,
         width = icon_size, -- our icons are square
         height = icon_size,
-        padding_left = Size.padding.default,
-        padding_right = Size.padding.default,
         callback = function()
             self:onShowPlusMenu()
         end,
@@ -183,17 +181,22 @@ function FileManager:setupLayout()
         padding = Size.padding.tiny,
         bordersize = 0,
         WidgetContainer:new {
-            dimen = { w = Screen:getWidth() },
+            dimen = { w = Screen:getWidth(), h = self.path_group:getSize().h },
             HorizontalGroup:new {
                 up_button,
                 WidgetContainer:new {
-                    dimen = { w = Screen:getWidth() - 2 * icon_size - 4 * Size.padding.default },
+                    dimen = {
+                        w = Screen:getWidth() - 2 * icon_size - 4 * Size.padding.default,
+                        h = self.path_group:getSize().h,
+                    },
                     self.path_group,
                 },
                 self.plus_button,
             }
         },
     }
+
+    -- logger.dbg("AAAAAAAAAAAAAA", self.banner[1][1]:getSize())
 
     local show_hidden = G_reader_settings:isTrue("show_hidden") or G_defaults:readSetting("DSHOWHIDDENFILES")
     local show_unsupported = G_reader_settings:isTrue("show_unsupported")
