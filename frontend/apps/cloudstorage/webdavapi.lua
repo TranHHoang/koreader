@@ -11,6 +11,13 @@ local logger = require("logger")
 local WebDavApi = {
 }
 
+function WebDavApi:getJoinedPath( address, path )
+    local path_encoded = self:urlEncode( path ) or ""
+    local address_strip = address:sub(-1) == "/" and address:sub(1, -2) or address
+    local path_strip = path_encoded:sub(1, 1) == "/" and path_encoded:sub(2) or path_encoded
+    return address_strip .. "/" .. path_strip
+end
+
 function WebDavApi:isCurrentDirectory( current_item, address, path )
     local is_home, is_parent
     local home_path
@@ -32,6 +39,7 @@ function WebDavApi:isCurrentDirectory( current_item, address, path )
         is_home = true
     else
         local temp_path = string.sub( item, string.len(home_path) + 1 )
+        if string.sub( path, -1 ) == "/" then path = string.sub( path, 1, -2 ) end
         if temp_path == path then
             is_parent = true
         end
@@ -51,7 +59,7 @@ function WebDavApi:urlEncode(url_data)
     return url_data
 end
 
-function WebDavApi:listFolder(address, user, pass, folder_path)
+function WebDavApi:listFolder(address, user, pass, folder_path, folder_mode)
     local path = self:urlEncode( folder_path )
     local webdav_list = {}
     local webdav_file = {}
@@ -61,10 +69,10 @@ function WebDavApi:listFolder(address, user, pass, folder_path)
     if string.sub( address, -1 ) == "/" then has_trailing_slash = true end
     if path == nil or path == "/" then
         path = ""
-    elseif string.sub( path, 1, 2 ) == "/" then
+    elseif string.sub( path, 1, 1 ) == "/" then
         if has_trailing_slash then
             -- too many slashes, remove one
-            path = string.sub( path, 1 )
+            path = string.sub( path, 2 )
         end
         has_leading_slash = true
     end
@@ -72,7 +80,7 @@ function WebDavApi:listFolder(address, user, pass, folder_path)
         address = address .. "/"
     end
     local webdav_url = address .. path
-    if not has_trailing_slash then
+    if string.sub(webdav_url, -1) ~= "/" then
         webdav_url = webdav_url .. "/"
     end
 
@@ -116,7 +124,7 @@ function WebDavApi:listFolder(address, user, pass, folder_path)
             if string.sub( item_fullpath, -1 ) == "/" then
                 item_fullpath = string.sub( item_fullpath, 1, -2 )
             end
-            local is_current_dir = self:isCurrentDirectory( item_fullpath, address, path )
+            local is_current_dir = self:isCurrentDirectory( util.urlDecode(item_fullpath), address, folder_path )
 
             local item_name = util.urlDecode( FFIUtil.basename( item_fullpath ) )
             item_name = util.htmlEntitiesToUtf8(item_name)
@@ -125,7 +133,7 @@ function WebDavApi:listFolder(address, user, pass, folder_path)
                 item:find("<[^:]*:resourcetype></[^:]*:resourcetype>")
 
             local item_path = (path == "" and has_trailing_slash) and item_name or path .. "/" .. item_name
-            if item:find("<[^:]*:collection/>") then
+            if item:find("<[^:]*:collection[^<]*/>") then
                 item_name = item_name .. "/"
                 if not is_current_dir then
                     table.insert(webdav_list, {
@@ -161,6 +169,14 @@ function WebDavApi:listFolder(address, user, pass, folder_path)
             type = files.type,
         })
     end
+    if folder_mode then
+        table.insert(webdav_list, 1, {
+            text = _("Long-press to choose current folder"),
+            url = folder_path,
+            type = "folder_long_press",
+            bold = true
+        })
+    end
     return webdav_list
 end
 
@@ -179,7 +195,42 @@ function WebDavApi:downloadFile(file_url, user, pass, local_path)
         logger.warn("WebDavApi: Download failure:", status or code or "network unreachable")
         logger.dbg("WebDavApi: Response headers:", headers)
     end
+    return code, (headers or {}).etag
+end
+
+function WebDavApi:uploadFile(file_url, user, pass, local_path, etag)
+    socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
+    local code, _, status = socket.skip(1, http.request{
+        url      = file_url,
+        method   = "PUT",
+        source   = ltn12.source.file(io.open(local_path, "r")),
+        user     = user,
+        password = pass,
+        headers = {
+            ["If-Match"] = etag
+        }
+    })
+    socketutil:reset_timeout()
+    if code < 200 or code > 299 then
+        logger.warn("WebDavApi: upload failure:", status or code or "network unreachable")
+    end
     return code
 end
+
+function WebDavApi:createFolder(folder_url, user, pass, folder_name)
+    socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
+    local code, _, status = socket.skip(1, http.request{
+        url      = folder_url,
+        method   = "MKCOL",
+        user     = user,
+        password = pass,
+    })
+    socketutil:reset_timeout()
+    if code ~= 201 then
+        logger.warn("WebDavApi: create folder failure:", status or code or "network unreachable")
+    end
+    return code
+end
+
 
 return WebDavApi

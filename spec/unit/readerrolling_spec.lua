@@ -1,9 +1,12 @@
 describe("Readerrolling module", function()
-    local DocumentRegistry, ReaderUI, Event, Screen
+    local DocumentRegistry, UIManager, ReaderUI, Event, Screen
     local readerui, rolling
 
     setup(function()
         require("commonrequire")
+        UIManager = require("ui/uimanager")
+        stub(UIManager, "getNthTopWidget")
+        UIManager.getNthTopWidget.returns({})
         DocumentRegistry = require("document/documentregistry")
         ReaderUI = require("apps/reader/readerui")
         Event = require("ui/event")
@@ -19,7 +22,7 @@ describe("Readerrolling module", function()
 
     describe("test in portrait screen mode", function()
         it("should goto portrait screen mode", function()
-            readerui:handleEvent(Event:new("SetRotationMode", Screen.ORIENTATION_PORTRAIT))
+            readerui:handleEvent(Event:new("SetRotationMode", Screen.DEVICE_ROTATED_UPRIGHT))
         end)
 
         it("should goto certain page", function()
@@ -116,7 +119,7 @@ describe("Readerrolling module", function()
 
     describe("test in landscape screen mode", function()
         it("should go to landscape screen mode", function()
-            readerui:handleEvent(Event:new("SetRotationMode", Screen.ORIENTATION_LANDSCAPE))
+            readerui:handleEvent(Event:new("SetRotationMode", Screen.DEVICE_ROTATED_CLOCKWISE))
         end)
         it("should goto certain page", function()
             for i = 1, 10, 5 do
@@ -164,27 +167,27 @@ describe("Readerrolling module", function()
 
     describe("switching screen mode should not change current page number", function()
         teardown(function()
-            readerui:handleEvent(Event:new("SetRotationMode", Screen.ORIENTATION_PORTRAIT))
+            readerui:handleEvent(Event:new("SetRotationMode", Screen.DEVICE_ROTATED_UPRIGHT))
         end)
         it("for portrait-landscape-portrait switching", function()
             for i = 80, 100, 10 do
-                readerui:handleEvent(Event:new("SetRotationMode", Screen.ORIENTATION_PORTRAIT))
+                readerui:handleEvent(Event:new("SetRotationMode", Screen.DEVICE_ROTATED_UPRIGHT))
                 rolling:onGotoPage(i)
                 assert.are.same(i, rolling.current_page)
-                readerui:handleEvent(Event:new("SetRotationMode", Screen.ORIENTATION_LANDSCAPE))
+                readerui:handleEvent(Event:new("SetRotationMode", Screen.DEVICE_ROTATED_CLOCKWISE))
                 assert.are_not.same(i, rolling.current_page)
-                readerui:handleEvent(Event:new("SetRotationMode", Screen.ORIENTATION_PORTRAIT))
+                readerui:handleEvent(Event:new("SetRotationMode", Screen.DEVICE_ROTATED_UPRIGHT))
                 assert.are.same(i, rolling.current_page)
             end
         end)
         it("for landscape-portrait-landscape switching", function()
             for i = 110, 130, 10 do
-                readerui:handleEvent(Event:new("SetRotationMode", Screen.ORIENTATION_LANDSCAPE))
+                readerui:handleEvent(Event:new("SetRotationMode", Screen.DEVICE_ROTATED_CLOCKWISE))
                 rolling:onGotoPage(i)
                 assert.are.same(i, rolling.current_page)
-                readerui:handleEvent(Event:new("SetRotationMode", Screen.ORIENTATION_PORTRAIT))
+                readerui:handleEvent(Event:new("SetRotationMode", Screen.DEVICE_ROTATED_UPRIGHT))
                 assert.are_not.same(i, rolling.current_page)
-                readerui:handleEvent(Event:new("SetRotationMode", Screen.ORIENTATION_LANDSCAPE))
+                readerui:handleEvent(Event:new("SetRotationMode", Screen.DEVICE_ROTATED_CLOCKWISE))
                 assert.are.same(i, rolling.current_page)
             end
         end)

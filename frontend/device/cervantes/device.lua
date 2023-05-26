@@ -12,20 +12,6 @@ local function getProductId()
     return product_id
 end
 
-local function isConnected()
-    -- read carrier state from sysfs (for eth0)
-    local file = io.open("/sys/class/net/eth0/carrier", "rb")
-
-    -- file exists while Wi-Fi module is loaded.
-    if not file then return 0 end
-
-    -- 0 means not connected, 1 connected
-    local out = file:read("*number")
-    file:close()
-
-    return out or 0
-end
-
 local function isMassStorageSupported()
     -- we rely on 3rd party package for that. It should be installed as part of KOReader prerequisites,
     local safemode_version = io.open("/usr/share/safemode/version", "rb")
@@ -49,6 +35,7 @@ local Cervantes = Generic:extend{
     canReboot = yes,
     canPowerOff = yes,
     canSuspend = yes,
+    supportsScreensaver = yes,
     home_dir = "/mnt/public",
 
     -- do we support usb mass storage?
@@ -106,13 +93,9 @@ local Cervantes4 = Cervantes:extend{
 
 -- input events
 function Cervantes:initEventAdjustHooks()
-    if self.touch_switch_xy then
-        self.input:registerEventAdjustHook(self.input.adjustTouchSwitchXY)
-    end
-
-    if self.touch_mirrored_x then
+    if self.touch_switch_xy and self.touch_mirrored_x then
         self.input:registerEventAdjustHook(
-            self.input.adjustTouchMirrorX,
+            self.input.adjustTouchSwitchAxesAndMirrorX,
             (self.screen:getWidth() - 1)
         )
     end
@@ -193,33 +176,8 @@ function Cervantes:initNetworkManager(NetworkMgr)
     function NetworkMgr:restoreWifiAsync()
         os.execute("./restore-wifi-async.sh")
     end
-    function NetworkMgr:isWifiOn()
-        return 1 == isConnected()
-    end
-end
-
--- screensaver
-function Cervantes:supportsScreensaver()
-    return true
-end
-function Cervantes:intoScreenSaver()
-    local Screensaver = require("ui/screensaver")
-    if self.screen_saver_mode == false then
-        Screensaver:setup()
-        Screensaver:show()
-    end
-    self.powerd:beforeSuspend()
-    self.screen_saver_mode = true
-end
-function Cervantes:outofScreenSaver()
-    if self.screen_saver_mode == true then
-        local Screensaver = require("ui/screensaver")
-        Screensaver:close()
-        local UIManager = require("ui/uimanager")
-        UIManager:nextTick(function() UIManager:setDirty("all", "full") end)
-    end
-    self.powerd:afterResume()
-    self.screen_saver_mode = false
+    NetworkMgr.isWifiOn = NetworkMgr.sysfsWifiOn
+    NetworkMgr.isConnected = NetworkMgr.ifHasAnAddress
 end
 
 -- power functions: suspend, resume, reboot, poweroff
@@ -263,7 +221,14 @@ function Cervantes:setEventHandlers(UIManager)
             UIManager:unschedule(UIManager.poweroff_action)
             -- resume if we were suspended
             if self.screen_saver_mode then
-                UIManager.event_handlers.Resume()
+                if self.screen_saver_lock then
+                    logger.dbg("Pressed power while awake in screen saver mode, going back to suspend...")
+                    self:_beforeSuspend()
+                    self.powerd:beforeSuspend() -- this won't be run by onPowerEvent because we're in screen_saver_mode
+                    self:onPowerEvent("Suspend")
+                else
+                    UIManager.event_handlers.Resume()
+                end
             else
                 UIManager.event_handlers.Suspend()
             end

@@ -44,6 +44,7 @@ local ConfirmBox = InputContainer:extend{
     keep_dialog_open = false,
     text = _("no text"),
     face = Font:getFace("infofont"),
+    icon = "notice-question",
     ok_text = _("OK"),
     cancel_text = _("Cancel"),
     ok_callback = function() end,
@@ -72,7 +73,7 @@ function ConfirmBox:init()
             }
         end
         if Device:hasKeys() then
-            self.key_events.Close = { {Device.input.group.Back}, doc = "cancel" }
+            self.key_events.Close = { { Device.input.group.Back } }
         end
     end
     local text_widget = TextBoxWidget:new{
@@ -83,7 +84,8 @@ function ConfirmBox:init()
     local content = HorizontalGroup:new{
         align = "center",
         IconWidget:new{
-            icon = "notice-question",
+            icon = self.icon,
+            alpha = true,
         },
         HorizontalSpan:new{ width = Size.span.horizontal_default },
         text_widget,
@@ -183,7 +185,7 @@ end
 
 function ConfirmBox:onShow()
     UIManager:setDirty(self, function()
-        return "ui", self[1][1].dimen
+        return "ui", self.movable.dimen
     end)
     if self.flush_events_on_show then
         -- Discard queued and upcoming input events to avoid accidental dismissal
@@ -193,7 +195,7 @@ end
 
 function ConfirmBox:onCloseWidget()
     UIManager:setDirty(nil, function()
-        return "ui", self[1][1].dimen
+        return "ui", self.movable.dimen
     end)
 end
 
@@ -205,7 +207,7 @@ function ConfirmBox:onClose()
 end
 
 function ConfirmBox:onTapClose(arg, ges)
-    if ges.pos:notIntersectWith(self[1][1].dimen) then
+    if ges.pos:notIntersectWith(self.movable.dimen) then
         self:onClose()
     end
     -- Don't let it propagate to underlying widgets

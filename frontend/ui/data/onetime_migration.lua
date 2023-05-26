@@ -7,7 +7,7 @@ local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 
 -- Date at which the last migration snippet was added
-local CURRENT_MIGRATION_DATE = 20220930
+local CURRENT_MIGRATION_DATE = 20221027
 
 -- Retrieve the date of the previous migration, if any
 local last_migration_date = G_reader_settings:readSetting("last_migration_date", 0)
@@ -456,7 +456,14 @@ if last_migration_date < 20220930 then
     if not load_defaults then
         logger.warn("loadfile:", err)
     else
-        load_defaults()
+        -- User input, there may be syntax errors, go through pcall like we used to.
+        local ok, perr = pcall(load_defaults)
+        if not ok then
+            logger.warn("Failed to execute defaults.persistent.lua:", perr)
+            -- Don't keep *anything* around, to make it more obvious that something went screwy...
+            logger.warn("/!\\ YOU WILL HAVE TO MIGRATE YOUR CUSTOM defaults.lua SETTINGS MANUALLY /!\\")
+            defaults = {}
+        end
     end
 
     for k, v in pairs(defaults) do
@@ -476,6 +483,16 @@ if last_migration_date < 20220930 then
     ok, err = os.rename(defaults_path, archived_path)
     if not ok then
        logger.warn("os.rename:", err)
+    end
+end
+
+-- Extend the 20220205 hack to *all* the devices flagged as unreliable...
+if last_migration_date < 20221027 then
+    logger.info("Performing one-time migration for 20221027")
+
+    local Device = require("device")
+    if Device:isKobo() and not Device:hasReliableMxcWaitFor() then
+        G_reader_settings:makeFalse("followed_link_marker")
     end
 end
 

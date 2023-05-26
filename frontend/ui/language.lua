@@ -35,7 +35,7 @@ local Language = {
         vi = "Tiếng Việt",
         tr = "Türkçe",
         vi_VN = "Viet Nam",
-        ar_AA = "عربى",
+        ar = "عربى",
         bg_BG = "български",
         bn = "বাংলা",
         el = "Ελληνικά",
@@ -91,14 +91,10 @@ function Language:isLanguageRTL(lang_locale)
 end
 
 function Language:changeLanguage(lang_locale)
-    local InfoMessage = require("ui/widget/infomessage")
     local UIManager = require("ui/uimanager")
     _.changeLang(lang_locale)
     G_reader_settings:saveSetting("language", lang_locale)
-    UIManager:show(InfoMessage:new{
-        text = _("Please restart KOReader for the new language setting to take effect."),
-        timeout = 3,
-    })
+    UIManager:askForRestart(_("Please restart KOReader for the new language setting to take effect."))
 end
 
 function Language:genLanguageSubItem(lang_locale)
@@ -148,11 +144,11 @@ function Language:getLangMenuTable()
                 self:genLanguageSubItem("vi"),
                 self:genLanguageSubItem("tr"),
                 self:genLanguageSubItem("vi_VN"),
-                self:genLanguageSubItem("ar_AA"),
+                self:genLanguageSubItem("ar"),
                 self:genLanguageSubItem("bg_BG"),
                 --self:genLanguageSubItem("bn"),
                 self:genLanguageSubItem("el"),
-                --self:genLanguageSubItem("fa"),
+                self:genLanguageSubItem("fa"),
                 self:genLanguageSubItem("he"),
                 self:genLanguageSubItem("hi"),
                 self:genLanguageSubItem("ja"),

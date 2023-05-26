@@ -1,5 +1,6 @@
 local BD = require("ui/bidi")
 local Blitbuffer = require("ffi/blitbuffer")
+local ButtonDialog = require("ui/widget/buttondialog")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
 local Event = require("ui/event")
@@ -52,49 +53,51 @@ function PageBrowserWidget:init()
 
     if Device:hasKeys() then
         self.key_events = {
-            Close = { {Device.input.group.Back}, doc = "close page" },
-            ScrollRowUp = {{"Up"}, doc = "scroll up"},
-            ScrollRowDown = {{"Down"}, doc = "scrol down"},
-            ScrollPageUp = {{Input.group.PgBack}, doc = "prev page"},
-            ScrollPageDown = {{Input.group.PgFwd}, doc = "next page"},
+            Close = { { Device.input.group.Back } },
+            ScrollRowUp = { { "Up" } },
+            ScrollRowDown = { { "Down" } },
+            ScrollPageUp = { { Input.group.PgBack } },
+            ScrollPageDown = { { Input.group.PgFwd } },
         }
     end
     if Device:isTouchDevice() then
-        self.ges_events.Swipe = {
-            GestureRange:new{
-                ges = "swipe",
-                range = self.dimen,
-            }
-        }
-        self.ges_events.MultiSwipe = {
-            GestureRange:new{
-                ges = "multiswipe",
-                range = self.dimen,
-            }
-        }
-        self.ges_events.Tap = {
-            GestureRange:new{
-                ges = "tap",
-                range = self.dimen,
-            }
-        }
-        self.ges_events.Hold = {
-            GestureRange:new{
-                ges = "hold",
-                range = self.dimen,
-            }
-        }
-        self.ges_events.Pinch = {
-            GestureRange:new{
-                ges = "pinch",
-                range = self.dimen,
-            }
-        }
-        self.ges_events.Spread = {
-            GestureRange:new{
-                ges = "spread",
-                range = self.dimen,
-            }
+        self.ges_events = {
+            Swipe = {
+                GestureRange:new{
+                    ges = "swipe",
+                    range = self.dimen,
+                }
+            },
+            MultiSwipe = {
+                GestureRange:new{
+                    ges = "multiswipe",
+                    range = self.dimen,
+                }
+            },
+            Tap = {
+                GestureRange:new{
+                    ges = "tap",
+                    range = self.dimen,
+                }
+            },
+            Hold = {
+                GestureRange:new{
+                    ges = "hold",
+                    range = self.dimen,
+                }
+            },
+            Pinch = {
+                GestureRange:new{
+                    ges = "pinch",
+                    range = self.dimen,
+                }
+            },
+            Spread = {
+                GestureRange:new{
+                    ges = "spread",
+                    range = self.dimen,
+                }
+            },
         }
     end
 
@@ -104,11 +107,11 @@ function PageBrowserWidget:init()
     self.title_bar = TitleBar:new{
         fullscreen = true,
         title = self.title,
-        left_icon = "info",
-        left_icon_tap_callback = function() self:showHelp() end,
+        left_icon = "appbar.menu",
+        left_icon_tap_callback = function() self:showMenu() end,
         left_icon_hold_callback = function()
             -- Cycle nb of toc span levels shown in bottom row
-            if self:updateNbTocSpans(-1, true) then
+            if self:updateNbTocSpans(-1, true, true) then
                 self:updateLayout()
             end
         end,
@@ -611,19 +614,152 @@ function PageBrowserWidget:showTile(grid_idx, page, tile, do_refresh)
     end
 end
 
-function PageBrowserWidget:showHelp()
+function PageBrowserWidget:showMenu()
+    local button_dialog
+    -- Width of our -/+ buttons, so it looks fine with Button's default font size of 20
+    local plus_minus_width = Screen:scaleBySize(60)
+    local buttons = {
+        {{
+            text = _("About page browser"),
+            align = "left",
+            callback = function()
+                self:showAbout()
+            end,
+        }},
+        {{
+            text = _("Available gestures"),
+            align = "left",
+            callback = function()
+                self:showGestures()
+            end,
+        }},
+        {
+            {
+                text = _("Thumbnail columns"),
+                callback = function() end,
+                align = "left",
+            },
+            {
+                text = "\u{2796}", -- Heavy minus sign
+                enabled_func = function() return self.nb_cols > self.min_nb_cols end,
+                callback = function()
+                    if self:updateNbCols(-1, true) then
+                        self:updateLayout()
+                    end
+                end,
+                width = plus_minus_width,
+            },
+            {
+                text = "\u{2795}", -- Heavy plus sign
+                enabled_func = function() return self.nb_cols < self.max_nb_cols end,
+                callback = function()
+                    if self:updateNbCols(1, true) then
+                        self:updateLayout()
+                    end
+                end,
+                width = plus_minus_width,
+            }
+        },
+        {
+            {
+                text = _("Thumbnail rows"),
+                callback = function() end,
+                align = "left",
+            },
+            {
+                text = "\u{2796}", -- Heavy minus sign
+                enabled_func = function() return self.nb_rows > self.min_nb_rows end,
+                callback = function()
+                    if self:updateNbRows(-1, true) then
+                        self:updateLayout()
+                    end
+                end,
+                width = plus_minus_width,
+            },
+            {
+                text = "\u{2795}", -- Heavy plus sign
+                enabled_func = function() return self.nb_rows < self.max_nb_rows end,
+                callback = function()
+                    if self:updateNbRows(1, true) then
+                        self:updateLayout()
+                    end
+                end,
+                width = plus_minus_width,
+            }
+        },
+        {
+            {
+                text = _("Chapters in bottom ribbon"),
+                callback = function() end,
+                align = "left",
+            },
+            {
+                text = "\u{2796}", -- Heavy minus sign
+                enabled_func = function() return self.nb_toc_spans > 0 end,
+                callback = function()
+                    if self:updateNbTocSpans(-1, true) then
+                        self:updateLayout()
+                    end
+                end,
+                width = plus_minus_width,
+            },
+            {
+                text = "\u{2795}", -- Heavy plus sign
+                enabled_func = function() return self.nb_toc_spans < self.max_toc_depth end,
+                callback = function()
+                    if self:updateNbTocSpans(1, true) then
+                        self:updateLayout()
+                    end
+                end,
+                width = plus_minus_width,
+            }
+        },
+    }
+    button_dialog = ButtonDialog:new{
+        -- width = math.floor(Screen:getWidth() / 2),
+        width = math.floor(Screen:getWidth() * 0.9), -- max width, will get smaller
+        shrink_unneeded_width = true,
+        buttons = buttons,
+        anchor = function()
+            return self.title_bar.left_button.image.dimen
+        end,
+    }
+    UIManager:show(button_dialog)
+end
+
+function PageBrowserWidget:showAbout()
     UIManager:show(InfoMessage:new{
         text = _([[
 Page browser shows thumbnails of pages.
 
-The bottom ribbon displays an extract of the book map around the shown pages: see the book map help for details.
+The bottom ribbon displays an extract of the book map around the pages displayed:
 
+If statistics are enabled, black bars are shown for already read pages (gray for pages read in the current reading session). Their heights vary depending on the time spent reading the page.
+Chapters are shown above the pages they encompass.
+Under the pages, these indicators may be shown:
+▲ current page
+❶ ❷ … previous locations
+▒ highlighted text
+ highlighted text with notes
+ bookmarked page]]),
+    })
+end
+
+function PageBrowserWidget:showGestures()
+    UIManager:show(InfoMessage:new{
+        text = _([[
 Swipe along the top or left screen edge to change the number of columns or rows of thumbnails.
-Swipe vertically to move one row, horizontally to move one page.
+
+Swipe vertically to move one row, horizontally to move one screen.
+
 Swipe horizontally in the bottom ribbon to move by the full stripe.
+
 Tap in the bottom ribbon on a page to focus thumbnails on this page.
+
 Tap on a thumbnail to read this page.
-Long-press on ⓘ to decrease or reset the number of chapter levels shown in the bottom ribbon.
+
+Long-press on ≡ to decrease or reset the number of chapter levels shown in the bottom ribbon.
+
 Any multiswipe will close the page browser.]]),
     })
 end
@@ -679,19 +815,26 @@ function PageBrowserWidget:saveSettings(reset)
     G_reader_settings:saveSetting("page_browser_nb_cols", self.nb_cols)
 end
 
-function PageBrowserWidget:updateNbTocSpans(value, relative)
+function PageBrowserWidget:updateNbTocSpans(value, relative, rollover)
     local new_nb_toc_spans
     if relative then
         new_nb_toc_spans = self.nb_toc_spans + value
     else
         new_nb_toc_spans = value
     end
-    -- We don't cap, we cycle
     if new_nb_toc_spans < 0 then
-        new_nb_toc_spans = self.max_toc_depth
+        if rollover then
+            new_nb_toc_spans = self.max_toc_depth
+        else
+            new_nb_toc_spans = 0
+        end
     end
     if new_nb_toc_spans > self.max_toc_depth then
-        new_nb_toc_spans = 0
+        if rollover then
+            new_nb_toc_spans = 0
+        else
+            new_nb_toc_spans = self.max_toc_depth
+        end
     end
     if new_nb_toc_spans == self.nb_toc_spans then
         return false
@@ -750,11 +893,31 @@ function PageBrowserWidget:updateFocusPage(value, relative)
     else
         new_focus_page = value
     end
-    if new_focus_page < 1 then
-        new_focus_page = 1
-    end
-    if new_focus_page > self.nb_pages then
-        new_focus_page = self.nb_pages
+    -- Handle scroll by row or page a bit differently, so we dont constrain and
+    -- readjust the focus page: when later scrolling in the other direction,
+    -- we'll find exactly the view as it was (this means that we allow a single
+    -- thumbnail in the view, but it's less confusing this way).
+    if relative and (value == -self.nb_grid_items or value == -self.nb_cols) then
+        -- Going back one page or row. If first thumbnail is page 1 (or less if
+        -- blank), don't move. Otherwise, go ahead without any check as we'll
+        -- have something to display.
+        if self.focus_page - self.focus_page_shift <= 1 then
+            return
+        end
+    elseif relative and (value == self.nb_grid_items or value == self.nb_cols) then
+        -- Going forward one page or row. If last thumbnail is last page (or more if
+        -- blank), don't move. Otherwise, go ahead without any check as we'll
+        -- have something to display.
+        if self.focus_page - self.focus_page_shift + self.nb_grid_items - 1 >= self.nb_pages then
+            return
+        end
+    else
+        if new_focus_page < 1 then
+            new_focus_page = 1
+        end
+        if new_focus_page > self.nb_pages then
+            new_focus_page = self.nb_pages
+        end
     end
     if new_focus_page == self.focus_page then
         return false
@@ -981,6 +1144,32 @@ function PageBrowserWidget:onHold(arg, ges)
             })
         end
         return true
+    end
+    -- Hold on title: do nothing
+    if ges.pos.y < self.title_bar_h then
+        return true
+    end
+    -- If hold on a thumbnail, toggle bookmark on that page
+    for idx=1, self.nb_grid_items do
+        if ges.pos:intersectWith(self.grid[idx].dimen) then
+            local page = self.grid[idx].page_idx
+            if page and self.grid[idx][1][1].is_page_thumbnail then
+                -- Only allow hold on fully displayed thumbnails.
+                -- Also, a thumbnail might be smaller than the original grid
+                -- item dimension. Be sure the hold is on it (otherwise, it's
+                -- a hold in the inter thumbnail margin, that we'd rather not
+                -- handle)
+                local thumb_frame = self.grid[idx][1][1]
+                if ges.pos:intersectWith(thumb_frame.dimen) then
+                    self.ui.bookmark:toggleBookmark(page)
+                    -- Update our cached bookmarks info and ensure the bottom ribbon is redrawn
+                    self.bookmarked_pages = self.ui.bookmark:getBookmarkedPages()
+                    self:updateLayout()
+                    return true
+                end
+            end
+            break
+        end
     end
     return true
 end

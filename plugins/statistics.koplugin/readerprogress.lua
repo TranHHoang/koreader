@@ -18,26 +18,16 @@ local TitleBar = require("ui/widget/titlebar")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
-local util = require("util")
+local datetime = require("datetime")
 local _ = require("gettext")
 local Screen = Device.screen
 
-local LINE_COLOR = Blitbuffer.COLOR_WEB_GRAY
+local LINE_COLOR = Blitbuffer.COLOR_GRAY_9
 local BG_COLOR = Blitbuffer.COLOR_LIGHT_GRAY
 
 -- Oh, hey, this one actually *is* an InputContainer!
 local ReaderProgress = InputContainer:extend{
     padding = Size.padding.fullscreen,
-}
-
-local dayOfWeekTranslation = {
-    ["Monday"] = _("Monday"),
-    ["Tuesday"] = _("Tuesday"),
-    ["Wednesday"] = _("Wednesday"),
-    ["Thursday"] = _("Thursday"),
-    ["Friday"] = _("Friday"),
-    ["Saturday"] = _("Saturday"),
-    ["Sunday"] = _("Sunday"),
 }
 
 function ReaderProgress:init()
@@ -59,11 +49,8 @@ function ReaderProgress:init()
         return "ui", self.dimen
     end)
     if Device:hasKeys() then
-        self.key_events = {
-            --don't get locked in on non touch devices
-            AnyKeyPressed = { { Device.input.group.Any },
-            seqtext = "any key", doc = "close dialog" }
-        }
+        -- don't get locked in on non touch devices
+        self.key_events.AnyKeyPressed = { { Device.input.group.Any } }
     end
     if Device:isTouchDevice() then
         self.ges_events.Swipe = {
@@ -114,7 +101,7 @@ function ReaderProgress:getStatusContent(width)
         self:genSummaryWeek(width),
         self:genSingleHeader(_("Week progress")),
         self:genWeekStats(7),
-        self:genDoubleHeader(_("Current"), _("Today") ),
+        self:genDoubleHeader(_("Session"), _("Today") ),
         self:genSummaryDay(width),
     }
 end
@@ -246,7 +233,7 @@ function ReaderProgress:genWeekStats(stats_day)
         else
             select_day_time = 0
         end
-        date_format_show = dayOfWeekTranslation[os.date("%A", diff_time)] .. os.date(" (%d.%m)", diff_time)
+        date_format_show = datetime.shortDayOfWeekToLongTranslation[os.date("%a", diff_time)] .. os.date(" (%Y-%m-%d)", diff_time)
         local total_group = HorizontalGroup:new{
             align = "center",
             padding = Size.padding.small,
@@ -254,7 +241,7 @@ function ReaderProgress:genWeekStats(stats_day)
                 dimen = Geom:new{ w = self.screen_width , h = height * (1/3) },
                 TextWidget:new{
                     padding = Size.padding.small,
-                    text = date_format_show .. " - " .. util.secondsToClockDuration(user_duration_format, select_day_time, true),
+                    text = date_format_show .. " — " .. datetime.secondsToClockDuration(user_duration_format, select_day_time, true, true),
                     face = Font:getFace("smallffont"),
                 },
             },
@@ -348,7 +335,7 @@ function ReaderProgress:genSummaryDay(width)
         CenterContainer:new{
             dimen = Geom:new{ w = tile_width, h = tile_height },
             TextWidget:new{
-                text = util.secondsToClockDuration(user_duration_format, self.current_duration, true),
+                text = datetime.secondsToClockDuration(user_duration_format, self.current_duration, true),
                 face = self.medium_font_face,
             },
         },
@@ -362,7 +349,7 @@ function ReaderProgress:genSummaryDay(width)
         CenterContainer:new{
             dimen = Geom:new{ w = tile_width, h = tile_height },
             TextWidget:new{
-                text = util.secondsToClockDuration(user_duration_format, self.today_duration, true),
+                text = datetime.secondsToClockDuration(user_duration_format, self.today_duration, true),
                 face = self.medium_font_face,
             },
         },
@@ -413,7 +400,7 @@ function ReaderProgress:genSummaryWeek(width)
             dimen = Geom:new{ w = tile_width, h = tile_height },
             TextBoxWidget:new{
                 alignment = "center",
-                text = _("Average\npages"),
+                text = _("Average\npages/day"),
                 face = self.small_font_face,
                 width = tile_width * 0.95,
             }
@@ -422,7 +409,7 @@ function ReaderProgress:genSummaryWeek(width)
             dimen = Geom:new{ w = tile_width, h = tile_height },
             TextBoxWidget:new{
                 alignment = "center",
-                text = _("Average\ntime"),
+                text = _("Average\ntime/day"),
                 face = self.small_font_face,
                 width = tile_width * 0.95,
             }
@@ -450,7 +437,7 @@ function ReaderProgress:genSummaryWeek(width)
         CenterContainer:new{
             dimen = Geom:new{ w = tile_width, h = tile_height },
             TextWidget:new{
-                text = util.secondsToClockDuration(user_duration_format, math.floor(total_time), true),
+                text = datetime.secondsToClockDuration(user_duration_format, math.floor(total_time), true),
                 face = self.medium_font_face,
             },
         },
@@ -464,7 +451,7 @@ function ReaderProgress:genSummaryWeek(width)
         CenterContainer:new{
             dimen = Geom:new{ w = tile_width, h = tile_height },
             TextWidget:new{
-                text = util.secondsToClockDuration(user_duration_format, math.floor(total_time) * (1/7), true),
+                text = datetime.secondsToClockDuration(user_duration_format, math.floor(total_time) * (1/7), true),
                 face = self.medium_font_face,
             }
         }
@@ -477,10 +464,6 @@ function ReaderProgress:genSummaryWeek(width)
         dimen = Geom:new{ w = self.screen_width , h = math.floor(self.screen_height * 0.10) },
         statistics_container,
     }
-end
-
-function ReaderProgress:onAnyKeyPressed()
-    return self:onClose()
 end
 
 function ReaderProgress:onSwipe(arg, ges_ev)
@@ -499,17 +482,15 @@ function ReaderProgress:onSwipe(arg, ges_ev)
     end
 end
 
-function ReaderProgress:onMultiSwipe(arg, ges_ev)
-    -- For consistency with other fullscreen widgets where swipe south can't be
-    -- used to close and where we then allow any multiswipe to close, allow any
-    -- multiswipe to close this widget too.
-    self:onClose()
-    return true
-end
-
 function ReaderProgress:onClose()
     UIManager:close(self)
     return true
 end
+ReaderProgress.onAnyKeyPressed = ReaderProgress.onClose
+-- For consistency with other fullscreen widgets where swipe south can't be
+-- used to close and where we then allow any multiswipe to close, allow any
+-- multiswipe to close this widget too.
+ReaderProgress.onMultiSwipe = ReaderProgress.onClose
+
 
 return ReaderProgress

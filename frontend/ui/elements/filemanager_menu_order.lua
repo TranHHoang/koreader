@@ -14,7 +14,9 @@ local order = {
         "sort_by",
         -- "----------------------------",
         "filebrowser_settings",
+        -- "----------------------------",
         -- "reverse_sorting",
+        -- "sort_mixed",
         -- "----------------------------",
         -- "start_with",
     },
@@ -35,6 +37,8 @@ local order = {
         -- end common settings
     },
     document = {
+        "document_metadata_location",
+        "document_metadata_location_move",
         "document_auto_save",
         "document_save",
         "document_end_action",
@@ -42,6 +46,7 @@ local order = {
     },
     device = {
         "keyboard_layout",
+        "external_keyboard",
         "font_ui_fallbacks",
         "----------------------------",
         "time",
@@ -65,7 +70,6 @@ local order = {
         "backspace_as_back",
         "----------------------------",
         "android_volume_keys",
-        "android_camera_key",
         "android_haptic_feedback",
         "android_back_button",
         "----------------------------",
@@ -137,6 +141,7 @@ local order = {
         "terminal",
         "----------------------------",
         "plugin_management",
+        "patch_management",
         "advanced_settings",
         "developer_options",
     },
@@ -166,13 +171,15 @@ local order = {
         "----------------------------",
         "mass_storage_actions", -- if Device:canToggleMassStorage()
         "----------------------------",
-        "ota_update", -- if Device:hasOTAUpdates()
+        "ota_update",           -- if Device:hasOTAUpdates()
         "help",
         "----------------------------",
         "exit_menu",
     },
     help = {
         "quickstart_guide",
+        "----------------------------",
+        "search_menu",
         "----------------------------",
         "report_bug",
         "----------------------------",
@@ -184,11 +191,11 @@ local order = {
     exit_menu = {
         "restart_koreader", -- if Device:canRestart()
         "----------------------------",
-        "sleep", -- if Device:canSuspend()
-        "poweroff", -- if Device:canPowerOff()
-        "reboot", -- if Device:canReboot()
+        "sleep",            -- if Device:canSuspend()
+        "poweroff",         -- if Device:canPowerOff()
+        "reboot",           -- if Device:canReboot()
         "----------------------------",
-        "start_bq", -- if Device:isCervantes()
+        "start_bq",         -- if Device:isCervantes()
         "exit",
     }
 }

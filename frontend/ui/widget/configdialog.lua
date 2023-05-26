@@ -60,14 +60,12 @@ function OptionTextItem:init()
                 ges = "tap",
                 range = self.dimen,
             },
-            doc = "Select Option Item",
         },
         HoldSelect = {
             GestureRange:new{
                 ges = "hold",
                 range = self.dimen,
             },
-            doc = "Hold Option Item",
         },
     }
 end
@@ -134,14 +132,12 @@ function OptionIconItem:init()
                 ges = "tap",
                 range = self.dimen,
             },
-            doc = "Select Option Item",
         },
         HoldSelect = {
             GestureRange:new{
                 ges = "hold",
                 range = self.dimen,
             },
-            doc = "Hold Option Item",
         },
 
     }
@@ -292,8 +288,8 @@ function ConfigOption:init()
                 local name_widget_width = math.floor(name_align * Screen:getWidth())
                 -- We don't remove default_option_hpadding from name_text_max_width
                 -- to give more to text and avoid truncation: as it is right aligned,
-                -- the text can grow on the left, padding_small is enough.
-                local name_text_max_width = name_widget_width - 2*padding_small
+                -- the text can grow on the left.
+                local name_text_max_width = name_widget_width
                 local face = Font:getFace(name_font_face, name_font_size)
                 local option_name_container = RightContainer:new{
                     dimen = Geom:new{ w = name_widget_width, h = option_height},
@@ -615,7 +611,6 @@ function ConfigOption:init()
                     num_buttons = #self.options[c].values,
                     position = self.options[c].default_pos,
                     callback = function(arg)
-
                         if arg == "-" or arg == "+" then
                             Notification:setNotifySource(Notification.SOURCE_BOTTOM_MENU_FINE)
                             self.config:onConfigFineTuneChoose(self.options[c].values, self.options[c].name,
@@ -898,7 +893,7 @@ function ConfigDialog:init()
     if Device:hasKeys() then
         -- set up keyboard events
         local close_keys = Device:hasFewKeys() and { "Back", "Left" } or Device.input.group.Back
-        self.key_events.Close = { { close_keys }, doc = "close config menu" }
+        self.key_events.Close = { { close_keys } }
     end
 end
 

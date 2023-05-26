@@ -28,6 +28,7 @@ local order = {
         "autoturn",
         "----------------------------",
         "go_to_previous_location",
+        "go_to_next_location",
     },
     navi_settings = {
         "toc_alt_toc",
@@ -41,7 +42,7 @@ local order = {
         "bookmarks_settings",
     },
     typeset = {
-        "reset_document_settings",
+        "document_settings",
         "----------------------------",
         "set_render_style",
         "style_tweaks",
@@ -78,13 +79,17 @@ local order = {
         "status_bar",
     },
     document = {
+        "document_metadata_location",
         "document_auto_save",
         "document_save",
         "document_end_action",
         "language_support",
+        "----------------------------",
+        "partial_rerendering",
     },
     device = {
         "keyboard_layout",
+        "external_keyboard",
         "font_ui_fallbacks",
         "----------------------------",
         "time",
@@ -109,7 +114,6 @@ local order = {
         "----------------------------",
         "page_turns_non_touch",
         "android_volume_keys",
-        "android_camera_key",
         "android_haptic_feedback",
         "android_back_button",
         "----------------------------",
@@ -187,6 +191,7 @@ local order = {
         "terminal",
         "----------------------------",
         "plugin_management",
+        "patch_management",
     },
     search = {
         "dictionary",
@@ -225,6 +230,8 @@ local order = {
     },
     help = {
         "quickstart_guide",
+        "----------------------------",
+        "search_menu",
         "----------------------------",
         "report_bug",
         "----------------------------",

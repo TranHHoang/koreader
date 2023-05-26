@@ -33,11 +33,12 @@ local KoptOptions = require("ui/data/koptoptions")
 local Device = require("device")
 local Event = require("ui/event")
 local Notification = require("ui/widget/notification")
+local ReaderHighlight = require("apps/reader/modules/readerhighlight")
 local ReaderZooming = require("apps/reader/modules/readerzooming")
 local UIManager = require("ui/uimanager")
 local util = require("util")
 local _ = require("gettext")
-local C_ = _.pgettext
+local NC_ = _.npgettext
 local T = require("ffi/util").template
 
 local Dispatcher = {
@@ -49,25 +50,27 @@ local settingsList = {
     -- Screen & Lights
     show_frontlight_dialog = {category="none", event="ShowFlDialog", title=_("Show frontlight dialog"), screen=true, condition=Device:hasFrontlight()},
     toggle_frontlight = {category="none", event="ToggleFrontlight", title=_("Toggle frontlight"), screen=true, condition=Device:hasFrontlight()},
-    set_frontlight = {category="absolutenumber", event="SetFlIntensity", min=0, max=Device:getPowerDevice().fl_max, title=_("Set frontlight brightness to %1"), screen=true, condition=Device:hasFrontlight()},
-    increase_frontlight = {category="incrementalnumber", event="IncreaseFlIntensity", min=1, max=Device:getPowerDevice().fl_max, title=_("Increase frontlight brightness by %1"), screen=true, condition=Device:hasFrontlight()},
-    decrease_frontlight = {category="incrementalnumber", event="DecreaseFlIntensity", min=1, max=Device:getPowerDevice().fl_max, title=_("Decrease frontlight brightness by %1"), screen=true, condition=Device:hasFrontlight()},
-    set_frontlight_warmth = {category="absolutenumber", event="SetFlWarmth", min=0, max=100, title=_("Set frontlight warmth to %1"), screen=true, condition=Device:hasNaturalLight()},
-    increase_frontlight_warmth = {category="incrementalnumber", event="IncreaseFlWarmth", min=1, max=Device:getPowerDevice().fl_warmth_max, title=_("Increase frontlight warmth by %1"), screen=true, condition=Device:hasNaturalLight()},
-    decrease_frontlight_warmth = {category="incrementalnumber", event="DecreaseFlWarmth", min=1, max=Device:getPowerDevice().fl_warmth_max, title=_("Decrease frontlight warmth by %1"), screen=true, condition=Device:hasNaturalLight(), separator=true},
+    set_frontlight = {category="absolutenumber", event="SetFlIntensity", min=0, max=Device:getPowerDevice().fl_max, title=_("Set frontlight brightness"), screen=true, condition=Device:hasFrontlight()},
+    increase_frontlight = {category="incrementalnumber", event="IncreaseFlIntensity", min=1, max=Device:getPowerDevice().fl_max, title=_("Increase frontlight brightness"), screen=true, condition=Device:hasFrontlight()},
+    decrease_frontlight = {category="incrementalnumber", event="DecreaseFlIntensity", min=1, max=Device:getPowerDevice().fl_max, title=_("Decrease frontlight brightness"), screen=true, condition=Device:hasFrontlight()},
+    set_frontlight_warmth = {category="absolutenumber", event="SetFlWarmth", min=0, max=100, title=_("Set frontlight warmth"), screen=true, condition=Device:hasNaturalLight()},
+    increase_frontlight_warmth = {category="incrementalnumber", event="IncreaseFlWarmth", min=1, max=Device:getPowerDevice().fl_warmth_max, title=_("Increase frontlight warmth"), screen=true, condition=Device:hasNaturalLight()},
+    decrease_frontlight_warmth = {category="incrementalnumber", event="DecreaseFlWarmth", min=1, max=Device:getPowerDevice().fl_warmth_max, title=_("Decrease frontlight warmth"), screen=true, condition=Device:hasNaturalLight(), separator=true},
     full_refresh = {category="none", event="FullRefresh", title=_("Full screen refresh"), screen=true},
     night_mode = {category="none", event="ToggleNightMode", title=_("Toggle night mode"), screen=true},
-    set_night_mode = {category="string", event="SetNightMode", title=_("Set night mode"), screen=true, args={true, false}, toggle={_("On"), _("Off")}, separator=true},
-    set_refresh_rate = {category="absolutenumber", event="SetBothRefreshRates", min=-1, max=200, title=_("Flash every %1 pages (always)"), screen=true, condition=Device:hasEinkScreen()},
-    set_day_refresh_rate = {category="absolutenumber", event="SetDayRefreshRate", min=-1, max=200, title=_("Flash every %1 pages (not in night mode)"), screen=true, condition=Device:hasEinkScreen()},
-    set_night_refresh_rate = {category="absolutenumber", event="SetNightRefreshRate", min=-1, max=200, title=_("Flash every %1 pages (in night mode)"), screen=true, condition=Device:hasEinkScreen()},
-    set_flash_on_chapter_boundaries = {category="string", event="SetFlashOnChapterBoundaries", title=_("Always flash on chapter boundaries"), screen=true, condition=Device:hasEinkScreen(), args={true, false}, toggle={_("On"), _("Off")}},
+    set_night_mode = {category="string", event="SetNightMode", title=_("Set night mode"), screen=true, args={true, false}, toggle={_("on"), _("off")}, separator=true},
+    set_refresh_rate = {category="absolutenumber", event="SetBothRefreshRates", min=-1, max=200, title=_("Full refresh rate (always)"), screen=true, condition=Device:hasEinkScreen()},
+    set_day_refresh_rate = {category="absolutenumber", event="SetDayRefreshRate", min=-1, max=200, title=_("Full refresh rate (not in night mode)"), screen=true, condition=Device:hasEinkScreen()},
+    set_night_refresh_rate = {category="absolutenumber", event="SetNightRefreshRate", min=-1, max=200, title=_("Full refresh rate (in night mode)"), screen=true, condition=Device:hasEinkScreen()},
+    set_flash_on_chapter_boundaries = {category="string", event="SetFlashOnChapterBoundaries", title=_("Always flash on chapter boundaries"), screen=true, condition=Device:hasEinkScreen(), args={true, false}, toggle={_("on"), _("off")}},
     toggle_flash_on_chapter_boundaries = {category="none", event="ToggleFlashOnChapterBoundaries", title=_("Toggle flashing on chapter boundaries"), screen=true, condition=Device:hasEinkScreen()},
-    set_no_flash_on_second_chapter_page = {category="string", event="SetNoFlashOnSecondChapterPage", title=_("Never flash on chapter's 2nd page"), screen=true, condition=Device:hasEinkScreen(), args={true, false}, toggle={_("On"), _("Off")}},
+    set_no_flash_on_second_chapter_page = {category="string", event="SetNoFlashOnSecondChapterPage", title=_("Never flash on chapter's 2nd page"), screen=true, condition=Device:hasEinkScreen(), args={true, false}, toggle={_("on"), _("off")}},
     toggle_no_flash_on_second_chapter_page = {category="none", event="ToggleNoFlashOnSecondChapterPage", title=_("Toggle flashing on chapter's 2nd page"), screen=true, condition=Device:hasEinkScreen(), separator=true},
+    set_flash_on_pages_with_images = {category="string", event="SetFlashOnPagesWithImages", title=_("Always flash on pages with images"), screen=true, condition=Device:hasEinkScreen(), args={true, false}, toggle={_("on"), _("off")}},
+    toggle_flash_on_pages_with_images = {category="none", event="ToggleFlashOnPagesWithImages", title=_("Toggle flashing on pages with images"), screen=true, condition=Device:hasEinkScreen()},
 
     -- Device settings
-    toggle_gsensor = {category="none", event="ToggleGSensor", title=_("Toggle accelerometer"), device=true, condition=Device:canToggleGSensor()},
+    toggle_gsensor = {category="none", event="ToggleGSensor", title=_("Toggle accelerometer"), device=true, condition=Device:hasGSensor()},
     wifi_on = {category="none", event="InfoWifiOn", title=_("Turn on Wi-Fi"), device=true, condition=Device:hasWifiToggle()},
     wifi_off = {category="none", event="InfoWifiOff", title=_("Turn off Wi-Fi"), device=true, condition=Device:hasWifiToggle()},
     toggle_wifi = {category="none", event="ToggleWifi", title=_("Toggle Wi-Fi"), device=true, condition=Device:hasWifiToggle()},
@@ -75,11 +78,12 @@ local settingsList = {
     show_network_info = {category="none", event="ShowNetworkInfo", title=_("Show network info"), device=true, separator=true},
     exit_screensaver = {category="none", event="ExitScreensaver", title=_("Exit screensaver"), device=true},
     restart = {category="none", event="Restart", title=_("Restart KOReader"), device=true, condition=Device:canRestart()},
-    suspend = {category="none", event="RequestSuspend", title=_("Suspend"), device=true},
+    suspend = {category="none", event="RequestSuspend", title=_("Suspend"), device=true, condition=Device:canSuspend()},
     reboot = {category="none", event="RequestReboot", title=_("Reboot the device"), device=true, condition=Device:canReboot()},
     poweroff = {category="none", event="RequestPowerOff", title=_("Power off"), device=true, condition=Device:canPowerOff(), separator=true},
     exit = {category="none", event="Exit", title=_("Exit KOReader"), device=true},
-    toggle_hold_corners = {category="none", event="IgnoreHoldCorners", title=_("Toggle hold corners"), device=true, separator=true},
+    toggle_hold_corners = {category="none", event="IgnoreHoldCorners", title=_("Toggle hold corners"), device=true},
+    toggle_touch_input = {category="none", event="IgnoreTouchInput", title=_("Toggle touch input"), device=true, separator=true},
     toggle_rotation = {category="none", event="SwapRotation", title=_("Toggle orientation"), device=true},
     invert_rotation = {category="none", event="InvertRotation", title=_("Invert rotation"), device=true},
     iterate_rotation = {category="none", event="IterateRotation", title=_("Rotate by 90° CW"), device=true},
@@ -95,6 +99,7 @@ local settingsList = {
     fulltext_search = {category="none", event="ShowFulltextSearchInput", title=_("Fulltext search"), general=true},
     file_search = {category="none", event="ShowFileSearch", title=_("File search"), general=true, separator=true},
     show_menu = {category="none", event="ShowMenu", title=_("Show menu"), general=true},
+    menu_search = {category="none", event="MenuSearch", title=_("Menu search"), general=true},
     favorites = {category="none", event="ShowColl", arg="favorites", title=_("Favorites"), general=true},
     screenshot = {category="none", event="Screenshot", title=_("Screenshot"), general=true, separator=true},
 
@@ -106,6 +111,7 @@ local settingsList = {
     folder_shortcuts = {category="none", event="ShowFolderShortcutsDialog", title=_("Folder shortcuts"), filemanager=true, separator=true},
 
     -- reader settings
+    open_next_document_in_folder = {category="none", event="OpenNextDocumentInFolder", title=_("Open next document in folder"), reader=true, separator=true},
     toggle_status_bar = {category="none", event="TapFooter", title=_("Toggle status bar"), reader=true, separator=true},
     prev_chapter = {category="none", event="GotoPrevChapter", title=_("Previous chapter"), reader=true},
     next_chapter = {category="none", event="GotoNextChapter", title=_("Next chapter"), reader=true},
@@ -117,6 +123,7 @@ local settingsList = {
     skim = {category="none", event="ShowSkimtoDialog", title=_("Skim document"), reader=true},
     back = {category="none", event="Back", title=_("Back"), reader=true},
     previous_location = {category="none", event="GoBackLink", arg=true, title=_("Back to previous location"), reader=true},
+    next_location = {category="none", event="GoForwardLink", arg=true, title=_("Forward to next location"), reader=true},
     latest_bookmark = {category="none", event="GoToLatestBookmark", title=_("Go to latest bookmark"), reader=true},
     follow_nearest_link = {category="arg", event="GoToPageLink", arg={pos={x=0,y=0}}, title=_("Follow nearest link"), reader=true},
     follow_nearest_internal_link = {category="arg", event="GoToInternalPageLink", arg={pos={x=0,y=0}}, title=_("Follow nearest internal link"), reader=true},
@@ -135,20 +142,22 @@ local settingsList = {
     toggle_page_change_animation = {category="none", event="TogglePageChangeAnimation", title=_("Toggle page turn animations"), reader=true, condition=Device:canDoSwipeAnimation()},
     toggle_inverse_reading_order = {category="none", event="ToggleReadingOrder", title=_("Toggle page turn direction"), reader=true, separator=true},
     swap_page_turn_buttons = {category="none", event="SwapPageTurnButtons", title=_("Invert page turn buttons"), reader=true, condition=Device:hasKeys(), separator=true},
+    set_highlight_action = {category="string", event="SetHighlightAction", title=_("Set highlight action"), args_func=ReaderHighlight.getHighlightActions, reader=true},
     cycle_highlight_action = {category="none", event="CycleHighlightAction", title=_("Cycle highlight action"), reader=true},
     cycle_highlight_style = {category="none", event="CycleHighlightStyle", title=_("Cycle highlight style"), reader=true},
-    page_jmp = {category="absolutenumber", event="GotoViewRel", min=-100, max=100, title=_("Go %1 pages"), reader=true},
+    page_jmp = {category="absolutenumber", event="GotoViewRel", min=-100, max=100, title=_("Turn pages"), reader=true},
     panel_zoom_toggle = {category="none", event="TogglePanelZoomSetting", title=_("Toggle panel zoom"), paging=true, separator=true},
 
     -- rolling reader settings
     set_font = {category="string", event="SetFont", title=_("Set font"), rolling=true, args_func=require("fontlist").getFontArgFunc,},
-    increase_font = {category="incrementalnumber", event="IncreaseFontSize", min=0.5, max=255, step=0.5, title=_("Increase font size by %1"), rolling=true},
-    decrease_font = {category="incrementalnumber", event="DecreaseFontSize", min=0.5, max=255, step=0.5, title=_("Decrease font size by %1"), rolling=true},
+    increase_font = {category="incrementalnumber", event="IncreaseFontSize", min=0.5, max=255, step=0.5, title=_("Increase font size"), rolling=true},
+    decrease_font = {category="incrementalnumber", event="DecreaseFontSize", min=0.5, max=255, step=0.5, title=_("Decrease font size"), rolling=true},
 
     -- paging reader settings
     toggle_page_flipping = {category="none", event="TogglePageFlipping", title=_("Toggle page flipping"), paging=true},
+    toggle_bookmark_flipping = {category="none", event="ToggleBookmarkFlipping", title=_("Toggle bookmark flipping"), paging=true},
     toggle_reflow = {category="none", event="ToggleReflow", title=_("Toggle reflow"), paging=true},
-    zoom = {category="string", event="SetZoomMode", title=_("Zoom mode"), args=ReaderZooming.available_zoom_modes, toggle=ReaderZooming.available_zoom_modes, paging=true},
+    zoom = {category="string", event="SetZoomMode", title=_("Zoom mode"), args_func=ReaderZooming.getZoomModeActions, paging=true},
     zoom_factor_change = {category="none", event="ZoomFactorChange", title=_("Change zoom factor"), paging=true, separator=true},
 
     -- parsed from CreOptions
@@ -161,10 +170,12 @@ local settingsList = {
     b_page_margin = {category="absolutenumber", rolling=true, separator=true},
     view_mode = {category="string", rolling=true},
     block_rendering_mode = {category="string", rolling=true},
-    render_dpi = {category="string", rolling=true},
+    render_dpi = {category="string", title=_("Zoom"), rolling=true},
     line_spacing = {category="absolutenumber", rolling=true, separator=true},
-    font_size = {category="absolutenumber", title=_("Set font size to %1"), rolling=true, step=0.5},
+    font_size = {category="absolutenumber", title=_("Set font size"), rolling=true, step=0.5},
     font_base_weight = {category="string", rolling=true},
+    word_spacing = {category="string", rolling=true},
+    word_expansion = {category="string", rolling=true},
     font_gamma = {category="string", rolling=true},
     font_hinting = {category="string", rolling=true},
     font_kerning = {category="string", rolling=true, separator=true},
@@ -172,7 +183,7 @@ local settingsList = {
     embedded_css = {category="string", rolling=true},
     embedded_fonts = {category="string", rolling=true},
     smooth_scaling = {category="string", rolling=true},
-    nightmode_images = {category="string", rolling=true},
+    nightmode_images = {category="string", rolling=true, separator=true},
 
     -- parsed from KoptOptions
     kopt_trim_page = {category="string", paging=true},
@@ -224,6 +235,7 @@ local dispatcher_menu_order = {
     "file_search",
 
     "show_menu",
+    "menu_search",
     "screenshot",
 
     "exit_screensaver",
@@ -234,6 +246,7 @@ local dispatcher_menu_order = {
     "poweroff",
 
     "toggle_hold_corners",
+    "toggle_touch_input",
     "toggle_gsensor",
     "rotation_mode",
     "toggle_rotation",
@@ -267,6 +280,8 @@ local dispatcher_menu_order = {
     "toggle_flash_on_chapter_boundaries",
     "set_no_flash_on_second_chapter_page",
     "toggle_no_flash_on_second_chapter_page",
+    "set_flash_on_pages_with_images",
+    "toggle_flash_on_pages_with_images",
 
     -- filemanager
     "folder_up",
@@ -276,6 +291,8 @@ local dispatcher_menu_order = {
     "folder_shortcuts",
 
     -- reader
+    "open_next_document_in_folder",
+
     "show_config_menu",
     "toggle_status_bar",
 
@@ -291,6 +308,7 @@ local dispatcher_menu_order = {
     "latest_bookmark",
     "back",
     "previous_location",
+    "next_location",
     "follow_nearest_link",
     "follow_nearest_internal_link",
     "clear_location_history",
@@ -310,6 +328,8 @@ local dispatcher_menu_order = {
     "increase_font",
     "decrease_font",
     "font_size",
+    "word_spacing",
+    "word_expansion",
     "font_gamma",
     "font_base_weight",
     "font_hinting",
@@ -318,11 +338,13 @@ local dispatcher_menu_order = {
     "toggle_bookmark",
     "toggle_page_change_animation",
     "toggle_page_flipping",
+    "toggle_bookmark_flipping",
     "toggle_reflow",
     "toggle_inverse_reading_order",
     "swap_page_turn_buttons",
     "zoom",
     "zoom_factor_change",
+    "set_highlight_action",
     "cycle_highlight_action",
     "cycle_highlight_style",
     "panel_zoom_toggle",
@@ -429,6 +451,7 @@ function Dispatcher:init()
                         settingsList[name].default = option.default_value
                     end
                 end
+                settingsList[name].unit = option.more_options_param and option.more_options_param.unit
             end
         end
     end
@@ -488,21 +511,49 @@ local function iter_func(settings)
     end
 end
 
+-- Returns the number of items present in the settings table
+function Dispatcher:_itemsCount(settings)
+    if settings then
+        local count = util.tableSize(settings)
+        if count > 0 and settings.settings ~= nil then
+            count = count - 1
+        end
+        return count
+    end
+end
+
 -- Returns a display name for the item.
-function Dispatcher:getNameFromItem(item, settings)
+function Dispatcher:getNameFromItem(item, settings, dont_show_value)
     if settingsList[item] == nil then
         return _("Unknown item")
     end
-    local amount
-    if settings ~= nil and settings[item] ~= nil then
-        amount = settings[item]
+    local title, category = settingsList[item].title, settingsList[item].category
+    local value = settings and settings[item]
+    if dont_show_value or value == nil or (value == 0 and category == "incrementalnumber") then
+        return title
+    else
+        local display_value
+        if category == "string" or category == "configurable" then
+            if type(value) == "table" then
+                display_value = string.format("%d / %d", unpack(value))
+            else
+                if not settingsList[item].args and settingsList[item].args_func then
+                    settingsList[item].args, settingsList[item].toggle = settingsList[item].args_func()
+                end
+                local value_num = util.arrayContains(settingsList[item].args, value)
+                display_value = settingsList[item].toggle[value_num]
+            end
+        elseif category == "absolutenumber" or category == "incrementalnumber" then
+            display_value = tostring(value)
+        end
+        if display_value then
+            if settingsList[item].unit then
+                display_value = display_value .. " " .. settingsList[item].unit
+            end
+            title = title .. ": " .. display_value
+        end
     end
-    if amount == nil
-        or (amount == 0 and settingsList[item].category == "incrementalnumber")
-    then
-        amount = C_("Number placeholder", "#")
-    end
-    return T(settingsList[item].title, amount)
+    return title
 end
 
 -- Add the item to the end of the execution order.
@@ -551,17 +602,14 @@ end
 function Dispatcher:menuTextFunc(settings)
     local action_name = _("Pass through")
     if settings then
-        local count = util.tableSize(settings)
+        local count = Dispatcher:_itemsCount(settings)
         if count == 0 then return _("Nothing") end
-        if count > 1 and settings.settings ~= nil then
-            count = count - 1
-        end
         if count == 1 then
             local item = next(settings)
             if item == "settings" then item = next(settings, item) end
             action_name = Dispatcher:getNameFromItem(item, settings)
         else
-            action_name = _("Many")
+            action_name = T(NC_("Dispatcher", "1 action", "%1 actions", count), count)
         end
     end
     return action_name
@@ -612,23 +660,23 @@ function Dispatcher:_addItem(caller, menu, location, settings, section)
         then
             if settingsList[k].category == "none" or settingsList[k].category == "arg" then
                 table.insert(menu, {
-                     text = settingsList[k].title,
-                     checked_func = function()
-                     return location[settings] ~= nil and location[settings][k] ~= nil
-                     end,
-                     callback = function(touchmenu_instance)
-                         if location[settings] == nil then
-                             location[settings] = {}
-                         end
-                         if location[settings][k] then
-                             location[settings][k] = nil
-                             Dispatcher:_removeFromOrder(location, settings, k)
-                         else
-                             location[settings][k] = true
-                             Dispatcher:_addToOrder(location, settings, k)
-                         end
-                         caller.updated = true
-                         if touchmenu_instance then touchmenu_instance:updateItems() end
+                    text = settingsList[k].title,
+                    checked_func = function()
+                        return location[settings] ~= nil and location[settings][k] ~= nil
+                    end,
+                    callback = function(touchmenu_instance)
+                        if location[settings] == nil then
+                            location[settings] = {}
+                        end
+                        if location[settings][k] then
+                            location[settings][k] = nil
+                            Dispatcher:_removeFromOrder(location, settings, k)
+                        else
+                            location[settings][k] = true
+                            Dispatcher:_addToOrder(location, settings, k)
+                        end
+                        caller.updated = true
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
                     end,
                     separator = settingsList[k].separator,
                 })
@@ -638,7 +686,7 @@ function Dispatcher:_addItem(caller, menu, location, settings, section)
                         return Dispatcher:getNameFromItem(k, location[settings])
                     end,
                     checked_func = function()
-                    return location[settings] ~= nil and location[settings][k] ~= nil
+                        return location[settings] ~= nil and location[settings][k] ~= nil
                     end,
                     callback = function(touchmenu_instance)
                         local SpinWidget = require("ui/widget/spinwidget")
@@ -647,14 +695,14 @@ function Dispatcher:_addItem(caller, menu, location, settings, section)
                             precision = "%0.1f"
                         end
                         local items = SpinWidget:new{
-                            value = location[settings] ~= nil and location[settings][k] or settingsList[k].default or 0,
+                            value = location[settings] ~= nil and location[settings][k] or settingsList[k].default or settingsList[k].min,
                             value_min = settingsList[k].min,
                             value_step = settingsList[k].step or 1,
                             precision = precision,
                             value_hold_step = 5,
                             value_max = settingsList[k].max,
                             default_value = settingsList[k].default,
-                            title_text = Dispatcher:getNameFromItem(k, location[settings]),
+                            title_text = Dispatcher:getNameFromItem(k, location[settings], true),
                             ok_always_enabled = true,
                             callback = function(spin)
                                 if location[settings] == nil then
@@ -686,7 +734,7 @@ function Dispatcher:_addItem(caller, menu, location, settings, section)
                         return Dispatcher:getNameFromItem(k, location[settings])
                     end,
                     checked_func = function()
-                    return location[settings] ~= nil and location[settings][k] ~= nil
+                        return location[settings] ~= nil and location[settings][k] ~= nil
                     end,
                     callback = function(touchmenu_instance)
                         local _ = require("gettext")
@@ -696,14 +744,13 @@ function Dispatcher:_addItem(caller, menu, location, settings, section)
                         end
                         local SpinWidget = require("ui/widget/spinwidget")
                         local items = SpinWidget:new{
-                            value = location[settings] ~= nil and location[settings][k] or 0,
+                            value = location[settings] ~= nil and location[settings][k] or settingsList[k].min,
                             value_min = settingsList[k].min,
                             value_step = settingsList[k].step or 1,
                             precision = precision,
                             value_hold_step = 5,
                             value_max = settingsList[k].max,
-                            default_value = 0,
-                            title_text = Dispatcher:getNameFromItem(k, location[settings]),
+                            title_text = Dispatcher:getNameFromItem(k, location[settings], true),
                             info_text = _([[If called by a gesture the amount of the gesture will be used]]),
                             ok_always_enabled = true,
                             callback = function(spin)
@@ -734,16 +781,20 @@ function Dispatcher:_addItem(caller, menu, location, settings, section)
                 })
             elseif settingsList[k].category == "string" or settingsList[k].category == "configurable" then
                 local sub_item_table = {}
-                if settingsList[k].args_func then
+                if not settingsList[k].args and settingsList[k].args_func then
                     settingsList[k].args, settingsList[k].toggle = settingsList[k].args_func()
                 end
                 for i=1,#settingsList[k].args do
                     table.insert(sub_item_table, {
                         text = tostring(settingsList[k].toggle[i]),
                         checked_func = function()
-                            return location[settings] ~= nil
-                                and location[settings][k] ~= nil
-                                and location[settings][k] == settingsList[k].args[i]
+                            if location[settings] ~= nil and location[settings][k] ~= nil then
+                                if type(location[settings][k]) == "table" then
+                                    return location[settings][k][1] == settingsList[k].args[i][1]
+                                else
+                                    return location[settings][k] == settingsList[k].args[i]
+                                end
+                            end
                         end,
                         callback = function()
                             if location[settings] == nil then
@@ -794,14 +845,19 @@ example usage:
 --]]--
 function Dispatcher:addSubMenu(caller, menu, location, settings)
     Dispatcher:init()
+    menu.ignored_by_menu_search = true -- all those would be duplicated
     table.insert(menu, {
         text = _("Nothing"),
         separator = true,
         checked_func = function()
-            return location[settings] ~= nil and next(location[settings]) == nil
+            return location[settings] ~= nil and Dispatcher:_itemsCount(location[settings]) == 0
         end,
         callback = function(touchmenu_instance)
+            local name = location[settings] and location[settings].settings and location[settings].settings.name
             location[settings] = {}
+            if name then
+                location[settings].settings = { name = name }
+            end
             caller.updated = true
             if touchmenu_instance then touchmenu_instance:updateItems() end
         end,
@@ -911,7 +967,7 @@ function Dispatcher:_showAsMenu(settings)
     end
     local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
     quickmenu = ButtonDialogTitle:new{
-        title = settings.settings.name or "Quick Menu",
+        title = settings.settings.name or _("QuickMenu"),
         title_align = "center",
         width_factor = 0.8,
         use_info_style = false,
@@ -923,13 +979,16 @@ end
 --[[--
 Calls the events in a settings list
 arguments are:
-    1) a reference to the uimanager
-    2) the settings table
-    3) optionally a `gestures`object
+    1) the settings table
+    2) optionally a `gestures` object
 --]]--
 function Dispatcher:execute(settings, gesture)
     if settings.settings ~= nil and settings.settings.show_as_quickmenu == true then
         return Dispatcher:_showAsMenu(settings)
+    end
+    local has_many = Dispatcher:_itemsCount(settings) > 1
+    if has_many then
+        UIManager:broadcastEvent(Event:new("BatchedUpdate"))
     end
     for k, v in iter_func(settings) do
         if type(k) == "number" then
@@ -971,6 +1030,9 @@ function Dispatcher:execute(settings, gesture)
             end
         end
         Notification:resetNotifySource()
+    end
+    if has_many then
+        UIManager:broadcastEvent(Event:new("BatchedUpdateDone"))
     end
 end
 

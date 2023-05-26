@@ -32,34 +32,40 @@ local FocusManager = InputContainer:extend{
     movement_allowed = { x = true, y = true },
 }
 
--- Only build the default mappings once, we'll make copies during instantiation.
-local KEY_EVENTS = {}
-local BUILTIN_KEY_EVENTS = {}
-local EXTRA_KEY_EVENTS = {}
-do
+-- Only build the default mappings once on initialization, or when an external keyboard is (dis-)/connected.
+-- We'll make copies during instantiation.
+local KEY_EVENTS
+local BUILTIN_KEY_EVENTS
+local EXTRA_KEY_EVENTS
+
+local function populateEventMappings()
+    KEY_EVENTS = {}
+    BUILTIN_KEY_EVENTS = {}
+    EXTRA_KEY_EVENTS = {}
+
     if Device:hasDPad() then
         local event_keys = {}
         -- these will all generate the same event, just with different arguments
-        table.insert(event_keys, {"FocusUp",    { {"Up"},    doc = "move focus up",    event = "FocusMove", args = {0, -1} } })
-        table.insert(event_keys, {"FocusRight", { {"Right"}, doc = "move focus right", event = "FocusMove", args = {1,  0} } })
-        table.insert(event_keys, {"FocusDown",  { {"Down"},  doc = "move focus down",  event = "FocusMove", args = {0,  1} } })
-        table.insert(event_keys, {"Press",      { {"Press"}, doc = "tap the widget",   event="Press" }})
+        table.insert(event_keys, { "FocusUp",    { { "Up" },    event = "FocusMove", args = {0, -1} } })
+        table.insert(event_keys, { "FocusRight", { { "Right" }, event = "FocusMove", args = {1,  0} } })
+        table.insert(event_keys, { "FocusDown",  { { "Down" },  event = "FocusMove", args = {0,  1} } })
+        table.insert(event_keys, { "Press",      { { "Press" }, event = "Press" } })
         local FEW_KEYS_END_INDEX = #event_keys -- Few keys device: only setup up, down, right and press
 
-        table.insert(event_keys, {"FocusLeft",  { {"Left"},  doc = "move focus left",         event = "FocusMove", args = {-1, 0} } })
+        table.insert(event_keys, { "FocusLeft",  { { "Left" },  event = "FocusMove", args = {-1, 0} } })
         local NORMAL_KEYS_END_INDEX = #event_keys
 
         -- Advanced Feature: following event handlers can be enabled via settings.reader.lua
-        -- Key combinations (Sym, Alt+Up, Tab, Shift+Tab and so on) are not used but shown as examples here
-        table.insert(event_keys, {"Hold",           { {"Sym", "AA"}, doc = "tap and hold the widget", event="Hold" } })
+        -- Key combinations (Sym+AA, Alt+Up, Tab, Shift+Tab and so on) are not used but shown as examples here
+        table.insert(event_keys, { "Hold",           { { "Sym", "AA" },    event = "Hold" } })
         -- half rows/columns move, it is helpful for slow device like Kindle DX to move quickly
-        table.insert(event_keys, {"HalfFocusUp",    { {"Alt", "Up"},    doc = "move focus half columns up",    event = "FocusHalfMove", args = {"up"} } })
-        table.insert(event_keys, {"HalfFocusRight", { {"Alt", "Right"}, doc = "move focus half rows right",    event = "FocusHalfMove", args = {"right"} } })
-        table.insert(event_keys, {"HalfFocusDown",  { {"Alt", "Down"},  doc = "move focus half columns down",  event = "FocusHalfMove", args = {"down"} } })
-        table.insert(event_keys, {"HalfFocusLeft",  { {"Alt", "Left"},  doc = "move focus half rows left",     event = "FocusHalfMove", args = {"left"} } })
+        table.insert(event_keys, { "HalfFocusUp",    { { "Alt", "Up" },    event = "FocusHalfMove", args = {"up"} } })
+        table.insert(event_keys, { "HalfFocusRight", { { "Alt", "Right" }, event = "FocusHalfMove", args = {"right"} } })
+        table.insert(event_keys, { "HalfFocusDown",  { { "Alt", "Down" },  event = "FocusHalfMove", args = {"down"} } })
+        table.insert(event_keys, { "HalfFocusLeft",  { { "Alt", "Left" },  event = "FocusHalfMove", args = {"left"} } })
         -- for PC navigation behavior support
-        table.insert(event_keys, {"FocusNext",      { {"Tab"},            doc = "move focus to next widget",     event="FocusNext"} })
-        table.insert(event_keys, {"FocusPrevious",  { {"Shift", "Tab"},   doc = "move focus to previous widget", event="FocusPrevious"} })
+        table.insert(event_keys, { "FocusNext",      { { "Tab" },          event = "FocusNext" } })
+        table.insert(event_keys, { "FocusPrevious",  { { "Shift", "Tab" }, event = "FocusPrevious" } })
 
         for i = 1, FEW_KEYS_END_INDEX do
             local key_name = event_keys[i][1]
@@ -92,6 +98,8 @@ do
         end
     end
 end
+
+populateEventMappings()
 
 function FocusManager:_init()
     InputContainer._init(self)
@@ -248,6 +256,38 @@ function FocusManager:onFocusMove(args)
         end
     end
     return true
+end
+
+function FocusManager:onPhysicalKeyboardConnected()
+    -- Re-initialize with new keys info.
+    populateEventMappings()
+    -- We can't just call FocusManager._init because it will *reset* the mappings, losing our widget-specific ones (if any),
+    -- and it'll call InputContainer._init, which *also* resets the touch zones.
+    -- Instead, we'll just do a merge ourselves.
+    util.tableMerge(self.key_events, KEY_EVENTS)
+    -- populateEventMappings replaces these, so, update our refs
+    self.builtin_key_events = BUILTIN_KEY_EVENTS
+    self.extra_key_events = EXTRA_KEY_EVENTS
+end
+
+function FocusManager:onPhysicalKeyboardDisconnected()
+    local prev_key_events = KEY_EVENTS
+    populateEventMappings()
+
+    -- If we still have keys, remove what disappeared from KEY_EVENTS from self.key_events (if any).
+    if Device:hasKeys() then
+        -- NOTE: This is slightly overkill, we could very well live with a few unreachable mappings for the rest of this widget's life ;).
+        for k, _ in pairs(prev_key_events) do
+            if not KEY_EVENTS[k] then
+                self.key_events[k] = nil
+            end
+        end
+    else
+        -- If we longer have keys at all, that's easy ;).
+        self.key_events = {}
+    end
+    self.builtin_key_events = BUILTIN_KEY_EVENTS
+    self.extra_key_events = EXTRA_KEY_EVENTS
 end
 
 -- constant, used to reset focus widget after layout recreation

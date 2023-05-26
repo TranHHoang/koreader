@@ -29,7 +29,7 @@ local KoptOptions = {
                 name = "rotation_mode",
                 name_text = _("Rotation"),
                 item_icons_func = function()
-                    if Screen:getRotationMode() == Screen.ORIENTATION_PORTRAIT then
+                    if Screen:getRotationMode() == Screen.DEVICE_ROTATED_UPRIGHT then
                         -- P, 0UR
                         return {
                             "rotation.P.90CCW",
@@ -37,7 +37,7 @@ local KoptOptions = {
                             "rotation.P.90CW",
                             "rotation.P.180UD",
                         }
-                    elseif Screen:getRotationMode() == Screen.ORIENTATION_PORTRAIT_ROTATED then
+                    elseif Screen:getRotationMode() == Screen.DEVICE_ROTATED_UPSIDE_DOWN then
                         -- P, 180UD
                         return {
                             "rotation.P.90CW",
@@ -45,7 +45,7 @@ local KoptOptions = {
                             "rotation.P.90CCW",
                             "rotation.P.0UR",
                         }
-                    elseif Screen:getRotationMode() == Screen.ORIENTATION_LANDSCAPE then
+                    elseif Screen:getRotationMode() == Screen.DEVICE_ROTATED_CLOCKWISE then
                         -- L, 90CW
                         return {
                             "rotation.L.90CCW",
@@ -66,8 +66,8 @@ local KoptOptions = {
                 -- For Dispatcher & onMakeDefault's sake
                 labels = {C_("Rotation", "⤹ 90°"), C_("Rotation", "↑ 0°"), C_("Rotation", "⤸ 90°"), C_("Rotation", "↓ 180°")},
                 alternate = false,
-                values = {Screen.ORIENTATION_LANDSCAPE_ROTATED, Screen.ORIENTATION_PORTRAIT, Screen.ORIENTATION_LANDSCAPE, Screen.ORIENTATION_PORTRAIT_ROTATED},
-                args = {Screen.ORIENTATION_LANDSCAPE_ROTATED, Screen.ORIENTATION_PORTRAIT, Screen.ORIENTATION_LANDSCAPE, Screen.ORIENTATION_PORTRAIT_ROTATED},
+                values = {Screen.DEVICE_ROTATED_COUNTER_CLOCKWISE, Screen.DEVICE_ROTATED_UPRIGHT, Screen.DEVICE_ROTATED_CLOCKWISE, Screen.DEVICE_ROTATED_UPSIDE_DOWN},
+                args = {Screen.DEVICE_ROTATED_COUNTER_CLOCKWISE, Screen.DEVICE_ROTATED_UPRIGHT, Screen.DEVICE_ROTATED_CLOCKWISE, Screen.DEVICE_ROTATED_UPSIDE_DOWN},
                 default_arg = 0,
                 current_func = function() return Screen:getRotationMode() end,
                 event = "SetRotationMode",
@@ -103,12 +103,18 @@ In 'semi-auto' and 'manual' modes, you may need to define areas once on an odd p
             {
                 name = "page_margin",
                 name_text = _("Margin"),
-                toggle = {C_("Page margin", "small"), C_("Page margin", "medium"), C_("Page margin", "large")},
-                values = {0.05, 0.10, 0.25},
+                buttonprogress = true,
+                values = {0.05, 0.10, 0.25, 0.40, 0.55, 0.70, 0.85, 1.00},
                 default_value = G_defaults:readSetting("DKOPTREADER_CONFIG_PAGE_MARGIN"),
                 event = "MarginUpdate",
                 name_text_hold_callback = optionsutil.showValues,
                 help_text = _([[Set margins to be applied after page-crop and zoom modes are applied.]]),
+                more_options = true,
+                more_options_param = {
+                    value_step = 0.01, value_hold_step = 0.10,
+                    value_min = 0, value_max = 1.50,
+                    precision = "%.2f",
+                },
             },
             {
                 name = "auto_straighten",

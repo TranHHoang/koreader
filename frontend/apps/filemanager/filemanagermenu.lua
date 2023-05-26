@@ -1,23 +1,24 @@
-local BD = require("ui/bidi")
+local BD              = require("ui/bidi")
 local CenterContainer = require("ui/widget/container/centercontainer")
-local ConfirmBox = require("ui/widget/confirmbox")
-local Device = require("device")
-local Event = require("ui/event")
-local FFIUtil = require("ffi/util")
-local InputContainer = require("ui/widget/container/inputcontainer")
-local PluginLoader = require("pluginloader")
-local SetDefaults = require("apps/filemanager/filemanagersetdefaults")
-local Size = require("ui/size")
-local UIManager = require("ui/uimanager")
-local Screen = Device.screen
-local dbg = require("dbg")
-local lfs = require("libs/libkoreader-lfs")
-local logger = require("logger")
-local util  = require("util")
-local _ = require("gettext")
-local T = FFIUtil.template
+local ConfirmBox      = require("ui/widget/confirmbox")
+local Device          = require("device")
+local Event           = require("ui/event")
+local FFIUtil         = require("ffi/util")
+local InputContainer  = require("ui/widget/container/inputcontainer")
+local PluginLoader    = require("pluginloader")
+local SetDefaults     = require("apps/filemanager/filemanagersetdefaults")
+local Size            = require("ui/size")
+local UIManager       = require("ui/uimanager")
+local Screen          = Device.screen
+local dbg             = require("dbg")
+local lfs             = require("libs/libkoreader-lfs")
+local logger          = require("logger")
+local util            = require("util")
+local _               = require("gettext")
+local N_              = _.ngettext
+local T               = FFIUtil.template
 
-local FileManagerMenu = InputContainer:extend{
+local FileManagerMenu = InputContainer:extend {
     tab_item_table = nil,
     menu_items = nil, -- table, mandatory
     registered_widgets = nil,
@@ -48,16 +49,21 @@ function FileManagerMenu:init()
 
     self.registered_widgets = {}
 
-    if Device:hasKeys() then
-        self.key_events = {
-            ShowMenu = { { "Menu" }, doc = "show menu" },
-        }
-    end
+    self:registerKeyEvents()
+
     self.activation_menu = G_reader_settings:readSetting("activate_menu")
     if self.activation_menu == nil then
         self.activation_menu = "swipe_tap"
     end
 end
+
+function FileManagerMenu:registerKeyEvents()
+    if Device:hasKeys() then
+        self.key_events.ShowMenu = { { "Menu" } }
+    end
+end
+
+FileManagerMenu.onPhysicalKeyboardConnected = FileManagerMenu.registerKeyEvents
 
 function FileManagerMenu:initGesListener()
     if not Device:isTouchDevice() then return end
@@ -69,8 +75,10 @@ function FileManagerMenu:initGesListener()
             id = "filemanager_tap",
             ges = "tap",
             screen_zone = {
-                ratio_x = DTAP_ZONE_MENU.x, ratio_y = DTAP_ZONE_MENU.y,
-                ratio_w = DTAP_ZONE_MENU.w, ratio_h = DTAP_ZONE_MENU.h,
+                ratio_x = DTAP_ZONE_MENU.x,
+                ratio_y = DTAP_ZONE_MENU.y,
+                ratio_w = DTAP_ZONE_MENU.w,
+                ratio_h = DTAP_ZONE_MENU.h,
             },
             handler = function(ges) return self:onTapShowMenu(ges) end,
         },
@@ -78,8 +86,10 @@ function FileManagerMenu:initGesListener()
             id = "filemanager_ext_tap",
             ges = "tap",
             screen_zone = {
-                ratio_x = DTAP_ZONE_MENU_EXT.x, ratio_y = DTAP_ZONE_MENU_EXT.y,
-                ratio_w = DTAP_ZONE_MENU_EXT.w, ratio_h = DTAP_ZONE_MENU_EXT.h,
+                ratio_x = DTAP_ZONE_MENU_EXT.x,
+                ratio_y = DTAP_ZONE_MENU_EXT.y,
+                ratio_w = DTAP_ZONE_MENU_EXT.w,
+                ratio_h = DTAP_ZONE_MENU_EXT.h,
             },
             overrides = {
                 "filemanager_tap",
@@ -90,8 +100,10 @@ function FileManagerMenu:initGesListener()
             id = "filemanager_swipe",
             ges = "swipe",
             screen_zone = {
-                ratio_x = DTAP_ZONE_MENU.x, ratio_y = DTAP_ZONE_MENU.y,
-                ratio_w = DTAP_ZONE_MENU.w, ratio_h = DTAP_ZONE_MENU.h,
+                ratio_x = DTAP_ZONE_MENU.x,
+                ratio_y = DTAP_ZONE_MENU.y,
+                ratio_w = DTAP_ZONE_MENU.w,
+                ratio_h = DTAP_ZONE_MENU.h,
             },
             overrides = {
                 "rolling_swipe",
@@ -103,8 +115,10 @@ function FileManagerMenu:initGesListener()
             id = "filemanager_ext_swipe",
             ges = "swipe",
             screen_zone = {
-                ratio_x = DTAP_ZONE_MENU_EXT.x, ratio_y = DTAP_ZONE_MENU_EXT.y,
-                ratio_w = DTAP_ZONE_MENU_EXT.w, ratio_h = DTAP_ZONE_MENU_EXT.h,
+                ratio_x = DTAP_ZONE_MENU_EXT.x,
+                ratio_y = DTAP_ZONE_MENU_EXT.y,
+                ratio_w = DTAP_ZONE_MENU_EXT.w,
+                ratio_h = DTAP_ZONE_MENU_EXT.h,
             },
             overrides = {
                 "filemanager_swipe",
@@ -118,7 +132,7 @@ function FileManagerMenu:onOpenLastDoc()
     local last_file = G_reader_settings:readSetting("lastfile")
     if not last_file or lfs.attributes(last_file, "mode") ~= "file" then
         local InfoMessage = require("ui/widget/infomessage")
-        UIManager:show(InfoMessage:new{
+        UIManager:show(InfoMessage:new {
             text = _("Cannot open last document"),
         })
         return
@@ -137,7 +151,6 @@ function FileManagerMenu:onOpenLastDoc()
 end
 
 function FileManagerMenu:setUpdateItemTable()
-
     -- setting tab
     self.menu_items.filebrowser_settings = {
         text = _("Settings"),
@@ -168,13 +181,14 @@ function FileManagerMenu:setUpdateItemTable()
                                     local SpinWidget = require("ui/widget/spinwidget")
                                     local Menu = require("ui/widget/menu")
                                     local default_perpage = Menu.items_per_page_default
-                                    local curr_perpage = G_reader_settings:readSetting("items_per_page") or default_perpage
-                                    local items = SpinWidget:new{
+                                    local curr_perpage = G_reader_settings:readSetting("items_per_page") or
+                                        default_perpage
+                                    local items = SpinWidget:new {
                                         value = curr_perpage,
                                         value_min = 6,
                                         value_max = 24,
                                         default_value = default_perpage,
-                                        title_text =  _("Items per page"),
+                                        title_text = _("Items per page"),
                                         keep_shown_on_apply = true,
                                         callback = function(spin)
                                             G_reader_settings:saveSetting("items_per_page", spin.value)
@@ -189,16 +203,18 @@ function FileManagerMenu:setUpdateItemTable()
                                 callback = function()
                                     local SpinWidget = require("ui/widget/spinwidget")
                                     local Menu = require("ui/widget/menu")
-                                    local curr_perpage = G_reader_settings:readSetting("items_per_page") or Menu.items_per_page_default
+                                    local curr_perpage = G_reader_settings:readSetting("items_per_page") or
+                                        Menu.items_per_page_default
                                     local default_font_size = Menu.getItemFontSize(curr_perpage)
-                                    local curr_font_size = G_reader_settings:readSetting("items_font_size") or default_font_size
-                                    local items_font = SpinWidget:new{
+                                    local curr_font_size = G_reader_settings:readSetting("items_font_size") or
+                                        default_font_size
+                                    local items_font = SpinWidget:new {
                                         value = curr_font_size,
                                         value_min = 10,
                                         value_max = 72,
                                         default_value = default_font_size,
                                         keep_shown_on_apply = true,
-                                        title_text =  _("Item font size"),
+                                        title_text = _("Item font size"),
                                         callback = function(spin)
                                             if spin.value == default_font_size then
                                                 -- We can't know if the user has set a size or hit "Use default", but
@@ -272,83 +288,83 @@ function FileManagerMenu:setUpdateItemTable()
                         separator = true,
                     },
                     {
-                text = _("History settings"),
-                sub_item_table = {
-                    {
-                        text = _("Clear history of deleted files"),
-                        callback = function()
-                            UIManager:show(ConfirmBox:new{
-                                text = _("Clear history of deleted files?"),
-                                ok_text = _("Clear"),
-                                ok_callback = function()
-                                    require("readhistory"):clearMissing()
+                        text = _("History settings"),
+                        sub_item_table = {
+                            {
+                                text = _("Clear history of deleted files"),
+                                callback = function()
+                                    UIManager:show(ConfirmBox:new {
+                                        text = _("Clear history of deleted files?"),
+                                        ok_text = _("Clear"),
+                                        ok_callback = function()
+                                            require("readhistory"):clearMissing()
+                                        end,
+                                    })
                                 end,
-                            })
-                        end,
-                    },
-                    {
-                        text = _("Auto-remove deleted or purged items from history"),
-                        checked_func = function()
-                            return G_reader_settings:isTrue("autoremove_deleted_items_from_history")
-                        end,
-                        callback = function()
-                            G_reader_settings:flipNilOrFalse("autoremove_deleted_items_from_history")
-                        end,
-                        separator = true,
-                    },
-                    {
-                        text = _("Show filename in Open last/previous menu items"),
-                        checked_func = function()
-                            return G_reader_settings:isTrue("open_last_menu_show_filename")
-                        end,
-                        callback = function()
-                            G_reader_settings:flipNilOrFalse("open_last_menu_show_filename")
-                        end,
-                    },
-                },
-            },
-            {
-                text = _("Home folder settings"),
-                sub_item_table = {
-                    {
-                        text = _("Set home folder"),
-                        callback = function()
-                            local text
-                            local home_dir = G_reader_settings:readSetting("home_dir")
-                            if home_dir then
-                                text = T(_("Home folder is set to:\n%1"), home_dir)
-                            else
-                                text = _("Home folder is not set.")
-                                home_dir = Device.home_dir
-                            end
-                            UIManager:show(ConfirmBox:new{
-                                text = text .. "\nChoose new folder to set as home?",
-                                ok_text = _("Choose folder"),
-                                ok_callback = function()
-                                    local path_chooser = require("ui/widget/pathchooser"):new{
-                                        select_file = false,
-                                        show_files = false,
-                                        path = home_dir,
-                                        onConfirm = function(new_path)
-                                            G_reader_settings:saveSetting("home_dir", new_path)
-                                        end
-                                    }
-                                    UIManager:show(path_chooser)
+                            },
+                            {
+                                text = _("Auto-remove deleted or purged items from history"),
+                                checked_func = function()
+                                    return G_reader_settings:isTrue("autoremove_deleted_items_from_history")
                                 end,
-                            })
-                        end,
+                                callback = function()
+                                    G_reader_settings:flipNilOrFalse("autoremove_deleted_items_from_history")
+                                end,
+                                separator = true,
+                            },
+                            {
+                                text = _("Show filename in Open last/previous menu items"),
+                                checked_func = function()
+                                    return G_reader_settings:isTrue("open_last_menu_show_filename")
+                                end,
+                                callback = function()
+                                    G_reader_settings:flipNilOrFalse("open_last_menu_show_filename")
+                                end,
+                            },
+                        },
                     },
                     {
-                        text = _("Shorten home folder"),
-                        checked_func = function()
-                            return G_reader_settings:nilOrTrue("shorten_home_dir")
-                        end,
-                        callback = function()
-                            G_reader_settings:flipNilOrTrue("shorten_home_dir")
-                            local FileManager = require("apps/filemanager/filemanager")
-                            if FileManager.instance then FileManager.instance:reinit() end
-                        end,
-                        help_text = _([[
+                        text = _("Home folder settings"),
+                        sub_item_table = {
+                            {
+                                text = _("Set home folder"),
+                                callback = function()
+                                    local text
+                                    local home_dir = G_reader_settings:readSetting("home_dir")
+                                    if home_dir then
+                                        text = T(_("Home folder is set to:\n%1"), home_dir)
+                                    else
+                                        text = _("Home folder is not set.")
+                                        home_dir = Device.home_dir
+                                    end
+                                    UIManager:show(ConfirmBox:new {
+                                        text = text .. "\n" .. _("Choose new folder to set as home?"),
+                                        ok_text = _("Choose folder"),
+                                        ok_callback = function()
+                                            local path_chooser = require("ui/widget/pathchooser"):new {
+                                                select_file = false,
+                                                show_files = false,
+                                                path = home_dir,
+                                                onConfirm = function(new_path)
+                                                    G_reader_settings:saveSetting("home_dir", new_path)
+                                                end
+                                            }
+                                            UIManager:show(path_chooser)
+                                        end,
+                                    })
+                                end,
+                            },
+                            {
+                                text = _("Shorten home folder"),
+                                checked_func = function()
+                                    return G_reader_settings:nilOrTrue("shorten_home_dir")
+                                end,
+                                callback = function()
+                                    G_reader_settings:flipNilOrTrue("shorten_home_dir")
+                                    local FileManager = require("apps/filemanager/filemanager")
+                                    if FileManager.instance then FileManager.instance:reinit() end
+                                end,
+                                help_text = _([[
 "Shorten home folder" will display the home folder itself as "Home" instead of its full path.
 
 Assuming the home folder is:
@@ -357,59 +373,58 @@ A subfolder will be shortened from:
 `/mnt/onboard/.books/Manga/Cells at Work`
 To:
 `Manga/Cells at Work`.]]),
+                            },
+                            {
+                                text = _("Lock home folder"),
+                                enabled_func = function()
+                                    return G_reader_settings:has("home_dir")
+                                end,
+                                checked_func = function()
+                                    return G_reader_settings:isTrue("lock_home_folder")
+                                end,
+                                callback = function()
+                                    G_reader_settings:flipNilOrFalse("lock_home_folder")
+                                    self.ui:onRefresh()
+                                end,
+                            },
+                        },
+                        separator = true,
                     },
                     {
-                        text = _("Lock home folder"),
-                        enabled_func = function()
-                            return G_reader_settings:has("home_dir")
-                        end,
-                        checked_func = function()
-                            return G_reader_settings:isTrue("lock_home_folder")
-                        end,
-                        callback = function()
-                            G_reader_settings:flipNilOrFalse("lock_home_folder")
-                            self.ui:onRefresh()
-                        end,
-                    },
-                },
-                separator = true,
-            },
-            {
-                text = _("Info lists items per page"),
-                help_text = _([[This sets the number of items per page in:
+                        text = _("Info lists items per page"),
+                        help_text = _([[This sets the number of items per page in:
 - Book information
 - Dictionary and Wikipedia lookup history
 - Reading statistics details
 - A few other plugins]]),
-                keep_menu_open = true,
-                callback = function()
-                    local SpinWidget = require("ui/widget/spinwidget")
-                    local KeyValuePage = require("ui/widget/keyvaluepage")
-                    local default_perpage = KeyValuePage:getDefaultKeyValuesPerPage()
-                    local curr_perpage = G_reader_settings:readSetting("keyvalues_per_page") or default_perpage
-                    local items = SpinWidget:new{
-                        value = curr_perpage,
-                        value_min = 10,
-                        value_max = 24,
-                        default_value = default_perpage,
-                        title_text =  _("Info lists items per page"),
-                        callback = function(spin)
-                            if spin.value == default_perpage then
-                                -- We can't know if the user has set a value or hit "Use default", but
-                                -- assume that if it is the default, he will prefer to stay with our
-                                -- default if he later changes screen DPI
-                                G_reader_settings:delSetting("keyvalues_per_page")
-                            else
-                                G_reader_settings:saveSetting("keyvalues_per_page", spin.value)
-                            end
-                        end
-                    }
-                    UIManager:show(items)
-                end,
-            },
+                        keep_menu_open = true,
+                        callback = function()
+                            local SpinWidget = require("ui/widget/spinwidget")
+                            local KeyValuePage = require("ui/widget/keyvaluepage")
+                            local default_perpage = KeyValuePage:getDefaultKeyValuesPerPage()
+                            local curr_perpage = G_reader_settings:readSetting("keyvalues_per_page") or default_perpage
+                            local items = SpinWidget:new {
+                                value = curr_perpage,
+                                value_min = 10,
+                                value_max = 24,
+                                default_value = default_perpage,
+                                title_text = _("Info lists items per page"),
+                                callback = function(spin)
+                                    if spin.value == default_perpage then
+                                        -- We can't know if the user has set a value or hit "Use default", but
+                                        -- assume that if it is the default, he will prefer to stay with our
+                                        -- default if he later changes screen DPI
+                                        G_reader_settings:delSetting("keyvalues_per_page")
+                                    else
+                                        G_reader_settings:saveSetting("keyvalues_per_page", spin.value)
+                                    end
+                                end
+                            }
+                            UIManager:show(items)
+                        end,
+                    },
                 },
             },
-            self.ui:getStartWithMenuTable(),
         }
     }
 
@@ -420,23 +435,61 @@ To:
         end
     end
 
-    self.menu_items.sort_by = self.ui:getSortingMenuTable()
-    table.insert(self.menu_items.sort_by.sub_item_table, {
-        text = _("Reverse order"),
-        checked_func = function() return self.ui.file_chooser.reverse_collate end,
-        callback = function() self.ui:toggleReverseCollate() end,
-    })
-    -- self.menu_items.start_with = self.ui:getStartWithMenuTable()
+    self.menu_items.sort_by = self:getSortingMenuTable()
+    self.menu_items.reverse_sorting = {
+        text = _("Reverse sorting"),
+        checked_func = function()
+            return G_reader_settings:isTrue("reverse_collate")
+        end,
+        callback = function()
+            G_reader_settings:flipNilOrFalse("reverse_collate")
+            self.ui.file_chooser:refreshPath()
+        end,
+    }
+    -- self.menu_items.sort_mixed = {
+    --     text = _("Folders and files mixed"),
+    --     enabled_func = function()
+    --         local collate = G_reader_settings:readSetting("collate")
+    --         return collate ~= "size" and
+    --             collate ~= "type" and
+    --             collate ~= "percent_unopened_first" and
+    --             collate ~= "percent_unopened_last"
+    --     end,
+    --     checked_func = function()
+    --         local collate = G_reader_settings:readSetting("collate")
+    --         return G_reader_settings:isTrue("collate_mixed") and
+    --             collate ~= "size" and
+    --             collate ~= "type" and
+    --             collate ~= "percent_unopened_first" and
+    --             collate ~= "percent_unopened_last"
+    --     end,
+    --     callback = function()
+    --         G_reader_settings:flipNilOrFalse("collate_mixed")
+    --         self.ui.file_chooser:refreshPath()
+    --     end,
+    -- }
+    -- self.menu_items.start_with = self:getStartWithMenuTable()
+
     if Device:supportsScreensaver() then
         self.menu_items.screensaver = {
             text = _("Screensaver"),
             sub_item_table = require("ui/elements/screensaver_menu"),
         }
     end
+
     -- insert common settings
     for id, common_setting in pairs(dofile("frontend/ui/elements/common_settings_menu_table.lua")) do
         self.menu_items[id] = common_setting
     end
+
+    -- settings tab - Document submenu
+    self.menu_items.document_metadata_location_move = {
+        text = _("Move book metadata"),
+        keep_menu_open = true,
+        callback = function()
+            self:moveBookMetadata()
+        end,
+    }
 
     -- tools tab
     self.menu_items.advanced_settings = {
@@ -456,7 +509,7 @@ To:
             {
                 text = _("Clear caches"),
                 callback = function()
-                    UIManager:show(ConfirmBox:new{
+                    UIManager:show(ConfirmBox:new {
                         text = _("Clear the cache folder?"),
                         ok_callback = function()
                             local DataStorage = require("datastorage")
@@ -468,10 +521,7 @@ To:
                             -- Also remove from the Cache objet references to the cache files we've just deleted
                             local Cache = require("cache")
                             Cache.cached = {}
-                            local InfoMessage = require("ui/widget/infomessage")
-                            UIManager:show(InfoMessage:new{
-                                text = _("Caches cleared. Please restart KOReader."),
-                            })
+                            UIManager:askForRestart(_("Caches cleared. Please restart KOReader."))
                         end,
                     })
                 end,
@@ -509,7 +559,7 @@ To:
                     end
                 end,
             },
-        }
+        },
     }
     if Device:isKobo() and not Device:isSunxi() then
         table.insert(self.menu_items.developer_options.sub_item_table, {
@@ -519,10 +569,7 @@ To:
             end,
             callback = function()
                 G_reader_settings:flipNilOrFalse("dev_startup_no_fbdepth")
-                local InfoMessage = require("ui/widget/infomessage")
-                UIManager:show(InfoMessage:new{
-                    text = _("This will take effect on next restart."),
-                })
+                UIManager:askForRestart()
             end,
         })
     end
@@ -535,10 +582,7 @@ To:
             end,
             callback = function()
                 G_reader_settings:flipNilOrFalse("dev_abort_on_crash")
-                local InfoMessage = require("ui/widget/infomessage")
-                UIManager:show(InfoMessage:new{
-                    text = _("This will take effect on next restart."),
-                })
+                UIManager:askForRestart()
             end,
         })
     end
@@ -617,10 +661,7 @@ To:
                     mxcfb_bypass_wait_for = not Device:hasReliableMxcWaitFor()
                 end
                 G_reader_settings:saveSetting("mxcfb_bypass_wait_for", not mxcfb_bypass_wait_for)
-                local InfoMessage = require("ui/widget/infomessage")
-                UIManager:show(InfoMessage:new{
-                    text = _("This will take effect on next restart."),
-                })
+                UIManager:askForRestart()
             end,
         })
     end
@@ -637,10 +678,7 @@ To:
             end,
             callback = function()
                 G_reader_settings:flipNilOrFalse("pb_ignore_b288_quirks")
-                local InfoMessage = require("ui/widget/infomessage")
-                UIManager:show(InfoMessage:new{
-                    text = _("This will take effect on next restart."),
-                })
+                UIManager:askForRestart()
             end,
         })
     end
@@ -660,10 +698,7 @@ To:
         end,
         callback = function()
             G_reader_settings:flipNilOrTrue("use_xtext")
-            local InfoMessage = require("ui/widget/infomessage")
-            UIManager:show(InfoMessage:new{
-                text = _("This will take effect on next restart."),
-            })
+            UIManager:askForRestart()
         end,
     })
     table.insert(self.menu_items.developer_options.sub_item_table, {
@@ -676,10 +711,7 @@ To:
                 end,
                 callback = function()
                     G_reader_settings:flipNilOrFalse("dev_reverse_ui_layout_mirroring")
-                    local InfoMessage = require("ui/widget/infomessage")
-                    UIManager:show(InfoMessage:new{
-                        text = _("This will take effect on next restart."),
-                    })
+                    UIManager:askForRestart()
                 end
             },
             {
@@ -689,18 +721,15 @@ To:
                 end,
                 callback = function()
                     G_reader_settings:flipNilOrFalse("dev_reverse_ui_text_direction")
-                    local InfoMessage = require("ui/widget/infomessage")
-                    UIManager:show(InfoMessage:new{
-                        text = _("This will take effect on next restart."),
-                    })
+                    UIManager:askForRestart()
                 end
-            }
-        }
+            },
+        },
     })
     table.insert(self.menu_items.developer_options.sub_item_table, {
         text_func = function()
             if G_reader_settings:nilOrTrue("use_cre_call_cache")
-                    and G_reader_settings:isTrue("use_cre_call_cache_log_stats") then
+                and G_reader_settings:isTrue("use_cre_call_cache_log_stats") then
                 return _("Enable CRE call cache (with stats)")
             end
             return _("Enable CRE call cache")
@@ -727,6 +756,7 @@ To:
     })
     if Device:isKobo() and Device:canToggleChargingLED() then
         table.insert(self.menu_items.developer_options.sub_item_table, {
+            -- @translators This is a debug option to help determine cases when standby failed to initiate properly. PM = power management.
             text = _("Turn on the LED on PM entry failure"),
             checked_func = function()
                 return G_reader_settings:isTrue("pm_debug_entry_failure")
@@ -740,7 +770,7 @@ To:
     self.menu_items.cloud_storage = {
         text = _("Cloud storage"),
         callback = function()
-            local cloud_storage = require("apps/cloudstorage/cloudstorage"):new{}
+            local cloud_storage = require("apps/cloudstorage/cloudstorage"):new {}
             UIManager:show(cloud_storage)
             local filemanagerRefresh = function() self.ui:onRefresh() end
             function cloud_storage:onClose()
@@ -784,7 +814,7 @@ Tap a book in the search results to open it.]]),
         end,
         hold_callback = function()
             local last_file = G_reader_settings:readSetting("lastfile")
-            UIManager:show(ConfirmBox:new{
+            UIManager:show(ConfirmBox:new {
                 text = T(_("Would you like to open the last document: %1?"), BD.filepath(last_file)),
                 ok_text = _("OK"),
                 ok_callback = function()
@@ -819,6 +849,7 @@ Tap a book in the search results to open it.]]),
     local MenuSorter = require("ui/menusorter")
     self.tab_item_table = MenuSorter:mergeAndSort("filemanager", self.menu_items, order)
 end
+
 dbg:guard(FileManagerMenu, 'setUpdateItemTable',
     function(self)
         local mock_menu_items = {}
@@ -828,13 +859,154 @@ dbg:guard(FileManagerMenu, 'setUpdateItemTable',
         end
     end)
 
+function FileManagerMenu:getSortingMenuTable()
+    local collates = {
+        { _("name"),                       "strcoll" },
+        { _("name (natural sorting)"),     "natural" },
+        { _("last read date"),             "access" },
+        { _("date added"),                 "change" },
+        { _("date modified"),              "modification" },
+        { _("size"),                       "size" },
+        { _("type"),                       "type" },
+        { _("percent – unopened first"), "percent_unopened_first" },
+        { _("percent – unopened last"),  "percent_unopened_last" },
+    }
+    local sub_item_table = {}
+    for i, v in ipairs(collates) do
+        table.insert(sub_item_table, {
+            text = v[1],
+            checked_func = function()
+                return v[2] == G_reader_settings:readSetting("collate", "strcoll")
+            end,
+            callback = function()
+                G_reader_settings:saveSetting("collate", v[2])
+                self.ui.file_chooser:refreshPath()
+            end,
+        })
+    end
+    return {
+        text_func = function()
+            local collate = G_reader_settings:readSetting("collate")
+            for i, v in ipairs(collates) do
+                if v[2] == collate then
+                    return T(_("Sort by: %1"), v[1])
+                end
+            end
+        end,
+        sub_item_table = sub_item_table,
+    }
+end
+
+-- function FileManagerMenu:getStartWithMenuTable()
+--     local start_withs = {
+--         { _("file browser"),     "filemanager" },
+--         { _("history"),          "history" },
+--         { _("favorites"),        "favorites" },
+--         { _("folder shortcuts"), "folder_shortcuts" },
+--         { _("last file"),        "last" },
+--     }
+--     local sub_item_table = {}
+--     for i, v in ipairs(start_withs) do
+--         table.insert(sub_item_table, {
+--             text = v[1],
+--             checked_func = function()
+--                 return v[2] == G_reader_settings:readSetting("start_with", "filemanager")
+--             end,
+--             callback = function()
+--                 G_reader_settings:saveSetting("start_with", v[2])
+--             end,
+--         })
+--     end
+--     return {
+--         text_func = function()
+--             local start_with = G_reader_settings:readSetting("start_with")
+--             for i, v in ipairs(start_withs) do
+--                 if v[2] == start_with then
+--                     return T(_("Start with: %1"), v[1])
+--                 end
+--             end
+--         end,
+--         sub_item_table = sub_item_table,
+--     }
+-- end
+
+function FileManagerMenu:moveBookMetadata()
+    local DocSettings = require("docsettings")
+    local FileChooser = self.ui.file_chooser
+    local function scanPath()
+        local sys_folders = {
+            -- do not scan sys_folders
+            ["/dev"]  = true,
+            ["/proc"] = true,
+            ["/sys"]  = true,
+        }
+        local books_to_move = {}
+        local dirs = { FileChooser.path }
+        while #dirs ~= 0 do
+            local new_dirs = {}
+            for _, d in ipairs(dirs) do
+                local ok, iter, dir_obj = pcall(lfs.dir, d)
+                if ok then
+                    for f in iter, dir_obj do
+                        local fullpath = "/" .. f
+                        if d ~= "/" then
+                            fullpath = d .. fullpath
+                        end
+                        local attributes = lfs.attributes(fullpath) or {}
+                        if attributes.mode == "directory" and f ~= "." and f ~= ".."
+                            and FileChooser:show_dir(f) and not sys_folders[fullpath] then
+                            table.insert(new_dirs, fullpath)
+                        elseif attributes.mode == "file" and not util.stringStartsWith(f, "._")
+                            and FileChooser:show_file(f) and DocSettings:hasSidecarFile(fullpath)
+                            and lfs.attributes(DocSettings:getSidecarFile(fullpath), "mode") ~= "file" then
+                            table.insert(books_to_move, fullpath)
+                        end
+                    end
+                end
+            end
+            dirs = new_dirs
+        end
+        return books_to_move
+    end
+    UIManager:show(ConfirmBox:new {
+        text = _("Scan books in current folder and subfolders for their metadata location?"),
+        ok_text = _("Scan"),
+        ok_callback = function()
+            local books_to_move = scanPath()
+            local books_to_move_nb = #books_to_move
+            if books_to_move_nb == 0 then
+                local InfoMessage = require("ui/widget/infomessage")
+                UIManager:show(InfoMessage:new {
+                    text = _("No books with metadata not in your preferred location found."),
+                })
+            else
+                UIManager:show(ConfirmBox:new {
+                    text = T(N_("1 book with metadata not in your preferred location found.",
+                            "%1 books with metadata not in your preferred location found.",
+                            books_to_move_nb), books_to_move_nb) .. "\n" ..
+                        _("Move book metadata to your preferred location?"),
+                    ok_text = _("Move"),
+                    ok_callback = function()
+                        UIManager:close(self.menu_container)
+                        for _, book in ipairs(books_to_move) do
+                            DocSettings:update(book, book)
+                        end
+                        FileChooser:refreshPath()
+                    end,
+                })
+            end
+        end,
+    })
+end
+
 function FileManagerMenu:exitOrRestart(callback, force)
     UIManager:close(self.menu_container)
 
     -- Only restart sets a callback, which suits us just fine for this check ;)
     if callback and not force and not Device:isStartupScriptUpToDate() then
-        UIManager:show(ConfirmBox:new{
-            text = _("KOReader's startup script has been updated. You'll need to completely exit KOReader to finalize the update."),
+        UIManager:show(ConfirmBox:new {
+            text = _(
+                "KOReader's startup script has been updated. You'll need to completely exit KOReader to finalize the update."),
             ok_text = _("Restart anyway"),
             ok_callback = function()
                 self:exitOrRestart(callback, true)
@@ -858,7 +1030,7 @@ function FileManagerMenu:onShowMenu(tab_index)
         tab_index = G_reader_settings:readSetting("filemanagermenu_tab_index") or 1
     end
 
-    local menu_container = CenterContainer:new{
+    local menu_container = CenterContainer:new {
         ignore = "height",
         dimen = Screen:getSize(),
     }
@@ -866,7 +1038,7 @@ function FileManagerMenu:onShowMenu(tab_index)
     local main_menu
     if Device:isTouchDevice() or Device:hasDPad() then
         local TouchMenu = require("ui/widget/touchmenu")
-        main_menu = TouchMenu:new{
+        main_menu = TouchMenu:new {
             width = Screen:getWidth(),
             last_index = tab_index,
             tab_item_table = self.tab_item_table,
@@ -874,7 +1046,7 @@ function FileManagerMenu:onShowMenu(tab_index)
         }
     else
         local Menu = require("ui/widget/menu")
-        main_menu = Menu:new{
+        main_menu = Menu:new {
             title = _("File manager menu"),
             item_table = Menu.itemTableFromTouchMenu(self.tab_item_table),
             width = Screen:getWidth() - (Size.margin.fullscreen_popout * 2),
@@ -908,13 +1080,13 @@ function FileManagerMenu:_getTabIndexFromLocation(ges)
     local last_tab_index = G_reader_settings:readSetting("filemanagermenu_tab_index") or 1
     if not ges then
         return last_tab_index
-    -- if the start position is far right
-    elseif ges.pos.x > Screen:getWidth() * (2/3) then
+        -- if the start position is far right
+    elseif ges.pos.x > Screen:getWidth() * (2 / 3) then
         return BD.mirroredUILayout() and 1 or #self.tab_item_table
-    -- if the start position is far left
-    elseif ges.pos.x < Screen:getWidth() * (1/3) then
+        -- if the start position is far left
+    elseif ges.pos.x < Screen:getWidth() * (1 / 3) then
         return BD.mirroredUILayout() and #self.tab_item_table or 1
-    -- if center return the last index
+        -- if center return the last index
     else
         return last_tab_index
     end
@@ -940,6 +1112,11 @@ function FileManagerMenu:onSetDimensions(dimen)
     if Device:isTouchDevice() then
         self:initGesListener()
     end
+end
+
+function FileManagerMenu:onMenuSearch()
+    self:onShowMenu()
+    self.menu_container[1]:onShowMenuSearch()
 end
 
 function FileManagerMenu:registerToMainMenu(widget)

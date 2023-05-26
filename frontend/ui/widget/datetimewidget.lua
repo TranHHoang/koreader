@@ -117,18 +117,16 @@ function DateTimeWidget:init()
     end
     self.width = self.width or math.floor(math.min(self.screen_width, self.screen_height) * width_scale_factor)
     if Device:hasKeys() then
-        self.key_events.Close = { {Device.input.group.Back}, doc = "close date widget" }
+        self.key_events.Close = { { Device.input.group.Back } }
     end
     if Device:isTouchDevice() then
-        self.ges_events = {
-            TapClose = {
-                GestureRange:new{
-                    ges = "tap",
-                    range = Geom:new{
-                        w = self.screen_width,
-                        h = self.screen_height,
-                    }
-                },
+        self.ges_events.TapClose = {
+            GestureRange:new{
+                ges = "tap",
+                range = Geom:new{
+                    w = self.screen_width,
+                    h = self.screen_height,
+                }
             },
         }
     end
@@ -213,7 +211,7 @@ function DateTimeWidget:createLayout()
             value = self.min,
             value_min = self.min_min or 0,
             value_max = self.min_max or 59,
-            value_step = 1,
+            value_step = self.min_step or 1,
             value_hold_step = self.min_hold_step or 10,
             width = number_picker_widgets_width,
         }
@@ -396,9 +394,6 @@ function DateTimeWidget:createLayout()
         }
     }
     self:refocusWidget()
-    UIManager:setDirty(self, function()
-        return "ui", self.date_frame.dimen
-    end)
 end
 
 function DateTimeWidget:update(year, month, day, hour, min, sec)
@@ -429,11 +424,6 @@ function DateTimeWidget:onShow()
     UIManager:setDirty(self, function()
         return "ui", self.date_frame.dimen
     end)
-    return true
-end
-
-function DateTimeWidget:onAnyKeyPressed()
-    UIManager:close(self)
     return true
 end
 

@@ -43,7 +43,7 @@ local function slim(book, is_search)
     for _, k in ipairs(is_search and search_used_metadata or used_metadata) do
         if k == "series" or k == "series_index" then
             slim_book[k] = book[k] or rapidjson.null
-        elseif k == "tags" then
+        elseif k == "tags" or k == "authors" then
             slim_book[k] = book[k] or {}
         else
             slim_book[k] = book[k]
@@ -143,7 +143,13 @@ end
 
 -- add a book to our books table
 function CalibreMetadata:addBook(book)
-    table.insert(self.books, #self.books + 1, slim(book))
+    -- prevent duplicate entries
+    local _, index = self:getBookUuid(book.lpath)
+    if index then
+        self.books[index] = slim(book)
+    else
+        table.insert(self.books, #self.books + 1, slim(book))
+    end
 end
 
 -- remove a book from our books table

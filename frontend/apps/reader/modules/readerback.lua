@@ -20,15 +20,21 @@ local ReaderBack = EventListener:extend{
 }
 
 function ReaderBack:init()
-    if Device:hasKeys() then
-        self.ui.key_events.Back = { {Device.input.group.Back}, doc = "Reader back" }
-    end
+    self:registerKeyEvents()
     -- Regular function wrapping our method, to avoid re-creating
     -- an anonymous function at each page turn
     self._addPreviousLocationToStackCallback = function()
         self:_addPreviousLocationToStack()
     end
 end
+
+function ReaderBack:registerKeyEvents()
+    if Device:hasKeys() then
+        self.ui.key_events.Back = { { Device.input.group.Back } }
+    end
+end
+
+ReaderBack.onPhysicalKeyboardConnected = ReaderBack.registerKeyEvents
 
 function ReaderBack:_getCurrentLocation()
     if self.ui.document.info.has_pages then

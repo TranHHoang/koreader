@@ -11,10 +11,6 @@ require("ffi/posix_h")
 require("ffi/linux_input_h")
 require("ffi/inkview_h")
 
--- FIXME: Signal ffi/input.lua (brought in by device/input later on) that we want to use poll mode backend.
--- Remove this once backend becomes poll-only.
-_G.POCKETBOOK_FFI = true
-
 local function yes() return true end
 local function no() return false end
 
@@ -61,6 +57,10 @@ local PocketBook = Generic:extend{
     -- Runtime state: whether raw input is actually used
     --- @fixme: Never actually set anywhere?
     is_using_raw_input = nil,
+
+    -- InkView may have started translating button codes based on rotation on newer devices...
+    -- That historically wasn't the case, hence this defaulting to false.
+    inkview_translates_buttons = false,
 
     -- Will be set appropriately at init
     isB288SoC = no,
@@ -188,6 +188,7 @@ function PocketBook:init()
         device = self,
         raw_input = raw_input,
         event_map = setmetatable({
+            [C.KEY_HOME] = "Home",
             [C.KEY_MENU] = "Menu",
             [C.KEY_PREV] = "LPgBack",
             [C.KEY_NEXT] = "LPgFwd",
@@ -212,37 +213,31 @@ function PocketBook:init()
                     quasiSuspended = false
                     return "Resume"
                 end
+            elseif ev.code == C.EVT_EXIT then
+                -- Auto shutdown event from inkview framework,
+                -- gracefully close everything and let the framework shutdown the device.
+                return "Exit"
+            elseif ev.code == C.MSC_GYRO then
+                return this:handleGyroEv(ev)
             end
         end,
     }
 
-    -- in contrast to kobo/kindle, pocketbook-devices do not use linux/input
-    -- events directly. To be able to use input.lua nevertheless, we make
-    -- inkview-events look like linux/input events or handle them directly
-    -- here.
+    -- If InkView translates buttons for us, disable our own translation map
+    if self.inkview_translates_buttons then
+        self.input:disableRotationMap()
+    end
+
+    -- If InkView tells us this device has a gsensor enable the event based functionality
+    if inkview.QueryGSensor() ~= 0 then
+        self.hasGSensor = yes
+    end
+
+    -- In contrast to kobo/kindle, pocketbook-devices do not use linux/input events directly.
+    -- To be able to use input.lua nevertheless,
+    -- we make inkview-events look like linux/input events or handle them directly here.
     -- Unhandled events will leave Input:waitEvent() as "GenericInput"
-    self.input:registerEventAdjustHook(function(_input, ev)
-        if ev.type == C.EVT_KEYDOWN or ev.type == C.EVT_KEYUP then
-            ev.value = ev.type == C.EVT_KEYDOWN and 1 or 0
-            ev.type = C.EV_KEY
-        end
-
-        -- handle C.EVT_BACKGROUND and C.EVT_FOREGROUND as MiscEvent as this makes
-        -- it easy to return a string directly which can be used in
-        -- uimanager.lua as event_handler index.
-        if ev.type == C.EVT_BACKGROUND or ev.type == C.EVT_FOREGROUND
-        or ev.type == C.EVT_SHOW or ev.type == C.EVT_HIDE then
-            ev.code = ev.type
-            ev.type = C.EV_MSC -- handle as MiscEvent, see above
-        end
-
-        -- auto shutdown event from inkview framework, gracefully close
-        -- everything and let the framework shutdown the device
-        if ev.type == C.EVT_EXIT then
-            require("ui/uimanager"):broadcastEvent(
-                require("ui/event"):new("Close"))
-        end
-    end)
+    -- NOTE: This all happens in ffi/input_pocketbook.lua
 
     self._model_init()
     if (not self.input.raw_input) or (not pcall(self.input.open, self.input, self.raw_input)) then
@@ -373,9 +368,10 @@ function PocketBook:initNetworkManager(NetworkMgr)
         end
     end
 
-    function NetworkMgr:isWifiOn()
+    function NetworkMgr:isConnected()
         return band(inkview.QueryNetwork(), C.NET_CONNECTED) ~= 0
     end
+    NetworkMgr.isWifiOn = NetworkMgr.isConnected
 end
 
 function PocketBook:getSoftwareVersion()
@@ -397,6 +393,11 @@ function PocketBook:setEventHandlers(UIManager)
     end
     UIManager.event_handlers.Resume = function()
         self:_afterResume()
+    end
+    UIManager.event_handlers.Exit = function()
+        local Event = require("ui/event")
+        UIManager:broadcastEvent(Event:new("Close"))
+        UIManager:quit(0)
     end
 end
 
@@ -563,7 +564,9 @@ local PocketBook632 = PocketBook:extend{
 local PocketBook633 = PocketBook:extend{
     model = "PBColor",
     display_dpi = 300,
+    color_saturation = 1.5,
     hasColorScreen = yes,
+    canHWDither = yes, -- Adjust color saturation with inkview
     canUseCBB = no, -- 24bpp
     isAlwaysPortrait = yes,
     usingForcedRotation = landscape_ccw,
@@ -593,6 +596,8 @@ local PocketBook700 = PocketBook:extend{
     display_dpi = 300,
     isAlwaysPortrait = yes,
     hasNaturalLight = yes,
+    -- c.f., https://github.com/koreader/koreader/issues/9556
+    inkview_translates_buttons = true,
 }
 
 -- PocketBook InkPad 3 (740)
@@ -625,7 +630,9 @@ local PocketBook740_2 = PocketBook:extend{
 local PocketBook741 = PocketBook:extend{
     model = "PBInkPadColor",
     display_dpi = 300,
+    color_saturation = 1.5,
     hasColorScreen = yes,
+    canHWDither = yes, -- Adjust color saturation with inkview
     canUseCBB = no, -- 24bpp
     isAlwaysPortrait = yes,
     usingForcedRotation = landscape_ccw,
@@ -640,12 +647,14 @@ end
 local PocketBookColorLux = PocketBook:extend{
     model = "PBColorLux",
     display_dpi = 125,
+    color_saturation = 1.5,
     hasColorScreen = yes,
+    canHWDither = yes, -- Adjust color saturation with inkview
     canUseCBB = no, -- 24bpp
 }
 function PocketBookColorLux:_model_init()
-    self.screen.blitbuffer_rotation_mode = self.screen.ORIENTATION_PORTRAIT
-    self.screen.native_rotation_mode = self.screen.ORIENTATION_PORTRAIT
+    self.screen.blitbuffer_rotation_mode = self.screen.DEVICE_ROTATED_UPRIGHT
+    self.screen.native_rotation_mode = self.screen.DEVICE_ROTATED_UPRIGHT
 end
 function PocketBookColorLux._fb_init(fb, finfo, vinfo)
     -- Pocketbook Color Lux reports bits_per_pixel = 8, but actually uses an RGB24 framebuffer

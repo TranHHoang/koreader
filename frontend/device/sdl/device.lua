@@ -21,7 +21,7 @@ local function isUrl(s)
 end
 
 local function isCommand(s)
-    return os.execute("which "..s.." >/dev/null 2>&1") == 0
+    return os.execute("command -v "..s.." >/dev/null") == 0
 end
 
 local function runCommand(command)
@@ -128,7 +128,6 @@ local Emulator = Device:extend{
     hasNaturalLight = yes,
     hasNaturalLightApi = yes,
     hasWifiToggle = yes,
-    hasWifiManager = yes,
     -- Not really, Device:reboot & Device:powerOff are not implemented, so we just exit ;).
     canPowerOff = yes,
     canReboot = yes,
@@ -301,9 +300,8 @@ function Device:init()
     end
 
     if portrait then
-        self.input:registerEventAdjustHook(self.input.adjustTouchSwitchXY)
         self.input:registerEventAdjustHook(
-            self.input.adjustTouchMirrorX,
+            self.input.adjustTouchSwitchAxesAndMirrorX,
             (self.screen:getScreenWidth() - 1)
         )
     end
@@ -345,9 +343,8 @@ end
 
 function Device:setEventHandlers(UIManager)
     if not self:canSuspend() then
-        -- If we can't suspend, we have no business even trying to, as we may not have overloaded `Device:simulateResume`,
-        -- and since the empty Generic prototype doesn't flip `Device.screen_saver_mode`, we'd be stuck if we tried...
-        -- Instead, rely on the Generic Suspend/Resume handlers, which are sane ;).
+        -- If we can't suspend, we have no business even trying to, as we may not have overloaded `Device:simulateResume`.
+        -- Instead, rely on the Generic Suspend/Resume handlers.
         return
     end
 
@@ -369,19 +366,29 @@ function Device:setEventHandlers(UIManager)
     end
 end
 
+function Device:initNetworkManager(NetworkMgr)
+    function NetworkMgr:isWifiOn() return true end
+    function NetworkMgr:isConnected()
+        -- Pull the default gateway first, so we don't even try to ping anything if there isn't one...
+        local default_gw = Device:getDefaultRoute()
+        if not default_gw then
+            return false
+        end
+        return 0 == os.execute("ping -c1 -w2 " .. default_gw .. " > /dev/null")
+    end
+end
+
 function Emulator:supportsScreensaver() return true end
 
 function Emulator:simulateSuspend()
     local Screensaver = require("ui/screensaver")
     Screensaver:setup()
     Screensaver:show()
-    self.screen_saver_mode = true
 end
 
 function Emulator:simulateResume()
     local Screensaver = require("ui/screensaver")
     Screensaver:close()
-    self.screen_saver_mode = false
 end
 
 -- fake network manager for the emulator
@@ -405,6 +412,7 @@ function Emulator:initNetworkManager(NetworkMgr)
     function NetworkMgr:isWifiOn()
         return G_reader_settings:nilOrTrue("emulator_fake_wifi_connected")
     end
+    NetworkMgr.isConnected = NetworkMgr.isWifiOn
 end
 
 io.write("Starting SDL in " .. SDL.getBasePath() .. "\n")

@@ -165,11 +165,10 @@ function KeyboardLayoutDialog:init()
             w = Screen:getWidth(),
             h = Screen:getHeight(),
         },
-        ignore_if_over = "height",
         self.movable,
     }
     if Device:hasKeys() then
-        self.key_events.CloseDialog = { {Device.input.group.Back}, doc = "close dialog" }
+        self.key_events.CloseDialog = { { Device.input.group.Back } }
     end
 end
 
@@ -181,7 +180,7 @@ end
 
 function KeyboardLayoutDialog:onCloseWidget()
     UIManager:setDirty(nil, function()
-        return "ui", self[1][1].dimen
+        return "ui", self.movable.dimen
     end)
 end
 

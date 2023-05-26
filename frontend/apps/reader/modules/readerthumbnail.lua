@@ -199,12 +199,15 @@ function ReaderThumbnail:resetCachedPagesForBookmarks(...)
             end
         else
             if bm.page and type(bm.page) == "number" then
-                local p = bm.page
-                if not start_page or p < start_page then
-                    start_page = p
-                end
-                if not end_page or p > end_page then
-                    end_page = p
+                local bm_page0 = (bm.pos0 and bm.pos0.page) or bm.page
+                local bm_page1 = (bm.pos1 and bm.pos1.page) or bm.page
+                for p = bm_page0, bm_page1 do
+                    if not start_page or p < start_page then
+                        start_page = p
+                    end
+                    if not end_page or p > end_page then
+                        end_page = p
+                    end
                 end
             end
         end
@@ -404,10 +407,12 @@ function ReaderThumbnail:_getPageImage(page)
     if self.ui.view.highlight.lighten_factor < 0.3 then
         self.ui.view.highlight.lighten_factor = 0.3 -- make lighten highlight a bit darker
     end
+    self.ui.highlight.select_mode = false -- Remove any select mode icon
 
     if self.ui.rolling then
         -- CRE documents: pages all have the aspect ratio of our screen (alt top status bar
         -- will be croped out after drawing), we will show them just as rendered.
+        self.ui.rolling.rendering_state = nil -- Remove any partial rerendering icon
         self.ui.view:onSetViewMode("page") -- Get out of scroll mode
         if self.ui.font.gamma_index < 30 then  -- Increase font gamma (if not already increased),
             self.ui.document:setGammaIndex(30) -- as downscaling will make text grayer
@@ -499,10 +504,12 @@ function ReaderThumbnail:onColorRenderingUpdate()
 end
 
 -- CRE: emitted after a re-rendering
-ReaderThumbnail.onTocReset = ReaderThumbnail.resetCache
+ReaderThumbnail.onDocumentRerendered = ReaderThumbnail.resetCache
+ReaderThumbnail.onDocumentPartiallyRerendered = ReaderThumbnail.resetCache
 -- Emitted When adding/removing/updating bookmarks and highlights
 ReaderThumbnail.onBookmarkAdded = ReaderThumbnail.resetCachedPagesForBookmarks
 ReaderThumbnail.onBookmarkRemoved = ReaderThumbnail.resetCachedPagesForBookmarks
 ReaderThumbnail.onBookmarkUpdated = ReaderThumbnail.resetCachedPagesForBookmarks
+ReaderThumbnail.onBookmarkEdited = ReaderThumbnail.resetCachedPagesForBookmarks
 
 return ReaderThumbnail

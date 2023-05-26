@@ -20,7 +20,7 @@ local C_ = _.pgettext
 local optionsutil = require("ui/data/optionsutil")
 local util = require("util")
 
-local ReaderFont = InputContainer:extend{
+local ReaderFont = InputContainer:extend {
     font_face = nil,
     font_size = nil,
     line_space_percent = nil,
@@ -32,22 +32,7 @@ local ReaderFont = InputContainer:extend{
 }
 
 function ReaderFont:init()
-    if Device:hasKeyboard() then
-        -- add shortcut for keyboard
-        self.key_events = {
-            ShowFontMenu = { { "F" }, doc = "show font menu" },
-            IncreaseSize = {
-                { "Shift", Input.group.PgFwd },
-                doc = "increase font size",
-                event = "ChangeSize", args = 0.5
-            },
-            DecreaseSize = {
-                { "Shift", Input.group.PgBack },
-                doc = "decrease font size",
-                event = "ChangeSize", args = -0.5
-            },
-        }
-    end
+    self:registerKeyEvents()
     -- Build face_table for menu
     -- self.face_table = {}
     -- Grouping fonts by system fonts and custom fonts
@@ -74,54 +59,81 @@ function ReaderFont:init()
         local font_filename, font_faceindex, is_monospace = cre.getFontFaceFilenameAndFaceIndex(v)
         table.insert(util.stringStartsWith(font_filename, "./fonts/custom/") and self.face_table[3].sub_item_table or
             self.face_table[2].sub_item_table, {
-            text_func = function()
-                -- defaults are hardcoded in credocument.lua
-                local default_font = G_reader_settings:readSetting("cre_font") or self.ui.document.default_font
-                local fallback_font = G_reader_settings:readSetting("fallback_font") or
-                    self.ui.document.fallback_fonts[1]
-                local monospace_font = G_reader_settings:readSetting("monospace_font") or self.ui.document.monospace_font
-                local text = v
-                if font_filename and font_faceindex then
-                    text = FontList:getLocalizedFontName(font_filename, font_faceindex) or text
-                end
-
-                if v == monospace_font then
-                    text = text .. " \u{1F13C}" -- Squared Latin Capital Letter M
-                elseif is_monospace then
-                    text = text .. " \u{1D39}" -- Modified Letter Capital M
-                end
-                if v == default_font then
-                    text = text .. "   ★"
-                end
-                if v == fallback_font then
-                    text = text .. "   �"
-                end
-                return text
-            end,
-            font_func = function(size)
-                if G_reader_settings:nilOrTrue("font_menu_use_font_face") then
+                text_func = function()
+                    -- defaults are hardcoded in credocument.lua
+                    local default_font = G_reader_settings:readSetting("cre_font") or self.ui.document.default_font
+                    local fallback_font = G_reader_settings:readSetting("fallback_font") or
+                        self.ui.document.fallback_fonts[1]
+                    local monospace_font = G_reader_settings:readSetting("monospace_font") or
+                    self.ui.document.monospace_font
+                    local text = v
                     if font_filename and font_faceindex then
-                        return Font:getFace(font_filename, size, font_faceindex)
+                        text = FontList:getLocalizedFontName(font_filename, font_faceindex) or text
                     end
-                end
-            end,
-            callback = function()
-                self:onSetFont(v)
-            end,
-            hold_callback = function(touchmenu_instance)
-                self:makeDefault(v, is_monospace, touchmenu_instance)
-            end,
-            checked_func = function()
-                return v == self.font_face
-            end,
-            menu_item_id = v,
-        })
+
+                    if v == monospace_font then
+                        text = text .. " \u{1F13C}" -- Squared Latin Capital Letter M
+                    elseif is_monospace then
+                        text = text .. " \u{1D39}" -- Modified Letter Capital M
+                    end
+                    if v == default_font then
+                        text = text .. "   ★"
+                    end
+                    if v == fallback_font then
+                        text = text .. "   �"
+                    end
+                    return text
+                end,
+                font_func = function(size)
+                    if G_reader_settings:nilOrTrue("font_menu_use_font_face") then
+                        if font_filename and font_faceindex then
+                            return Font:getFace(font_filename, size, font_faceindex)
+                        end
+                    end
+                end,
+                callback = function()
+                    self:onSetFont(v)
+                end,
+                hold_callback = function(touchmenu_instance)
+                    self:makeDefault(v, is_monospace, touchmenu_instance)
+                end,
+                checked_func = function()
+                    return v == self.font_face
+                end,
+                menu_item_id = v,
+            })
     end
     self.face_table.open_on_menu_item_id_func = function()
         return self.font_face
     end
     self.ui.menu:registerToMainMenu(self)
+
+    -- NOP our own gesture handling
+    self.ges_events = nil
 end
+
+function ReaderFont:onGesture() end
+
+function ReaderFont:registerKeyEvents()
+    if Device:hasKeyboard() then
+        -- add shortcut for keyboard
+        self.key_events = {
+            ShowFontMenu = { { "F" } },
+            IncreaseSize = {
+                { "Shift", Input.group.PgFwd },
+                event = "ChangeSize",
+                args = 0.5
+            },
+            DecreaseSize = {
+                { "Shift", Input.group.PgBack },
+                event = "ChangeSize",
+                args = -0.5
+            },
+        }
+    end
+end
+
+ReaderFont.onPhysicalKeyboardConnected = ReaderFont.registerKeyEvents
 
 function ReaderFont:onSetDimensions(dimen)
     self.dimen = dimen
@@ -341,7 +353,7 @@ function ReaderFont:makeDefault(face, is_monospace, touchmenu_instance)
             -- default monospace font.
             UIManager:show(MultiConfirmBox:new {
                 text = T(_("Would you like %1 to be used as the default font (★), or the monospace font (\u{1F13C})?")
-                    , face),
+                , face),
                 choice1_text = _("Default"),
                 choice1_callback = function()
                     G_reader_settings:saveSetting("cre_font", face)
@@ -360,8 +372,10 @@ function ReaderFont:makeDefault(face, is_monospace, touchmenu_instance)
             return
         end
         UIManager:show(MultiConfirmBox:new {
-            text = T(_("Would you like %1 to be used as the default font (★), or the fallback font (�)?\n\nCharacters not found in the active font are shown in the fallback font instead.")
-                , face),
+            text = T(
+            _(
+            "Would you like %1 to be used as the default font (★), or the fallback font (�)?\n\nCharacters not found in the active font are shown in the fallback font instead.")
+            , face),
             choice1_text = _("Default"),
             choice1_callback = function()
                 G_reader_settings:saveSetting("cre_font", face)
@@ -416,14 +430,14 @@ end
 
 function ReaderFont:onIncreaseFontSize(ges)
     local delta_int = self:gesToFontSize(ges)
-    Notification:notify(_("Increasing font size…"), true)
+    Notification:notify(_("Increasing font size…"), nil, true)
     self:onChangeSize(delta_int)
     return true
 end
 
 function ReaderFont:onDecreaseFontSize(ges)
     local delta_int = self:gesToFontSize(ges)
-    Notification:notify(_("Decreasing font size…"), true)
+    Notification:notify(_("Decreasing font size…"), nil, true)
     self:onChangeSize(-delta_int)
     return true
 end
@@ -439,15 +453,15 @@ If you encounter a book where such families are abused to the point where your d
 local FONT_FAMILIES = {
     -- On 1st page
     -- @translators These are typography font family names as used in CSS, they can be kept untranslated if they are used more commonly than their translation
-    { "serif", _("Serif") },
+    { "serif",      _("Serif") },
     { "sans-serif", _("Sans-serif") },
-    { "monospace", _("Monospace") },
+    { "monospace",  _("Monospace") },
     -- On 2nd page
-    { "cursive", _("Cursive") },
-    { "fantasy", _("Fantasy") },
-    { "emoji", _("Emoji \u{1F60A}") },
-    { "fangsong", _("Fang Song \u{4EFF}\u{5B8B}") },
-    { "math", _("Math") },
+    { "cursive",    _("Cursive") },
+    { "fantasy",    _("Fantasy") },
+    { "emoji",      _("Emoji \u{1F60A}") },
+    { "fangsong",   _("Fang Song \u{4EFF}\u{5B8B}") },
+    { "math",       _("Math") },
 }
 
 function ReaderFont:updateFontFamilyFonts()
@@ -579,6 +593,7 @@ Enabling this will ignore such font names and make sure your preferred family fo
                 self:updateFontFamilyFonts()
             end,
             sub_item_table = {
+                ignored_by_menu_search = true, -- those would be duplicated
                 {
                     text = T(_("Font for %1"), BD.wrap(T("'font-family: %1'", family_tag))),
                     separator = true,
@@ -613,7 +628,8 @@ Enabling this will ignore such font names and make sure your preferred family fo
             },
         }
         for k, v in ipairs(face_list) do
-            local font_filename, font_faceindex, is_monospace, has_ot_math, has_emojis = cre.getFontFaceFilenameAndFaceIndex(v)
+            local font_filename, font_faceindex, is_monospace, has_ot_math, has_emojis = cre
+            .getFontFaceFilenameAndFaceIndex(v)
             if i == 1 then
                 face_to_filename[v] = { font_filename, font_faceindex }
             end
@@ -783,7 +799,8 @@ This setting allows scaling all monospace fonts by this percentage so they can f
         text = _("Generate font test document"),
         callback = function()
             UIManager:show(ConfirmBox:new {
-                text = _("Would you like to generate an HTML document showing some sample text rendered with each available font?"),
+                text = _(
+                "Would you like to generate an HTML document showing some sample text rendered with each available font?"),
                 ok_callback = function()
                     self:buildFontsTestDocument()
                 end,
@@ -839,7 +856,7 @@ a { color: black; }
 </head>
 <body>
 <h1>%s</h1>
-]]   , _("Available fonts test document"), _("AVAILABLE FONTS")))
+]], _("Available fonts test document"), _("AVAILABLE FONTS")))
     local face_list = cre.getFontFaces()
     f:write("<div style='margin: 2em'>\n")
     for _, font_name in ipairs(face_list) do

@@ -23,22 +23,33 @@ local Input = Device.input
 local band = bit.band
 
 -- The following constants are positions in a bitfield
-local SOURCE_BOTTOM_MENU_ICON =     0x0001 -- icons in bottom menu
-local SOURCE_BOTTOM_MENU_TOGGLE =   0x0002 -- toggles in bottom menu
-local SOURCE_BOTTOM_MENU_FINE =     0x0004 -- toggles with fine-tuning ("increase", "+" etc)
-local SOURCE_BOTTOM_MENU_MORE =     0x0008 -- three dots in bottom menu
+local SOURCE_BOTTOM_MENU_ICON     = 0x0001 -- icons in bottom menu
+local SOURCE_BOTTOM_MENU_TOGGLE   = 0x0002 -- toggles in bottom menu
+local SOURCE_BOTTOM_MENU_FINE     = 0x0004 -- toggles with fine-tuning ("increase", "+" etc)
+local SOURCE_BOTTOM_MENU_MORE     = 0x0008 -- three dots in bottom menu
 local SOURCE_BOTTOM_MENU_PROGRESS = 0x0010 -- progress indicator on bottom menu
-local SOURCE_DISPATCHER =           0x0020 -- dispatcher
-local SOURCE_OTHER =                0x0040 -- all other sources (e.g. keyboard)
+local SOURCE_DISPATCHER           = 0x0020 -- dispatcher
+local SOURCE_OTHER                = 0x0040 -- all other sources (e.g. keyboard)
 
 -- All bottom menu bits
-local SOURCE_BOTTOM_MENU = SOURCE_BOTTOM_MENU_ICON + SOURCE_BOTTOM_MENU_TOGGLE + SOURCE_BOTTOM_MENU_FINE +
-        SOURCE_BOTTOM_MENU_MORE + SOURCE_BOTTOM_MENU_PROGRESS
+local SOURCE_BOTTOM_MENU = SOURCE_BOTTOM_MENU_ICON +
+                           SOURCE_BOTTOM_MENU_TOGGLE +
+                           SOURCE_BOTTOM_MENU_FINE +
+                           SOURCE_BOTTOM_MENU_MORE +
+                           SOURCE_BOTTOM_MENU_PROGRESS
 
 -- these values can be changed here
-local SOURCE_SOME = SOURCE_BOTTOM_MENU_FINE + SOURCE_DISPATCHER
-local SOURCE_DEFAULT = SOURCE_SOME + SOURCE_BOTTOM_MENU_MORE + SOURCE_BOTTOM_MENU_PROGRESS
-local SOURCE_ALL = SOURCE_BOTTOM_MENU + SOURCE_DISPATCHER + SOURCE_OTHER
+local SOURCE_SOME = SOURCE_BOTTOM_MENU_FINE +
+                    SOURCE_DISPATCHER
+local SOURCE_DEFAULT = SOURCE_SOME +
+                       SOURCE_BOTTOM_MENU_MORE +
+                       SOURCE_BOTTOM_MENU_PROGRESS
+local SOURCE_ALL = SOURCE_BOTTOM_MENU +
+                   SOURCE_DISPATCHER +
+                   SOURCE_OTHER
+
+-- Maximum number of saved message text
+local MAX_NB_PAST_MESSAGES = 20
 
 local Notification = InputContainer:extend{
     face = Font:getFace("x_smallinfofont"),
@@ -65,16 +76,14 @@ local Notification = InputContainer:extend{
     SOURCE_SOME = SOURCE_SOME,
     SOURCE_DEFAULT = SOURCE_DEFAULT,
     SOURCE_ALL = SOURCE_ALL,
+    _past_messages = {}, -- a static class member to store the N last messages text
 }
 
 function Notification:init()
     if not self.toast then
         -- If not toast, closing is handled in here
         if Device:hasKeys() then
-            self.key_events = {
-                AnyKeyPressed = { { Input.group.Any },
-                    seqtext = "any key", doc = "close dialog" }
-            }
+            self.key_events.AnyKeyPressed = { { Input.group.Any } }
         end
         if Device:isTouchDevice() then
             self.ges_events.TapClose = {
@@ -143,10 +152,11 @@ function Notification:getNotifySource()
     return self.notify_source
 end
 
--- show popups if `self.notify_source` is not masked by the setting `notification_sources_to_show_mask`
-function Notification:notify(arg, refresh_after)
+-- Display a notification popup if `source` or `self.notify_source` is not masked by the `notification_sources_to_show_mask` setting
+function Notification:notify(arg, source, refresh_after)
+    source = source or self.notify_source
     local mask = G_reader_settings:readSetting("notification_sources_to_show_mask") or self.SOURCE_DEFAULT
-    if self.notify_source and band(mask, self.notify_source) ~= 0 then
+    if source and band(mask, self.notify_source) ~= 0 then
         UIManager:show(Notification:new{
             text = arg,
          })
@@ -156,6 +166,10 @@ function Notification:notify(arg, refresh_after)
         return true
     end
     return false
+end
+
+function Notification:getPastMessages()
+    return self._past_messages
 end
 
 function Notification:_cleanShownStack()
@@ -189,19 +203,21 @@ function Notification:onCloseWidget()
 end
 
 function Notification:onShow()
-    -- triggered by the UIManager after we got successfully shown (not yet painted)
+    -- NOTE: We use the elusive "[ui]" mode solely for the sake of NTX boards flagged as unreliable,
+    --       in the hope that this will save them from an EPDC race that might make them horribly crash.
+    --       c.f., https://github.com/koreader/koreader/issues/9806#issuecomment-1416827447
     UIManager:setDirty(self, function()
-        return "ui", self.frame.dimen
+        return "[ui]", self.frame.dimen
     end)
     if self.timeout then
         UIManager:scheduleIn(self.timeout, function() UIManager:close(self) end)
     end
-    return true
-end
 
-function Notification:onAnyKeyPressed()
-    if self.toast then return end -- should not happen
-    UIManager:close(self)
+    if #self._past_messages >= MAX_NB_PAST_MESSAGES then
+        table.remove(self._past_messages)
+    end
+    table.insert(self._past_messages, 1, os.date("%X: ") .. self.text)
+
     return true
 end
 
@@ -210,6 +226,7 @@ function Notification:onTapClose()
     UIManager:close(self)
     return true
 end
+Notification.onAnyKeyPressed = Notification.onTapClose
 
 -- Toasts should go bye-bye on user input, without stopping the event's propagation.
 function Notification:onKeyPress(key)

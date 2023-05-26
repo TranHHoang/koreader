@@ -1,16 +1,16 @@
+local DataStorage = require("datastorage")
 local DocumentRegistry = require("document/documentregistry")
 local DocSettings = require("docsettings")
-local ReadHistory = require("readhistory")
+local ffiutil = require("ffi/util")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 local md5 = require("ffi/sha2").md5
 local util = require("util")
 local _ = require("gettext")
-local T = require("ffi/util").template
+local T = ffiutil.template
 
 local MyClipping = {
     my_clippings = "/mnt/us/documents/My Clippings.txt",
-    history_dir = "./history",
 }
 
 function MyClipping:new(o)
@@ -242,6 +242,7 @@ function MyClipping:parseHighlight(highlights, bookmarks, book)
                                "(.*)",
                                "%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d") .. "$"
 
+    local orphan_highlights = {}
     for page, items in pairs(highlights) do
         for _, item in ipairs(items) do
             local clipping = {}
@@ -251,14 +252,22 @@ function MyClipping:parseHighlight(highlights, bookmarks, book)
             clipping.text = self:getText(item.text)
             clipping.chapter = item.chapter
             clipping.drawer = item.drawer
+            local bookmark_found = false
             for _, bookmark in pairs(bookmarks) do
-                if bookmark.datetime == item.datetime and bookmark.text then
-                    local bookmark_quote = bookmark.text:match(pattern)
-                    if bookmark_quote ~= clipping.text and bookmark.text ~= clipping.text then
-                        -- use modified quoted text or entire bookmark text if it's not a match
-                        clipping.note = bookmark_quote or bookmark.text
+                if bookmark.datetime == item.datetime then
+                    if bookmark.text then
+                        local bookmark_quote = bookmark.text:match(pattern)
+                        if bookmark_quote ~= clipping.text and bookmark.text ~= clipping.text then
+                            -- use modified quoted text or entire bookmark text if it's not a match
+                            clipping.note = bookmark_quote or bookmark.text
+                        end
                     end
+                    bookmark_found = true
+                    break
                 end
+            end
+            if not bookmark_found then
+                table.insert(orphan_highlights, { clipping })
             end
             if item.text == "" and item.pos0 and item.pos1 and
                     item.pos0.x and item.pos0.y and
@@ -274,7 +283,7 @@ function MyClipping:parseHighlight(highlights, bookmarks, book)
                 clipping.image = self:getImage(image)
             end
             --- @todo Store chapter info when exporting highlights.
-            if clipping.text and clipping.text ~= "" or clipping.image then
+            if (bookmark_found and clipping.text and clipping.text ~= "") or clipping.image then
                 table.insert(book, { clipping })
             end
         end
@@ -288,6 +297,10 @@ function MyClipping:parseHighlight(highlights, bookmarks, book)
     end
     -- Sort clippings by their position in the book.
     table.sort(book, function(v1, v2) return bookmark_indexes[v1[1].time] > bookmark_indexes[v2[1].time] end)
+     -- Place orphans at the end
+    for _, v in ipairs(orphan_highlights) do
+        table.insert(book, v)
+    end
 end
 
 function MyClipping:parseHistoryFile(clippings, history_file, doc_file)
@@ -320,18 +333,24 @@ end
 
 function MyClipping:parseHistory()
     local clippings = {}
-    for f in lfs.dir(self.history_dir) do
-        self:parseHistoryFile(clippings,
-                              self.history_dir .. "/" .. f,
-                              DocSettings:getPathFromHistory(f) .. "/" ..
-                              DocSettings:getNameFromHistory(f))
+    local history_dir = DataStorage:getHistoryDir()
+    if lfs.attributes(history_dir, "mode") == "directory" then
+        for f in lfs.dir(history_dir) do
+            local legacy_history_file = ffiutil.joinPath(history_dir, f)
+            if lfs.attributes(legacy_history_file, "mode") == "file" then
+                local doc_file = DocSettings:getFileFromHistory(f)
+                if doc_file then
+                    self:parseHistoryFile(clippings, legacy_history_file, doc_file)
+                end
+            end
+        end
     end
-    for _, item in ipairs(ReadHistory.hist) do
-        self:parseHistoryFile(clippings,
-                              DocSettings:getSidecarFile(item.file),
-                              item.file)
+    for _, item in ipairs(require("readhistory").hist) do
+        if not item.dim then
+            self:parseHistoryFile(clippings, DocSettings:getSidecarFile(item.file, "doc"), item.file)
+            self:parseHistoryFile(clippings, DocSettings:getSidecarFile(item.file, "dir"), item.file)
+        end
     end
-
     return clippings
 end
 
@@ -375,8 +394,8 @@ function MyClipping:getDocMeta(view)
     end
     return {
         title = title,
-        -- To make sure that export doesn't fail due to unsupported charchters.
-        exportable_title = parsed_title,
+        -- Replaces characters that are invalid in filenames.
+        output_filename = util.getSafeFilename(title),
         author = author,
         number_of_pages = number_of_pages,
         file = view.document.file,

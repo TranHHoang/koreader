@@ -69,6 +69,9 @@ function ReaderCoptListener:onReadSettings(config)
 end
 
 function ReaderCoptListener:onConfigChange(option_name, option_value)
+    -- font_size and line_spacing are historically and sadly shared by both mupdf and cre reader modules,
+    -- but fortunately they can be distinguished by their different ranges
+    if (option_name == "font_size" or option_name == "line_spacing") and option_value < 5 then return end
     self.document.configurable[option_name] = option_value
     self.ui:handleEvent(Event:new("StartActivityIndicator"))
     return true
@@ -90,11 +93,26 @@ function ReaderCoptListener:onTimeFormatChanged()
     self.ui.document._document:setIntProperty("window.status.clock.12hours", G_reader_settings:isTrue("twelve_hour_clock") and 1 or 0)
 end
 
+function ReaderCoptListener:shouldHeaderBeRepainted()
+    local top_wg = UIManager:getTopmostVisibleWidget() or {}
+    if top_wg.name == "ReaderUI" then
+        -- We're on display, go ahead
+        return true
+    elseif top_wg.covers_fullscreen or top_wg.covers_header then
+        -- We're hidden behind something that definitely covers us, don't do anything
+        return false
+    else
+        -- There's something on top of us, but we might still be visible, request a ReaderUI repaint,
+        -- UIManager will sort it out.
+        return true
+    end
+end
+
 function ReaderCoptListener:updateHeader()
     -- Have crengine display accurate time and battery on its next drawing
     self.ui.document:resetBufferCache() -- be sure next repaint is a redrawing
     -- Force a refresh if we're not hidden behind another widget
-    if UIManager:getTopWidget() == "ReaderUI" then
+    if self:shouldHeaderBeRepainted() then
         UIManager:setDirty(self.view.dialog, "ui",
             Geom:new{
                 x = 0, y = 0,
@@ -147,10 +165,6 @@ function ReaderCoptListener:onResume()
     self:headerRefresh()
 end
 
-function ReaderCoptListener:onLeaveStandby()
-    self:headerRefresh()
-end
-
 function ReaderCoptListener:onOutOfScreenSaver()
     if not self._delayed_screensaver then
         return
@@ -163,7 +177,6 @@ end
 -- Unschedule on these events
 ReaderCoptListener.onCloseDocument = ReaderCoptListener.unscheduleHeaderRefresh
 ReaderCoptListener.onSuspend = ReaderCoptListener.unscheduleHeaderRefresh
-ReaderCoptListener.onEnterStandby = ReaderCoptListener.unscheduleHeaderRefresh
 
 function ReaderCoptListener:setAndSave(setting, property, value)
     self.ui.document._document:setIntProperty(property, value)

@@ -2,6 +2,7 @@ local BD = require("ui/bidi")
 local Device = require("device")
 local Event = require("ui/event")
 local EventListener = require("ui/widget/eventlistener")
+local Font = require("ui/font")
 local InfoMessage = require("ui/widget/infomessage")
 local NetworkMgr = require("ui/network/manager")
 local UIManager = require("ui/uimanager")
@@ -115,8 +116,8 @@ local network_activity_noise_margin = 12 -- unscaled_size_check: ignore
 
 -- Read the statistics/tx_packets sysfs entry for the current network interface.
 -- It *should* be the least noisy entry on an idle network...
--- The fact that auto_disable_wifi is only available on (Device:hasWifiManager() and not Device:isEmulator())
--- allows us to get away with a Linux-only solution.
+-- The fact that auto_disable_wifi is only available on devices that expose a
+-- net sysfs entry allows us to get away with a Linux-only solution.
 function NetworkListener:_getTxPackets()
     -- read tx_packets stats from sysfs (for the right network if)
     local file = io.open("/sys/class/net/" .. NetworkMgr:getNetworkInterfaceName() .. "/statistics/tx_packets", "rb")
@@ -198,13 +199,11 @@ end
 
 function NetworkListener:onNetworkConnected()
     logger.dbg("NetworkListener: onNetworkConnected")
-    if not (Device:hasWifiManager() and not Device:isEmulator()) then
-        return
+    if Device:hasWifiManager() then
+        -- This is for the sake of events that don't emanate from NetworkMgr itself...
+        NetworkMgr:setWifiState(true)
+        NetworkMgr:setConnectionState(true)
     end
-
-    -- This is for the sake of events that don't emanate from NetworkMgr itself...
-    NetworkMgr:setWifiState(true)
-    NetworkMgr:setConnectionState(true)
 
     if not G_reader_settings:isTrue("auto_disable_wifi") then
         return
@@ -218,12 +217,10 @@ end
 
 function NetworkListener:onNetworkDisconnected()
     logger.dbg("NetworkListener: onNetworkDisconnected")
-    if not (Device:hasWifiManager() and not Device:isEmulator()) then
-        return
+    if Device:hasWifiManager() then
+        NetworkMgr:setWifiState(false)
+        NetworkMgr:setConnectionState(false)
     end
-
-    NetworkMgr:setWifiState(false)
-    NetworkMgr:setConnectionState(false)
 
     if not G_reader_settings:isTrue("auto_disable_wifi") then
         return
@@ -244,6 +241,8 @@ function NetworkListener:onShowNetworkInfo()
     if Device.retrieveNetworkInfo then
         UIManager:show(InfoMessage:new{
             text = Device:retrieveNetworkInfo(),
+            -- IPv6 addresses are *loooooong*!
+            face = Font:getFace("x_smallinfofont"),
         })
     else
         UIManager:show(InfoMessage:new{

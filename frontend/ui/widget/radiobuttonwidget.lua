@@ -1,3 +1,34 @@
+--[[--
+Widget that allows selecting an entry from a @{ui.widget.radiobuttontable|RadioButton} list.
+
+
+Example:
+    local RadioButtonWidget = require("ui/widget/radiobuttonwidget")
+
+    local radio_buttons = {
+        { {text = _("Radio 1"), provider = 1} },
+        { {text = _("Radio 2"), provider = 2, checked = true} },
+        { {text = _("Radio 3"), provider = "identifier"} },
+    }
+    UIManager:show(RadioButtonWidget:new{
+        title_text = _("Example Title"),
+        info_text = _("Some more information"),
+        cancel_text = _("Close"),
+        ok_text = _("Apply"),
+        width_factor = 0.9,
+        radio_buttons = radio_buttons,
+        callback = function(radio)
+            if radio.provider == 1 then
+                -- do something here
+            elseif radio.provider == 2 then
+                -- do some other things here
+            elseif radio.provider == "identifier" then
+                -- or do a third thing here
+            end
+        end,
+    })
+]]
+
 local Blitbuffer = require("ffi/blitbuffer")
 local ButtonTable = require("ui/widget/buttontable")
 local CenterContainer = require("ui/widget/container/centercontainer")
@@ -49,19 +80,17 @@ function RadioButtonWidget:init()
         self.width = math.floor(math.min(self.screen_width, self.screen_height) * self.width_factor)
     end
     if Device:hasKeys() then
-        self.key_events.Close = { {Device.input.group.Back}, doc = "close widget" }
+        self.key_events.Close = { { Device.input.group.Back } }
     end
-    self.ges_events = {
-        TapClose = {
-            GestureRange:new{
-                ges = "tap",
-                range = Geom:new{
-                    w = self.screen_width,
-                    h = self.screen_height,
-                }
-            },
+    self.ges_events.TapClose = {
+        GestureRange:new{
+            ges = "tap",
+            range = Geom:new{
+                w = self.screen_width,
+                h = self.screen_height,
+            }
         },
-        }
+    }
     self:update()
 end
 
@@ -215,11 +244,6 @@ function RadioButtonWidget:onShow()
     UIManager:setDirty(self, function()
         return "ui", self.widget_frame.dimen
     end)
-    return true
-end
-
-function RadioButtonWidget:onAnyKeyPressed()
-    self:onClose()
     return true
 end
 

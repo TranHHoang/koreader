@@ -7,6 +7,7 @@ local Button = require("ui/widget/button")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local CheckMark = require("ui/widget/checkmark")
 local Device = require("device")
+local Event = require("ui/event")
 local FocusManager = require("ui/widget/focusmanager")
 local Font = require("ui/font")
 local FrameContainer = require("ui/widget/container/framecontainer")
@@ -25,12 +26,15 @@ local Size = require("ui/size")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
 local UnderlineContainer = require("ui/widget/container/underlinecontainer")
+local Utf8Proc = require("ffi/utf8proc")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
-local util = require("util")
+local datetime = require("datetime")
 local getMenuText = require("ui/widget/menu").getMenuText
 local _ = require("gettext")
-local T = require("ffi/util").template
+local ffiUtil = require("ffi/util")
+local util = require("util")
+local T = ffiUtil.template
 local Input = Device.input
 local Screen = Device.screen
 
@@ -55,14 +59,12 @@ function TouchMenuItem:init()
                 ges = "tap",
                 range = self.dimen,
             },
-            doc = "Select Menu Item",
         },
         HoldSelect = {
             GestureRange:new{
                 ges = "hold",
                 range = self.dimen,
             },
-            doc = "Hold Menu Item",
         },
     }
 
@@ -168,7 +170,7 @@ function TouchMenuItem:onTapSelect(arg, ges)
     if self.item.enabled_func then
         enabled = self.item.enabled_func()
     end
-    if enabled == false then return end
+    if enabled == false then return true end -- don't propagate
 
     local tap_on_checkmark = false
     if ges and ges.pos and ges.pos.x then
@@ -180,7 +182,7 @@ function TouchMenuItem:onTapSelect(arg, ges)
     end
 
     -- If the menu hasn't actually been drawn yet, don't do anything (as it's confusing, and the coordinates may be wrong).
-    if not self.item_frame.dimen then return end
+    if not self.item_frame.dimen then return true end
 
     if G_reader_settings:isFalse("flash_ui") then
         self.menu:onMenuSelect(self.item, tap_on_checkmark)
@@ -223,9 +225,21 @@ function TouchMenuItem:onHoldSelect(arg, ges)
     if self.item.enabled_func then
         enabled = self.item.enabled_func()
     end
-    if enabled == false then return end
+    if enabled == false then
+        -- Allow help_text to be displayed even if menu item disabled
+        if self.item.help_text or type(self.item.help_text_func) == "function" then
+            local help_text = self.item.help_text
+            if self.item.help_text_func then
+                help_text = self.item.help_text_func(self)
+            end
+            if help_text then
+                UIManager:show(InfoMessage:new{ text = help_text, })
+            end
+        end
+        return true -- don't propagate
+    end
 
-    if not self.item_frame.dimen then return end
+    if not self.item_frame.dimen then return true end
 
     if G_reader_settings:isFalse("flash_ui") then
         self.menu:onMenuHold(self.item, self.text_truncated)
@@ -496,12 +510,12 @@ function TouchMenu:init()
         }
     }
 
-    self.key_events.Back = { {Input.group.Back}, doc = "back to upper menu or close touchmenu" }
+    self.key_events.Back = { { Input.group.Back } }
     if Device:hasFewKeys() then
-        self.key_events.Back = { {"Left"}, doc = "back to upper menu or close touchmenu" }
+        self.key_events.Back = { { "Left" } }
     end
-    self.key_events.NextPage = { {Input.group.PgFwd}, doc = "next page" }
-    self.key_events.PrevPage = { {Input.group.PgBack}, doc = "previous page" }
+    self.key_events.NextPage = { { Input.group.PgFwd } }
+    self.key_events.PrevPage = { { Input.group.PgBack } }
 
     local icons = {}
     for _, v in ipairs(self.tab_item_table) do
@@ -549,9 +563,20 @@ function TouchMenu:init()
         self.page_info_right_chev
     }
     -- group for device info
-    self.time_info = TextWidget:new{
+    self.time_info = Button:new{
         text = "",
         face = self.fface,
+        text_font_bold = false,
+        callback = function()
+            UIManager:show(InfoMessage:new{
+                text = datetime.secondsToDateTime(nil, nil, true),
+            })
+        end,
+        hold_callback = function()
+            UIManager:broadcastEvent(Event:new("ShowBatteryStatistics"))
+        end,
+        bordersize = 0,
+        show_parent = self.show_parent,
     }
     self.device_info = HorizontalGroup:new{
         self.time_info,
@@ -678,12 +703,13 @@ function TouchMenu:updateItems()
                     h = self.item_height,
                 },
                 show_parent = self.show_parent,
+                item_visible_index = c,
             }
             table.insert(self.item_group, item_tmp)
             if item_tmp:isEnabled() then
                 table.insert(self.layout, {[self.cur_tab] = item_tmp}) -- for the focusmanager
             end
-            if item.separator and c ~= self.perpage then
+            if item.separator and c ~= self.perpage and i ~= #self.item_table then
                 -- insert split line
                 table.insert(self.item_group, self.split_line)
             end
@@ -706,7 +732,7 @@ function TouchMenu:updateItems()
     self.page_info_left_chev:enableDisable(self.page > 1)
     self.page_info_right_chev:enableDisable(self.page < self.page_num)
 
-    local time_info_txt = util.secondsToHour(os.time(), G_reader_settings:isTrue("twelve_hour_clock"))
+    local time_info_txt = datetime.secondsToHour(os.time(), G_reader_settings:isTrue("twelve_hour_clock"))
     local powerd = Device:getPowerDevice()
     if Device:hasBattery() then
         local batt_lvl = powerd:getCapacity()
@@ -799,7 +825,7 @@ function TouchMenu:onNextPage()
     elseif self.page == self.page_num then
         self.page = 1
     end
-        self:updateItems()
+    self:updateItems()
     return true
 end
 
@@ -821,6 +847,18 @@ end
 
 function TouchMenu:onLastPage()
     self.page = self.page_num
+    self:updateItems()
+    return true
+end
+
+function TouchMenu:onGotoPage(nb)
+    if nb > self.page_num then
+        self.page = self.page_num
+    elseif nb < 1 then
+        self.page = 1
+    else
+        self.page = nb
+    end
     self:updateItems()
     return true
 end
@@ -873,7 +911,7 @@ function TouchMenu:onMenuSelect(item, tap_on_checkmark)
             if callback then
                 -- Provide callback with us, so it can call our
                 -- closemenu() or updateItems() when it sees fit
-                -- (if not providing checked or checked_fund, caller
+                -- (if not providing checked or checked_func, caller
                 -- must set keep_menu_open=true if that is wished)
                 callback(self)
                 if refresh then
@@ -961,6 +999,352 @@ end
 
 function TouchMenu:onBack()
     self:backToUpperMenu()
+end
+
+-- Menu search feature
+function TouchMenu:search(search_for)
+    local found_menu_items = {}
+
+    local MAX_MENU_DEPTH = 10 -- our menu max depth is currently 6
+    local function recurse(item_table, path, text, icon, depth)
+        if item_table.ignored_by_menu_search then
+            return
+        end
+        depth = depth + 1
+        if depth > MAX_MENU_DEPTH then
+            return
+        end
+        for i, v in ipairs(item_table) do
+            if type(v) == "table" and not v.ignored_by_menu_search then
+                local entry_text = v.text_func and v.text_func() or v.text
+                local indent = text and ((" "):rep(math.min(depth-1, 6)) .. "→ ") or "→ " -- all spaces here are Hair Space U+200A
+                local walk_text = text and (text .. "\n" .. indent .. entry_text) or (indent .. entry_text)
+                local walk_path = path .. "." .. i
+                if Utf8Proc.lowercase(entry_text):find(search_for, 1, true) then
+                    table.insert(found_menu_items, {entry_text, icon, walk_path, walk_text})
+                end
+                local sub_item_table = v.sub_item_table
+                if v.sub_item_table_func then
+                    sub_item_table = v.sub_item_table_func()
+                end
+                if sub_item_table and not sub_item_table.ignored_by_menu_search then
+                    recurse(sub_item_table, walk_path, walk_text, icon, depth)
+                end
+            end
+        end
+    end -- recurse
+
+    -- Initial call of recurse, for each tab
+    for i = 1, #self.tab_item_table do
+        recurse(self.tab_item_table[i], i, nil, self.tab_item_table[i].icon, 0)
+    end
+
+    return found_menu_items
+end
+
+function TouchMenu:openMenu(path, with_animation)
+    local parts = {}
+    for part in util.gsplit(path, "%.", false) do -- path is ie. "2.3.3.1"
+        table.insert(parts, tonumber(part))
+    end
+    util.arrayReverse(parts) -- so we can just table.remove() and pop them from end
+
+    local function highlightWidget(widget, unhighlight)
+        if not widget then return end
+        local highlight_dimen = widget.dimen
+        if highlight_dimen.w == 0 then
+            highlight_dimen.w = widget.width
+        end
+        if unhighlight then
+            widget.invert = false
+            UIManager:widgetInvert(widget, highlight_dimen.x, highlight_dimen.y, highlight_dimen.w)
+            UIManager:setDirty(nil, "ui", highlight_dimen)
+        else
+            widget.invert = true
+            UIManager:widgetInvert(widget, highlight_dimen.x, highlight_dimen.y, highlight_dimen.w)
+            UIManager:setDirty(nil, "fast", highlight_dimen)
+        end
+    end
+
+    -- Steps/state among consecutive calls to walkStep()
+    local STEPS = {
+        START = 0,
+        TARGET_TAB_HIGHLIGHT_ICON = 1,
+        TARGET_TAB_OPEN = 2,
+        TARGET_PAGE_OR_HIGHLIGHT_NEXT_PREV = 3,
+        TARGET_PAGE_OR_NAVIGATE_NEXT_PREV = 4,
+        MENU_ITEM_HIGHLIGHT = 5, -- intermediate or final menu item
+        MENU_ITEM_ENTER = 6, -- intermediate menu item only
+        DONE = 7,
+    }
+    local step = STEPS.START
+    local tab_nb
+    local item_nb
+    local walkStep_scheduled
+    local trap_widget
+
+    local function walkStep()
+        walkStep_scheduled = false
+        -- Default delay if not overriden (-1 means no scheduleIn() so no refresh, 0 means nextTick)
+        local next_delay = with_animation and 1 or -1
+        if step == STEPS.START then
+            -- Ensure some initial delay so search dialog and result list can be closed and refreshed
+            next_delay = with_animation and 1 or 0
+            step = STEPS.TARGET_TAB_HIGHLIGHT_ICON
+        elseif step == STEPS.TARGET_TAB_HIGHLIGHT_ICON then
+            tab_nb = table.remove(parts)
+            if with_animation then
+                highlightWidget(self.bar.icon_widgets[tab_nb].image)
+            end
+            step = STEPS.TARGET_TAB_OPEN
+        elseif step == STEPS.TARGET_TAB_OPEN then
+            -- The tab icon wouldn't be unhighligted by any other action.
+            -- Animation may have been cancelled, so unhighlight if it was.
+            if self.bar.icon_widgets[tab_nb].image.invert then
+                highlightWidget(self.bar.icon_widgets[tab_nb].image, true)
+            end
+            self:switchMenuTab(tab_nb)
+            self.bar:switchToTab(tab_nb)
+            item_nb = table.remove(parts)
+            step = STEPS.TARGET_PAGE_OR_HIGHLIGHT_NEXT_PREV
+        elseif step == STEPS.TARGET_PAGE_OR_HIGHLIGHT_NEXT_PREV or
+               step == STEPS.TARGET_PAGE_OR_NAVIGATE_NEXT_PREV then
+            local target_page = math.floor((item_nb - 1) / self.perpage) + 1
+            local pages_diff = target_page - self.page
+            if pages_diff == 0 then -- we are on the right menu page
+                step = STEPS.MENU_ITEM_HIGHLIGHT
+                next_delay = -1 -- we paused before, no need for more pause
+                if not with_animation and #parts == 0 then
+                    -- Except if no animation and we are on the final menu that
+                    -- we want to highlight: this final highlight needs to be
+                    -- delayed for it to be drawn after the final menu page is.
+                    next_delay = 1
+                end
+            elseif step == STEPS.TARGET_PAGE_OR_HIGHLIGHT_NEXT_PREV then
+                -- No need to highlight chevrons if no animation
+                if with_animation then
+                    if pages_diff > 0 then
+                        highlightWidget(self.page_info_right_chev)
+                    else
+                        highlightWidget(self.page_info_left_chev)
+                    end
+                    if pages_diff > 1 or pages_diff < -1 then
+                        -- Change pages quicker if more than one needed, but slow on the last one
+                        next_delay = 0.5
+                    end
+                end
+                step = STEPS.TARGET_PAGE_OR_NAVIGATE_NEXT_PREV
+            else -- STEPS.TARGET_PAGE_OR_NAVIGATE_NEXT_PREV
+                if pages_diff > 0 then
+                    self:onNextPage()
+                else
+                    self:onPrevPage()
+                end
+                step = STEPS.TARGET_PAGE_OR_HIGHLIGHT_NEXT_PREV
+                if with_animation and (pages_diff > 1 or pages_diff < -1) then
+                    -- Change pages quicker if more than one needed, but slow on the last one
+                    next_delay = 0.5
+                end
+            end
+        elseif step == STEPS.MENU_ITEM_HIGHLIGHT then
+            if with_animation or #parts == 0 then
+                -- Even if no animation, highlight the final item (and don't unhighlight it)
+                local item_visible_index = (item_nb - 1) % self.perpage + 1
+                local item_widget
+                for i, w in ipairs(self.item_group) do
+                    if w.item_visible_index == item_visible_index then
+                        item_widget = w
+                        break
+                    end
+                end
+                if item_widget then
+                    highlightWidget(item_widget)
+                end
+            end
+            if #parts == 0 then
+                step = STEPS.DONE
+            else
+                step = STEPS.MENU_ITEM_ENTER
+            end
+        elseif step == STEPS.MENU_ITEM_ENTER then
+            self:onMenuSelect(self.item_table[item_nb])
+            item_nb = table.remove(parts)
+            step = STEPS.TARGET_PAGE_OR_HIGHLIGHT_NEXT_PREV
+        else -- STEPS.DONE
+            if trap_widget then
+                UIManager:close(trap_widget)
+                trap_widget = nil
+            end
+            return
+        end
+        if next_delay >= 0 then
+            walkStep_scheduled = true
+            UIManager:scheduleIn(next_delay, walkStep)
+        else
+            walkStep()
+        end
+    end
+
+    -- We use an invisible TrapWidget when no animation, so we can
+    -- cancel the delayed final highlight
+    local TrapWidget = require("ui/widget/trapwidget")
+    trap_widget = TrapWidget:new{
+        text = with_animation and _("Walking you there…") or nil,
+        dismiss_callback = function()
+            trap_widget = nil
+            if walkStep_scheduled then
+                UIManager:unschedule(walkStep)
+                if with_animation then
+                    -- continue walking as if no animation, so we immediately
+                    -- reach the requested menu item. We need a new invisible
+                    -- TrapWidget for the reason explained above in case a
+                    -- second tap happens.
+                    with_animation = false
+                    trap_widget = TrapWidget:new{
+                        text = nil,
+                        dismiss_callback = function()
+                            trap_widget = nil
+                            if walkStep_scheduled then
+                                UIManager:unschedule(walkStep)
+                            end
+                        end,
+                        resend_event = true,
+                    }
+                    UIManager:show(trap_widget)
+                    walkStep()
+                end
+            end
+        end,
+        resend_event = not with_animation, -- if not animation, don't eat the tap
+    }
+    UIManager:show(trap_widget) -- catch taps during animaton
+
+    -- Call it: it will reschedule itself if animation; if not, it will
+    -- just execute itself without pause until done.
+    -- If tap while animating, it will switch to the non-animation
+    -- behaviour, to reach the requested menu item immediately.
+    walkStep()
+end
+
+function TouchMenu:onShowMenuSearch()
+    local InputDialog = require("ui/widget/inputdialog")
+    local ConfirmBox = require("ui/widget/confirmbox")
+    local Menu = require("ui/widget/menu")
+
+    local function show_search_results(search_string)
+        local found_menu_items = self:search(search_string)
+
+        local function get_current_search_results()
+            local function open_menu(i, animate)
+                UIManager:close(self.results_menu_container)
+                UIManager:setDirty(nil, "ui")
+                self:openMenu(found_menu_items[i][3], animate)
+            end
+            local function item_callback(i)
+                local confirm_box
+                confirm_box = ConfirmBox:new{
+                    text = found_menu_items[i][4],
+                    icon = found_menu_items[i][2],
+                    ok_text = _("Open"),
+                    ok_callback = function()
+                        UIManager:close(confirm_box)
+                        open_menu(i)
+                    end,
+                    other_buttons = {{
+                        {
+                            text = _("Walk me there"),
+                            callback = function()
+                                UIManager:close(confirm_box)
+                                open_menu(i, true)
+                            end,
+                        },
+                    }},
+
+                }
+                UIManager:show(confirm_box)
+            end
+
+            local result_items = {}
+            for i = 1, #found_menu_items do
+                table.insert(result_items,
+                    {
+                        text = found_menu_items[i][1],
+                        callback = function() item_callback(i) end,
+                        hold_callback = function() open_menu(i) end,
+                    }
+                )
+            end
+            return result_items
+        end -- get_current_search_results()
+
+        if #found_menu_items > 0 then
+            local results_menu = Menu:new{
+                title = _("Search results"),
+                item_table = get_current_search_results(),
+                width = math.floor(Screen:getWidth() * 0.9),
+                height = math.floor(Screen:getHeight() * 0.9),
+                single_line = true,
+                items_per_page = 10,
+                items_font_size = Menu.getItemFontSize(10),
+                onMenuSelect = function(item, pos)
+                    if pos.callback then pos.callback() end
+                end,
+                onMenuHold = function(item, pos)
+                    if pos.hold_callback then pos.hold_callback() end
+                end,
+                close_callback = function()
+                    UIManager:close(self.results_menu_container)
+                end
+            }
+
+            -- build container
+            self.results_menu_container = CenterContainer:new{
+                dimen = Screen:getSize(),
+                results_menu,
+            }
+
+            results_menu.show_parent = self.results_menu_container
+
+            UIManager:show(self.results_menu_container)
+
+        else
+            UIManager:show(InfoMessage:new{
+                text = T(_("No menus containing '%1' found."), search_string),
+            })
+        end
+    end -- show_search_results()
+
+    local search_dialog
+    search_dialog = InputDialog:new{
+        title = _("Search menu entry"),
+        description = _("Search for a menu entry containing the following text (case insensitive)."),
+        input = G_reader_settings:readSetting("menu_search_string", _("Help")),
+        buttons = {
+            {
+                {
+                    text = _("Cancel"),
+                    id = "close",
+                    callback = function()
+                        UIManager:close(search_dialog)
+                    end,
+                },
+                {
+                    text = _("Search"),
+                    is_enter_default = true,
+                    callback = function()
+                        local search_for = search_dialog:getInputText()
+                        search_for = Utf8Proc.lowercase(search_for)
+                        G_reader_settings:saveSetting("menu_search_string", search_for)
+                        UIManager:close(search_dialog)
+                        show_search_results(search_for)
+                    end,
+                },
+            }
+        },
+    }
+
+    UIManager:show(search_dialog)
+    search_dialog:onShowKeyboard()
 end
 
 return TouchMenu

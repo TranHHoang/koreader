@@ -206,7 +206,7 @@ end
 
 function KindlePowerD:checkUnexpectedWakeup()
     local state = self:getPowerdState()
-    logger.info("Powerd resume state:", state)
+    logger.dbg("Powerd resume state:", state)
     -- If we moved on to the active state,
     -- then we were woken by user input not our alarm.
     if state ~= "screenSaver" and state ~= "suspended" then return end
@@ -214,7 +214,7 @@ function KindlePowerD:checkUnexpectedWakeup()
     if self.device.wakeup_mgr:isWakeupAlarmScheduled() and self.device.wakeup_mgr:wakeupAction() then
         logger.info("Kindle scheduled wakeup")
     else
-        logger.info("Kindle unscheduled wakeup")
+        logger.warn("Kindle unscheduled wakeup")
     end
 end
 
@@ -228,7 +228,7 @@ function KindlePowerD:initWakeupMgr()
     if self.lipc_handle == nil then return end
 
     function KindlePowerD:wakeupFromSuspend()
-        logger.info("Kindle wakeupFromSuspend")
+        logger.dbg("Kindle wakeupFromSuspend")
         -- Give the device a few seconds to settle.
         -- This filters out user input resumes -> device will resume to active
         -- Also the Kindle stays in Ready to suspend for 10 seconds
@@ -238,7 +238,7 @@ function KindlePowerD:initWakeupMgr()
     end
 
     function KindlePowerD:readyToSuspend()
-        logger.info("Kindle readyToSuspend")
+        logger.dbg("Kindle readyToSuspend")
         if self.device.wakeup_mgr:isWakeupAlarmScheduled() then
             local now = os.time()
             local alarm = self.device.wakeup_mgr:getWakeupAlarmEpoch()
@@ -255,7 +255,20 @@ function KindlePowerD:initWakeupMgr()
     self.device.wakeup_mgr = WakeupMgr:new{rtc = require("device/kindle/mockrtc")}
 end
 
---- @fixme: This won't ever fire, as KindlePowerD is already a metatable on a plain table.
+-- Ask powerd to reset the t1 timeout, so that AutoSuspend can do its thing properly
+function KindlePowerD:resetT1Timeout()
+    -- NOTE: powerd will only send a t1TimerReset event every $(kdb get system/daemon/powerd/send_t1_reset_interval) (15s),
+    --       which is just fine, as we should only request it at most every 5 minutes ;).
+    -- NOTE: This will fail if the device is already showing the screensaver.
+    if self.lipc_handle then
+        -- AFAIK, the value is irrelevant
+        self.lipc_handle:set_int_property("com.lab126.powerd", "touchScreenSaverTimeout", 1)
+    else
+        os.execute("lipc-set-prop -i com.lab126.powerd touchScreenSaverTimeout 1")
+    end
+end
+
+--- @fixme: This won't ever fire on its own, as KindlePowerD is already a metatable on a plain table.
 function KindlePowerD:__gc()
     if self.lipc_handle then
         self.lipc_handle:close()

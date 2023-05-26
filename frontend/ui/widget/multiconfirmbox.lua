@@ -41,6 +41,7 @@ local MultiConfirmBox = InputContainer:extend{
     modal = true,
     text = _("no text"),
     face = Font:getFace("infofont"),
+    icon = "notice-question",
     choice1_text = _("Choice 1"),
     choice1_text_func = nil,
     choice2_text = _("Choice 2"),
@@ -71,13 +72,14 @@ function MultiConfirmBox:init()
             }
         end
         if Device:hasKeys() then
-            self.key_events.Close = { {Device.input.group.Back}, doc = "cancel" }
+            self.key_events.Close = { { Device.input.group.Back } }
         end
     end
     local content = HorizontalGroup:new{
         align = "center",
         IconWidget:new{
-            icon = "notice-question",
+            icon = self.icon,
+            alpha = true,
         },
         HorizontalSpan:new{ width = Size.span.horizontal_default },
         TextBoxWidget:new{
@@ -147,7 +149,7 @@ end
 
 function MultiConfirmBox:onShow()
     UIManager:setDirty(self, function()
-        return "ui", self[1][1].dimen
+        return "ui", self[1][1].dimen -- i.e., MovableContainer
     end)
 end
 

@@ -26,6 +26,7 @@ function KoboPowerD:_syncKoboLightOnStart()
     local is_frontlight_on = nil
     local new_warmth = nil
     local kobo_light_on_start = tonumber(G_defaults:readSetting("KOBO_LIGHT_ON_START"))
+
     if kobo_light_on_start then
         if kobo_light_on_start > 0 then
             new_intensity = math.min(kobo_light_on_start, 100)
@@ -146,6 +147,8 @@ function KoboPowerD:init()
             -- Does this device's NaturalLight use a custom scale?
             self.fl_warmth_min = self.device.frontlight_settings.nl_min or self.fl_warmth_min
             self.fl_warmth_max = self.device.frontlight_settings.nl_max or self.fl_warmth_max
+            -- Generic does it *after* init, but we're going to need it *now*...
+            self.warmth_scale = 100 / self.fl_warmth_max
             -- If this device has a mixer, we can use the ioctl for brightness control, as it's much lower latency.
             if self.device:hasNaturalLightMixer() then
                 local kobolight = require("ffi/kobolight")
@@ -170,7 +173,7 @@ function KoboPowerD:init()
         if self:isFrontlightOnHW() then
             -- On devices with a mixer, setIntensity will *only* set the FL, so, ensure we honor the warmth, too.
             if self.device:hasNaturalLightMixer() then
-               self:setWarmth(self.fl_warmth)
+               self:setWarmth(self.fl_warmth, true)
             end
             -- Use setIntensity to ensure it sets fl_intensity, and because we don't want the ramping behavior of turnOn
             self:setIntensity(self:frontlightIntensityHW())
@@ -302,8 +305,12 @@ function KoboPowerD:turnOffFrontlightHW()
         return
     end
     ffiUtil.runInSubProcess(function()
-        for i = 1,5 do
-            self:setIntensityHW(math.floor(self.fl_intensity - ((self.fl_intensity * (1/5)) * i)))
+        for i = 1, 5 do
+            -- NOTE: Do *not* switch to (self.fl_intensity * (1/5) * i) here, it may lead to rounding errors,
+            --       which is problematic paired w/ math.floor because it doesn't round towards zero,
+            --       which means we may end up passing -1 to setIntensityHW, which will fail,
+            --       because we're bypassing the clamping usually done by setIntensity...
+            self:setIntensityHW(math.floor(self.fl_intensity - (self.fl_intensity / 5 * i)))
             --- @note: Newer devices appear to block slightly longer on FL ioctls/sysfs, so only sleep on older devices,
             ---        otherwise we get a jump and not a ramp ;).
             if not self.device:hasNaturalLight() then
@@ -335,8 +342,8 @@ function KoboPowerD:turnOnFrontlightHW()
         return
     end
     ffiUtil.runInSubProcess(function()
-        for i = 1,5 do
-            self:setIntensityHW(math.ceil(self.fl_min + ((self.fl_intensity * (1/5)) * i)))
+        for i = 1, 5 do
+            self:setIntensityHW(math.ceil(self.fl_min + (self.fl_intensity / 5 * i)))
             --- @note: Newer devices appear to block slightly longer on FL ioctls/sysfs, so only sleep on older devices,
             ---        otherwise we get a jump and not a ramp ;).
             if not self.device:hasNaturalLight() then
@@ -371,13 +378,6 @@ function KoboPowerD:afterResume()
     if self.fl == nil then return end
     -- Don't bother if the light was already off on suspend
     if not self.fl_was_on then return end
-    -- Update warmth state
-    if self.fl_warmth ~= nil then
-        -- And we need an explicit setWarmth if the device has a mixer, because turnOn won't touch the warmth on those ;).
-        if self.device:hasNaturalLightMixer() then
-            self:setWarmth(self.fl_warmth)
-        end
-    end
     -- Turn the frontlight back on
     self:turnOnFrontlight()
 

@@ -19,18 +19,27 @@ function ReaderConfig:init()
     end
     self.configurable:loadDefaults(self.options)
 
-    if Device:hasKeys() then
-        self.key_events = {
-            ShowConfigMenu = { {{"Press","AA"}}, doc = "show config dialog" },
-        }
-    end
+    self:registerKeyEvents()
     self:initGesListener()
     if G_reader_settings:has("activate_menu") then
         self.activation_menu = G_reader_settings:readSetting("activate_menu")
     else
         self.activation_menu = "swipe_tap"
     end
+
+    -- delegate gesture listener to ReaderUI, NOP our own
+    self.ges_events = nil
 end
+
+function ReaderConfig:onGesture() end
+
+function ReaderConfig:registerKeyEvents()
+    if Device:hasKeys() then
+        self.key_events.ShowConfigMenu = { { { "Press", "AA" } } }
+    end
+end
+
+ReaderConfig.onPhysicalKeyboardConnected = ReaderConfig.registerKeyEvents
 
 function ReaderConfig:initGesListener()
     if not Device:isTouchDevice() then return end
@@ -123,6 +132,7 @@ function ReaderConfig:onShowConfigMenu()
         configurable = self.configurable,
         config_options = self.options,
         is_always_active = true,
+        covers_footer = true,
         close_callback = function() self:onCloseCallback() end,
     }
     self.ui:handleEvent(Event:new("DisableHinting"))

@@ -26,7 +26,8 @@ local userpatch = require("userpatch")
 userpatch.applyPatches(userpatch.early_once)
 userpatch.applyPatches(userpatch.early)
 
-io.write(" [*] Version: ", require("version"):getCurrentRevision(), "\n\n")
+local Version = require("version")
+io.write(" [*] Version: ", Version:getCurrentRevision(), "\n\n")
 
 -- Load default settings
 G_defaults = require("luadefaults"):open()
@@ -48,7 +49,7 @@ end
 
 local lang_locale = G_reader_settings:readSetting("language")
 -- Allow quick switching to Arabic for testing RTL/UI mirroring
-if os.getenv("KO_RTL") then lang_locale = "ar_AA" end
+if os.getenv("KO_RTL") then lang_locale = "ar" end
 local _ = require("gettext")
 if lang_locale then
     _.changeLang(lang_locale)
@@ -69,7 +70,7 @@ if G_reader_settings:isTrue("debug") and G_reader_settings:isTrue("debug_verbose
 -- Option parsing:
 local longopts = {
     debug = "d",
-    verbose = "d",
+    verbose = "v",
     profile = "p",
     help = "h",
 }
@@ -185,15 +186,11 @@ end
 local CanvasContext = require("document/canvascontext")
 CanvasContext:init(Device)
 
+-- Update the version log file if there was an update or the device has changed
+Version:updateVersionLog(Device.model)
+
 -- Handle one time migration stuff (settings, deprecation, ...) in case of an upgrade...
 require("ui/data/onetime_migration")
-
--- Touch screen (this may display some widget, on first install on Kobo Touch,
--- so have it done after CanvasContext:init() but before Bidi.setup() to not
--- have mirroring mess x/y probing).
-if Device:needsTouchScreenProbe() then
-    Device:touchScreenProbe()
-end
 
 -- UI mirroring for RTL languages, and text shaping configuration
 local Bidi = require("ui/bidi")
@@ -271,15 +268,11 @@ end
 local exit_code
 if file then
     local ReaderUI = require("apps/reader/readerui")
-    UIManager:nextTick(function()
-        ReaderUI:showReader(file)
-    end)
+    ReaderUI:showReader(file)
     exit_code = UIManager:run()
 elseif directory then
     local FileManager = require("apps/filemanager/filemanager")
-    UIManager:nextTick(function()
-        FileManager:showFiles(directory)
-    end)
+    FileManager:showFiles(directory)
     exit_code = UIManager:run()
 else
     local QuickStart = require("ui/quickstart")
@@ -290,47 +283,38 @@ else
 
     if start_with == "last" and last_file and lfs.attributes(last_file, "mode") ~= "file" then
         UIManager:show(retryLastFile())
-        -- no exit code as something else will be run after this.
-        UIManager:run()
+        -- We'll want to return from this without actually quitting,
+        -- so this is a slightly mangled UIManager:run() call to coerce the main loop into submission...
+        -- We'll call :run properly in either of the following branches once returning.
+        UIManager:runOnce()
     end
     if start_with == "last" and last_file then
         local ReaderUI = require("apps/reader/readerui")
-        UIManager:nextTick(function()
-            -- Instantiate RD
-            ReaderUI:showReader(last_file)
-        end)
+        -- Instantiate RD
+        ReaderUI:showReader(last_file)
         exit_code = UIManager:run()
     else
         local FileManager = require("apps/filemanager/filemanager")
-        local home_dir =
-            G_reader_settings:readSetting("home_dir") or Device.home_dir or lfs.currentdir()
-        UIManager:nextTick(function()
-            -- Instantiate FM
-            FileManager:showFiles(home_dir)
-        end)
+        local home_dir = G_reader_settings:readSetting("home_dir") or Device.home_dir or lfs.currentdir()
+        -- Instantiate FM
+        FileManager:showFiles(home_dir)
         -- Always open FM modules on top of filemanager, so closing 'em doesn't result in an exit
         -- because of an empty widget stack, and so they can interact with the FM instance as expected.
         if start_with == "history" then
             local FileManagerHistory = require("apps/filemanager/filemanagerhistory")
-            UIManager:nextTick(function()
-                FileManagerHistory:new{
-                    ui = FileManager.instance,
-                }:onShowHist()
-            end)
+            FileManagerHistory:new{
+                ui = FileManager.instance,
+            }:onShowHist()
         elseif start_with == "favorites" then
             local FileManagerCollection = require("apps/filemanager/filemanagercollection")
-            UIManager:nextTick(function()
-                FileManagerCollection:new{
-                    ui = FileManager.instance,
-                }:onShowColl("favorites")
-            end)
+            FileManagerCollection:new{
+                ui = FileManager.instance,
+            }:onShowColl("favorites")
         elseif start_with == "folder_shortcuts" then
             local FileManagerShortcuts = require("apps/filemanager/filemanagershortcuts")
-            UIManager:nextTick(function()
-                FileManagerShortcuts:new{
-                    ui = FileManager.instance,
-                }:onShowFolderShortcutsDialog()
-            end)
+            FileManagerShortcuts:new{
+                ui = FileManager.instance,
+            }:onShowFolderShortcutsDialog()
         end
         exit_code = UIManager:run()
     end
@@ -342,8 +326,10 @@ local function exitReader()
     local ko_exit = os.getenv("KO_EXIT_CODE")
     if ko_exit then
         local fo = io.open(ko_exit, "w+")
-        fo:write(tostring(exit_code))
-        fo:close()
+        if fo then
+            fo:write(tostring(exit_code))
+            fo:close()
+        end
     end
 
     local ReaderActivityIndicator =

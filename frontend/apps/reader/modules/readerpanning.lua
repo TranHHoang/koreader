@@ -13,35 +13,49 @@ local ReaderPanning = InputContainer:extend{
 }
 
 function ReaderPanning:init()
+    self:registerKeyEvents()
+    -- NOP our own gesture handling
+    self.ges_events = nil
+end
+
+function ReaderPanning:onGesture() end
+
+function ReaderPanning:registerKeyEvents()
     if Device:hasKeyboard() then
         self.key_events = {
             -- these will all generate the same event, just with different arguments
             MoveUp = {
-                { "Up" }, doc = "move visible area up",
-                event = "Panning", args = {0, -1} },
+                { "Up" },
+                event = "Panning",
+                args = {0, -1}
+            },
             MoveDown = {
-                { "Down" }, doc = "move visible area down",
-                event = "Panning", args = {0,  1} },
+                { "Down" },
+                event = "Panning",
+                args = {0,  1}
+            },
             MoveLeft = {
-                { "Left" }, doc = "move visible area left",
-                event = "Panning", args = {-1, 0} },
+                { "Left" },
+                event = "Panning",
+                args = {-1, 0}
+            },
             MoveRight = {
-                { "Right" }, doc = "move visible area right",
-                event = "Panning", args = {1,  0} },
+                { "Right" },
+                event = "Panning",
+                args = {1,  0}
+            },
         }
     end
 end
 
-function ReaderPanning:onSetDimensions(dimensions)
-    self.dimen = dimensions
-end
+ReaderPanning.onPhysicalKeyboardConnected = ReaderPanning.registerKeyEvents
 
 function ReaderPanning:onPanning(args, _)
     local dx, dy = unpack(args)
     -- for now, bounds checking/calculation is done in the view
     self.view:PanningUpdate(
-        dx * self.panning_steps.normal * self.dimen.w * (1/100),
-        dy * self.panning_steps.normal * self.dimen.h * (1/100))
+        dx * self.panning_steps.normal * self.view.visible_area.w * (1/100),
+        dy * self.panning_steps.normal * self.view.visible_area.h * (1/100))
     return true
 end
 

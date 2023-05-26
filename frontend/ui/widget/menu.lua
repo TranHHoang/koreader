@@ -128,14 +128,12 @@ function MenuItem:init()
                 ges = "tap",
                 range = self.dimen,
             },
-            doc = "Select Menu Item",
         },
         HoldSelect = {
             GestureRange:new{
-                ges = "hold",
+                ges = self.handle_hold_on_hold_release and "hold_release" or "hold",
                 range = self.dimen,
             },
-            doc = "Hold Menu Item",
         },
     }
 
@@ -198,7 +196,7 @@ function MenuItem:init()
         text = mandatory,
         face = self.info_face,
         bold = self.bold,
-        fgcolor = self.dim and Blitbuffer.COLOR_DARK_GRAY or nil,
+        fgcolor = self.mandatory_dim and Blitbuffer.COLOR_DARK_GRAY or nil,
     }
     local mandatory_w = mandatory_widget:getWidth()
 
@@ -492,11 +490,7 @@ function MenuItem:onTapSelect(arg, ges)
 
     local pos = self:getGesPosition(ges)
     if G_reader_settings:isFalse("flash_ui") then
-        logger.dbg("creating coroutine for menu select")
-        local co = coroutine.create(function()
-            self.menu:onMenuSelect(self.table, pos)
-        end)
-        coroutine.resume(co)
+        self.menu:onMenuSelect(self.table, pos)
     else
         -- c.f., ui/widget/iconbutton for the canonical documentation about the flash_ui code flow
 
@@ -517,11 +511,7 @@ function MenuItem:onTapSelect(arg, ges)
 
         -- Callback
         --
-        logger.dbg("creating coroutine for menu select")
-        local co = coroutine.create(function()
-            self.menu:onMenuSelect(self.table, pos)
-        end)
-        coroutine.resume(co)
+        self.menu:onMenuSelect(self.table, pos)
 
         UIManager:forceRePaint()
     end
@@ -604,8 +594,6 @@ local Menu = FocusManager:extend{
     is_popout = true,
     -- set icon to add title bar left button
     title_bar_left_icon = nil,
-    -- set this to true to add close button
-    has_close_button = true,
     -- close_callback is a function, which is executed when menu is closed
     -- it is usually set by the widget which creates the menu
     close_callback = nil,
@@ -642,9 +630,12 @@ function Menu:init()
     self.show_parent = self.show_parent or self
     self.item_table = self.item_table or {}
     self.item_table_stack = {}
-    self.dimen = Geom:new{ x = 0, y = 0, w = self.width, h = self.height or Screen:getHeight() }
-    if self.dimen.h > Screen:getHeight() or self.dimen.h == nil then
-        self.dimen.h = Screen:getHeight()
+
+    self.screen_w = Screen:getWidth()
+    self.screen_h = Screen:getHeight()
+    self.dimen = Geom:new{ x = 0, y = 0, w = self.width or self.screen_w, h = self.height or self.screen_h }
+    if self.dimen.h > self.screen_h then
+        self.dimen.h = self.screen_h
     end
 
     self.border_size = self.is_borderless and 0 or Size.border.window
@@ -677,7 +668,7 @@ function Menu:init()
         left_icon = self.title_bar_left_icon,
         left_icon_tap_callback = function() self:onLeftButtonTap() end,
         left_icon_hold_callback = function() self:onLeftButtonHold() end,
-        close_callback = self.has_close_button and function() self:onClose() end,
+        close_callback = function() self:onClose() end,
         show_parent = self.show_parent or self,
     }
 
@@ -846,7 +837,7 @@ function Menu:init()
         dimen = self.inner_dimen:copy(),
         WidgetContainer:new{
             dimen = Geom:new{
-                w = Screen:getWidth(),
+                w = self.screen_w,
                 h = self.page_return_arrow:getSize().h,
             },
             self.return_button,
@@ -854,13 +845,9 @@ function Menu:init()
     }
 
     self:_recalculateDimen()
-    self.vertical_span = HorizontalGroup:new{
-        VerticalSpan:new{ width = self.span_width }
-    }
     self.content_group = VerticalGroup:new{
         align = "left",
         header,
-        self.vertical_span,
         body,
     }
     local content = OverlapGroup:new{
@@ -893,8 +880,8 @@ function Menu:init()
                 ges = "tap",
                 range = Geom:new{
                     x = 0, y = 0,
-                    w = Screen:getWidth(),
-                    h = Screen:getHeight(),
+                    w = self.screen_w,
+                    h = self.screen_h,
                 }
             }
         }
@@ -923,16 +910,12 @@ function Menu:init()
 
     if Device:hasKeys() then
         -- set up keyboard events
-        self.key_events.Close = { {Input.group.Back}, doc = "close menu" }
+        self.key_events.Close = { { Input.group.Back } }
         if Device:hasFewKeys() then
-            self.key_events.Close = { {"Left"}, doc = "close menu" }
+            self.key_events.Close = { { "Left" } }
         end
-        self.key_events.NextPage = {
-            {Input.group.PgFwd}, doc = "goto next page of the menu"
-        }
-        self.key_events.PrevPage = {
-            {Input.group.PgBack}, doc = "goto previous page of the menu"
-        }
+        self.key_events.NextPage = { { Input.group.PgFwd } }
+        self.key_events.PrevPage = { { Input.group.PgBack } }
     end
 
     if Device:hasDPad() then
@@ -940,11 +923,9 @@ function Menu:init()
         self.key_events.FocusRight = nil
         -- shortcut icon is not needed for touch device
         if self.is_enable_shortcut then
-            self.key_events.SelectByShortCut = { {self.item_shortcuts} }
+            self.key_events.SelectByShortCut = { { self.item_shortcuts } }
         end
-        self.key_events.Right = {
-            {"Right"}, doc = "hold  menu item"
-        }
+        self.key_events.Right = { { "Right" } }
     end
 
     if #self.item_table > 0 then
@@ -992,7 +973,7 @@ function Menu:updatePageInfo(select_number)
             self:moveFocusTo(1, select_number)
         end
         -- update page information
-        self.page_info_text:setText(FFIUtil.template(_("Page %1 of %2"), self.page, self.page_num))
+        self.page_info_text:setText(T(_("Page %1 of %2"), self.page, self.page_num))
         if self.page_num > 1 then
             self.page_info_text:enable()
         else
@@ -1028,7 +1009,6 @@ function Menu:updateItems(select_number)
     self.item_group:clear()
     self.page_info:resetLayout()
     self.return_button:resetLayout()
-    self.vertical_span:clear()
     self.content_group:resetLayout()
     self:_recalculateDimen()
 
@@ -1068,6 +1048,7 @@ function Menu:updateItems(select_number)
                 bidi_wrap_func = self.item_table[i].bidi_wrap_func,
                 mandatory = self.item_table[i].mandatory,
                 mandatory_func = self.item_table[i].mandatory_func,
+                mandatory_dim = self.item_table[i].mandatory_dim or self.item_table[i].dim,
                 bold = self.item_table.current == i or self.item_table[i].bold == true,
                 dim = self.item_table[i].dim,
                 font = "smallinfofont",
@@ -1086,6 +1067,7 @@ function Menu:updateItems(select_number)
                 with_dots = self.with_dots,
                 line_color = self.line_color,
                 items_padding = self.items_padding,
+                handle_hold_on_hold_release = self.handle_hold_on_hold_release,
             }
             table.insert(self.item_group, item_tmp)
             -- this is for focus manager
@@ -1176,7 +1158,6 @@ function Menu:switchItemTable(new_title, new_item_table, itemnumber, itemmatch)
 end
 
 function Menu:onScreenResize(dimen)
-    --- @todo Investigate: could this cause minor memory leaks?
     self:init()
     return false
 end
@@ -1353,8 +1334,8 @@ function Menu:onSwipe(arg, ges_ev)
     elseif direction == "east" then
         self:onPrevPage()
     elseif direction == "south" then
-        if self.has_close_button and not self.no_title then
-            -- If there is a close button displayed (so, this Menu can be
+        if not self.no_title then
+            -- If there is a titlebar with a close button displayed (so, this Menu can be
             -- closed), allow easier closing with swipe south.
             self:onClose()
         end
@@ -1373,8 +1354,8 @@ function Menu:onMultiSwipe(arg, ges_ev)
     -- For consistency with other fullscreen widgets where swipe south can't be
     -- used to close and where we then allow any multiswipe to close, allow any
     -- multiswipe to close this widget too.
-    if self.has_close_button and not self.no_title then
-        -- If there is a close button displayed (so, this Menu can be
+    if not self.no_title then
+        -- If there is a titlebar with a close button displayed (so, this Menu can be
         -- closed), allow easier closing with swipe south.
         self:onClose()
     end

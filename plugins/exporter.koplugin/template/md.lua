@@ -9,6 +9,10 @@ local formatters = {
         formatter = "**%s**",
         label = _("Bold")
     },
+    highlight = {
+        formatter = "==%s==",
+        label = _("Highlight")
+    },
     italic = {
         formatter = "*%s*",
         label = _("Italic")
@@ -42,7 +46,7 @@ local function prepareBookContent(book, formatting_options, highlight_formatting
             current_chapter = entry.chapter
             content = content .. "## " .. current_chapter .. "\n"
         end
-        content = content .. "### Page " .. entry.page .. " @ " .. os.date("%d %B %Y %I:%M %p", entry.time) .. "\n"
+        content = content .. "### Page " .. entry.page .. " @ " .. os.date("%d %B %Y %I:%M:%S %p", entry.time) .. "\n"
         if highlight_formatting then
             content = content .. string.format(formatters[formatting_options[entry.drawer]].formatter, entry.text) .."\n"
         else

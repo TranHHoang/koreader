@@ -23,14 +23,6 @@ local Screen = require("device").screen
 local T = require("ffi/util").template
 
 local CloudStorage = Menu:extend{
-    cloud_servers = {
-        {
-            text = _("Add new cloud storage"),
-            title = _("Choose cloud type"),
-            url = "add",
-            editable = false,
-        },
-    },
     no_title = false,
     show_parent = nil,
     is_popout = false,
@@ -173,11 +165,11 @@ function CloudStorage:openCloudServer(url)
         if NetworkMgr:willRerunWhenConnected(function() self:openCloudServer(url) end) then
             return
         end
-        tbl, e = WebDav:run(self.address, self.username, self.password, url)
+        tbl, e = WebDav:run(self.address, self.username, self.password, url, self.choose_folder_mode)
     end
     if tbl then
         self:switchItemTable(url, tbl)
-        if self.type == "dropbox" then
+        if self.type == "dropbox" or self.type == "webdav" then
             self.onLeftButtonTap = function()
                 self:showPlusMenu(url)
             end
@@ -277,6 +269,7 @@ function CloudStorage:downloadFile(item)
                             {
                                 {
                                     text = _("Cancel"),
+                                    id = "close",
                                     callback = function()
                                         UIManager:close(input_dialog)
                                     end,
@@ -648,7 +641,11 @@ function CloudStorage:uploadFile(url)
                 end)
                 local url_base = url ~= "/" and url or ""
                 UIManager:tickAfterNext(function()
-                    DropBox:uploadFile(url_base, self.password, file_path, callback_close)
+                    if self.type == "dropbox" then
+                        DropBox:uploadFile(url_base, self.password, file_path, callback_close)
+                    elseif self.type == "webdav" then
+                        WebDav:uploadFile(url_base, self.address, self.username, self.password, file_path, callback_close)
+                    end
                 end)
             end
         end
@@ -686,7 +683,11 @@ function CloudStorage:createFolder(url)
                             end
                             self:openCloudServer(url)
                         end
-                        DropBox:createFolder(url_base, self.password, folder_name, callback_close)
+                        if self.type == "dropbox" then
+                            DropBox:createFolder(url_base, self.password, folder_name, callback_close)
+                        elseif self.type == "webdav" then
+                            WebDav:createFolder(url_base, self.address, self.username, self.password, folder_name, callback_close)
+                        end
                     end,
                 },
             }
@@ -711,8 +712,8 @@ function CloudStorage:configCloud(type)
                 name = fields[1],
                 password = fields[2],
                 address = fields[3],
+                url = fields[4],
                 type = "dropbox",
-                url = "/"
             })
         elseif type == "ftp" then
             table.insert(cs_servers,{
@@ -758,6 +759,7 @@ function CloudStorage:editCloudServer(item)
                     server.name = fields[1]
                     server.password = fields[2]
                     server.address = fields[3]
+                    server.url = fields[4]
                     cs_servers[i] = server
                     break
                 end

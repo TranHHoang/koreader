@@ -4,7 +4,6 @@ local Event = require("ui/event")
 local Geom = require("ui/geometry")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local Math = require("optmath")
-local ReaderZooming = require("apps/reader/modules/readerzooming")
 local UIManager = require("ui/uimanager")
 local bit = require("bit")
 local logger = require("logger")
@@ -41,73 +40,100 @@ local ReaderPaging = InputContainer:extend{
 }
 
 function ReaderPaging:init()
-    self.key_events = {}
+    self:registerKeyEvents()
+    self.pan_interval = time.s(1 / self.pan_rate)
+    self.number_of_pages = self.ui.document.info.number_of_pages
+
+    -- delegate gesture listener to readerui, NOP our own
+    self.ges_events = nil
+end
+
+function ReaderPaging:onGesture() end
+
+function ReaderPaging:registerKeyEvents()
     if Device:hasKeys() then
         self.key_events.GotoNextPage = {
-            { {"RPgFwd", "LPgFwd", "Right" } }, doc = "go to next page",
-            event = "GotoViewRel", args = 1,
+            { { "RPgFwd", "LPgFwd", not Device:hasFewKeys() and "Right" } },
+            event = "GotoViewRel",
+            args = 1,
         }
         self.key_events.GotoPrevPage = {
-            { { "RPgBack", "LPgBack", "Left" } }, doc = "go to previous page",
-            event = "GotoViewRel", args = -1,
+            { { "RPgBack", "LPgBack", not Device:hasFewKeys() and "Left" } },
+            event = "GotoViewRel",
+            args = -1,
         }
-        if Device:hasFewKeys() then
-            table.remove(self.key_events.GotoNextPage[1][1], 3) -- right
-            table.remove(self.key_events.GotoPrevPage[1][1], 3) -- left
-        end
         self.key_events.GotoNextPos = {
-            { {"Down" } }, doc = "go to next position",
-            event = "GotoPosRel", args = 1,
+            { "Down" },
+            event = "GotoPosRel",
+            args = 1,
         }
         self.key_events.GotoPrevPos = {
-            { { "Up" } }, doc = "go to previous position",
-            event = "GotoPosRel", args = -1,
+            { "Up" },
+            event = "GotoPosRel",
+            args = -1,
         }
-
     end
     if Device:hasKeyboard() then
         self.key_events.GotoFirst = {
-            {"1"}, doc = "go to start", event = "GotoPercent", args = 0,
+            { "1" },
+            event = "GotoPercent",
+            args = 0,
         }
         self.key_events.Goto11 = {
-            {"2"}, doc = "go to 11%", event = "GotoPercent", args = 11,
+            { "2" },
+            event = "GotoPercent",
+            args = 11,
         }
         self.key_events.Goto22 = {
-            {"3"}, doc = "go to 22%", event = "GotoPercent", args = 22,
+            { "3" },
+            event = "GotoPercent",
+            args = 22,
         }
         self.key_events.Goto33 = {
-            {"4"}, doc = "go to 33%", event = "GotoPercent", args = 33,
+            { "4" },
+            event = "GotoPercent",
+            args = 33,
         }
         self.key_events.Goto44 = {
-            {"5"}, doc = "go to 44%", event = "GotoPercent", args = 44,
+            { "5" },
+            event = "GotoPercent",
+            args = 44,
         }
         self.key_events.Goto55 = {
-            {"6"}, doc = "go to 55%", event = "GotoPercent", args = 55,
+            { "6" },
+            event = "GotoPercent",
+            args = 55,
         }
         self.key_events.Goto66 = {
-            {"7"}, doc = "go to 66%", event = "GotoPercent", args = 66,
+            { "7" },
+            event = "GotoPercent",
+            args = 66,
         }
         self.key_events.Goto77 = {
-            {"8"}, doc = "go to 77%", event = "GotoPercent", args = 77,
+            { "8" },
+            event = "GotoPercent",
+            args = 77,
         }
         self.key_events.Goto88 = {
-            {"9"}, doc = "go to 88%", event = "GotoPercent", args = 88,
+            { "9" },
+            event = "GotoPercent",
+            args = 88,
         }
         self.key_events.GotoLast = {
-            {"0"}, doc = "go to end", event = "GotoPercent", args = 100,
+            { "0" },
+            event = "GotoPercent",
+            args = 100,
         }
     end
-    self.pan_interval = time.s(1 / self.pan_rate)
-    self.number_of_pages = self.ui.document.info.number_of_pages
 end
+
+ReaderPaging.onPhysicalKeyboardConnected = ReaderPaging.registerKeyEvents
 
 function ReaderPaging:onReaderReady()
     self:setupTouchZones()
 end
 
 function ReaderPaging:setupTouchZones()
-    self.ges_events = {}
-    self.onGesture = nil
     if not Device:isTouchDevice() then return end
 
     local forward_zone, backward_zone = self.view:getTapZones()
@@ -166,9 +192,6 @@ function ReaderPaging:onReadSettings(config)
     self.flipping_zoom_mode = config:readSetting("flipping_zoom_mode") or "page"
     self.flipping_scroll_mode = config:isTrue("flipping_scroll_mode")
     self.is_reflowed = config:has("kopt_text_wrap") and config:readSetting("kopt_text_wrap") == 1
-    for _, v in ipairs(ReaderZooming.zoom_pan_settings) do
-        self[v] = config:readSetting(v) or G_reader_settings:readSetting(v) or ReaderZooming[v]
-    end
 end
 
 function ReaderPaging:onSaveSettings()
@@ -246,15 +269,11 @@ function ReaderPaging:onToggleBookmarkFlipping()
 
     if self.bookmark_flipping_mode then
         self.orig_flipping_mode = self.view.flipping_visible
-        self.orig_dogear_mode = self.view.dogear_visible
-
         self.view.flipping_visible = true
-        self.view.dogear_visible = true
         self.bm_flipping_orig_page = self.current_page
         self:enterFlippingMode()
     else
         self.view.flipping_visible = self.orig_flipping_mode
-        self.view.dogear_visible = self.orig_dogear_mode
         self:exitFlippingMode()
         self:_gotoPage(self.bm_flipping_orig_page)
     end
@@ -695,7 +714,7 @@ function ReaderPaging:onUpdateScrollPageGamma(gamma)
     return true
 end
 
-function ReaderPaging:getNextPageState(blank_area, offset)
+function ReaderPaging:getNextPageState(blank_area, image_offset)
     local page_area = self.view:getPageArea(
         self.view.state.page,
         self.view.state.zoom,
@@ -703,21 +722,25 @@ function ReaderPaging:getNextPageState(blank_area, offset)
     local visible_area = Geom:new{x = 0, y = 0}
     visible_area.w, visible_area.h = blank_area.w, blank_area.h
     visible_area.x, visible_area.y = page_area.x, page_area.y
-    visible_area = visible_area:shrinkInside(page_area, offset.x, offset.y)
+    visible_area = visible_area:shrinkInside(page_area, image_offset.x, image_offset.y)
     -- shrink blank area by the height of visible area
     blank_area.h = blank_area.h - visible_area.h
+    local page_offset = Geom:new{x = self.view.state.offset.x, y = 0}
+    if blank_area.w > page_area.w then
+        page_offset:offsetBy((blank_area.w - page_area.w) / 2, 0)
+    end
     return {
         page = self.view.state.page,
         zoom = self.view.state.zoom,
         rotation = self.view.state.rotation,
         gamma = self.view.state.gamma,
-        offset = Geom:new{ x = self.view.state.offset.x, y = 0},
+        offset = page_offset,
         visible_area = visible_area,
         page_area = page_area,
     }
 end
 
-function ReaderPaging:getPrevPageState(blank_area, offset)
+function ReaderPaging:getPrevPageState(blank_area, image_offset)
     local page_area = self.view:getPageArea(
         self.view.state.page,
         self.view.state.zoom,
@@ -726,15 +749,19 @@ function ReaderPaging:getPrevPageState(blank_area, offset)
     visible_area.w, visible_area.h = blank_area.w, blank_area.h
     visible_area.x = page_area.x
     visible_area.y = page_area.y + page_area.h - visible_area.h
-    visible_area = visible_area:shrinkInside(page_area, offset.x, offset.y)
+    visible_area = visible_area:shrinkInside(page_area, image_offset.x, image_offset.y)
     -- shrink blank area by the height of visible area
     blank_area.h = blank_area.h - visible_area.h
+    local page_offset = Geom:new{x = self.view.state.offset.x, y = 0}
+    if blank_area.w > page_area.w then
+        page_offset:offsetBy((blank_area.w - page_area.w) / 2, 0)
+    end
     return {
         page = self.view.state.page,
         zoom = self.view.state.zoom,
         rotation = self.view.state.rotation,
         gamma = self.view.state.gamma,
-        offset = Geom:new{ x = self.view.state.offset.x, y = 0},
+        offset = page_offset,
         visible_area = visible_area,
         page_area = page_area,
     }

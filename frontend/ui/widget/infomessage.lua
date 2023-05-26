@@ -79,10 +79,7 @@ local InfoMessage = InputContainer:extend{
 function InfoMessage:init()
     if self.dismissable then
         if Device:hasKeys() then
-            self.key_events = {
-                AnyKeyPressed = { { Input.group.Any },
-                    seqtext = "any key", doc = "close dialog" }
-            }
+            self.key_events.AnyKeyPressed = { { Input.group.Any } }
         end
         if Device:isTouchDevice() then
             self.ges_events.TapClose = {
@@ -216,7 +213,7 @@ function InfoMessage:onCloseWidget()
     end
 
     UIManager:setDirty(nil, function()
-        return "ui", self[1][1].dimen
+        return "ui", self.movable.dimen
     end)
 end
 
@@ -234,7 +231,7 @@ function InfoMessage:onShow()
     end
     -- set our region to be dirty, so UImanager will call our paintTo()
     UIManager:setDirty(self, function()
-        return "ui", self[1][1].dimen
+        return "ui", self.movable.dimen
     end)
     if self.flush_events_on_show then
         -- Discard queued and upcoming input events to avoid accidental dismissal
@@ -257,7 +254,7 @@ end
 
 function InfoMessage:getVisibleArea()
     if not self.invisible then
-        return self[1][1].dimen
+        return self.movable.dimen
     end
 end
 
@@ -280,18 +277,12 @@ function InfoMessage:dismiss()
     UIManager:close(self)
 end
 
-function InfoMessage:onAnyKeyPressed()
-    self:dismiss()
-    if self.readonly ~= true then
-        return true
-    end
-end
-
 function InfoMessage:onTapClose()
     self:dismiss()
     if self.readonly ~= true then
         return true
     end
 end
+InfoMessage.onAnyKeyPressed = InfoMessage.onTapClose
 
 return InfoMessage

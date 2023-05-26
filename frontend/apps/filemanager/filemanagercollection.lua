@@ -1,17 +1,12 @@
-local BD = require("ui/bidi")
 local ButtonDialogTitle = require("ui/widget/buttondialogtitle")
 local Device = require("device")
-local FileManagerBookInfo = require("apps/filemanager/filemanagerbookinfo")
-local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("ui/widget/menu")
 local ReadCollection = require("readcollection")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local Screen = require("device").screen
-local BaseUtil = require("ffi/util")
-local util = require("util")
+local filemanagerutil = require("apps/filemanager/filemanagerutil")
 local _ = require("gettext")
-local T = BaseUtil.template
 
 local FileManagerCollection = WidgetContainer:extend{
     coll_menu_title = _("Favorites"),
@@ -40,89 +35,80 @@ function FileManagerCollection:updateItemTable()
         ReadCollection:prepareList(self.coll_menu.collection), select_number)
 end
 
+function FileManagerCollection:onMenuChoice(item)
+    require("apps/reader/readerui"):showReader(item.file)
+end
+
 function FileManagerCollection:onMenuHold(item)
     self.collfile_dialog = nil
-    local buttons = {
-        {
-            {
-                text = _("Sort"),
-                callback = function()
-                    UIManager:close(self.collfile_dialog)
-                    local item_table = {}
-                    for i=1, #self._manager.coll_menu.item_table do
-                        table.insert(item_table, {text = self._manager.coll_menu.item_table[i].text, label = self._manager.coll_menu.item_table[i].file})
-                    end
-                    local SortWidget = require("ui/widget/sortwidget")
-                    local sort_item
-                    sort_item = SortWidget:new{
-                        title = _("Sort favorites"),
-                        item_table = item_table,
-                        callback = function()
-                            local new_order_table = {}
-                            for i=1, #sort_item.item_table do
-                                table.insert(new_order_table, {
-                                    file = sort_item.item_table[i].label,
-                                    order = i
-                                })
-                            end
-                            ReadCollection:writeCollection(new_order_table, self._manager.coll_menu.collection)
-                            self._manager:updateItemTable()
-                        end
-                    }
-                    UIManager:show(sort_item)
+    local function close_dialog_callback()
+        UIManager:close(self.collfile_dialog)
+    end
+    local function status_button_callback()
+        UIManager:close(self.collfile_dialog)
+        self._manager:updateItemTable()
+    end
+    local is_currently_opened = item.file == (self.ui.document and self.ui.document.file)
 
-                end,
-            },
-            {
-                text = _("Remove from collection"),
-                callback = function()
-                    ReadCollection:removeItem(item.file, self._manager.coll_menu.collection)
-                    self._manager:updateItemTable()
-                    UIManager:close(self.collfile_dialog)
-                end,
-            },
-        },
+    local buttons = {}
+    if not (item.dim or is_currently_opened) then
+        table.insert(buttons, filemanagerutil.genStatusButtonsRow(item.file, status_button_callback))
+        table.insert(buttons, {}) -- separator
+    end
+    table.insert(buttons, {
+        filemanagerutil.genResetSettingsButton(item.file, status_button_callback, is_currently_opened),
         {
-            {
-                text = _("Book information"),
-                enabled = FileManagerBookInfo:isSupported(item.file),
-                callback = function()
-                    FileManagerBookInfo:show(item.file)
-                    UIManager:close(self.collfile_dialog)
-                end,
-            },
+            text = _("Remove from favorites"),
+            callback = function()
+                UIManager:close(self.collfile_dialog)
+                ReadCollection:removeItem(item.file, self._manager.coll_menu.collection)
+                self._manager:updateItemTable()
+            end,
         },
-    }
-    -- NOTE: Duplicated from frontend/apps/filemanager/filemanager.lua
-    if Device:canExecuteScript(item.file) then
-        table.insert(buttons, {
-            {
-                -- @translators This is the script's programming language (e.g., shell or python)
-                text = T(_("Execute %1 script"), util.getScriptType(item.file)),
-                enabled = true,
-                callback = function()
-                    UIManager:close(self.collfile_dialog)
-                    local script_is_running_msg = InfoMessage:new{
-                            -- @translators %1 is the script's programming language (e.g., shell or python), %2 is the filename
-                            text = T(_("Running %1 script %2…"), util.getScriptType(item.file), BD.filename(BaseUtil.basename(item.file))),
-                    }
-                    UIManager:show(script_is_running_msg)
-                    UIManager:scheduleIn(0.5, function()
-                        local rv = os.execute(BaseUtil.realpath(item.file))
-                        UIManager:close(script_is_running_msg)
-                        if rv == 0 then
-                            UIManager:show(InfoMessage:new{
-                                text = _("The script exited successfully."),
-                            })
-                        else
-                            UIManager:show(InfoMessage:new{
-                                text = T(_("The script returned a non-zero status code: %1!"), bit.rshift(rv, 8)),
-                                icon = "notice-warning",
+    })
+    table.insert(buttons, {
+        {
+            text = _("Sort favorites"),
+            callback = function()
+                UIManager:close(self.collfile_dialog)
+                local item_table = {}
+                for _, v in ipairs(self._manager.coll_menu.item_table) do
+                    table.insert(item_table, {text = v.text, label = v.file})
+                end
+                local SortWidget = require("ui/widget/sortwidget")
+                local sort_item
+                sort_item = SortWidget:new{
+                    title = _("Sort favorites"),
+                    item_table = item_table,
+                    callback = function()
+                        local new_order_table = {}
+                        for i, v in ipairs(sort_item.item_table) do
+                            table.insert(new_order_table, {
+                                file = v.label,
+                                order = i,
                             })
                         end
-                    end)
-                end,
-            }
+                        ReadCollection:writeCollection(new_order_table, self._manager.coll_menu.collection)
+                        self._manager:updateItemTable()
+                    end
+                }
+                UIManager:show(sort_item)
+            end,
+        },
+        filemanagerutil.genBookInformationButton(item.file, close_dialog_callback, item.dim),
+    })
+    table.insert(buttons, {
+        filemanagerutil.genBookCoverButton(item.file, close_dialog_callback, item.dim),
+        filemanagerutil.genBookDescriptionButton(item.file, close_dialog_callback, item.dim),
+    })
+
+    if Device:canExecuteScript(item.file) then
+        local function button_callback()
+            UIManager:close(self.collfile_dialog)
+            self.coll_menu.close_callback()
+        end
+        table.insert(buttons, {
+            filemanagerutil.genExecuteScriptButton(item.file, button_callback)
         })
     end
 
@@ -153,11 +139,10 @@ end
 function FileManagerCollection:onShowColl(collection)
     self.coll_menu = Menu:new{
         ui = self.ui,
-        width = Screen:getWidth(),
-        height = Screen:getHeight(),
         covers_fullscreen = true, -- hint for UIManager:_repaint()
         is_borderless = true,
         is_popout = false,
+        onMenuChoice = self.onMenuChoice,
         onMenuHold = self.onMenuHold,
         onSetRotationMode = self.MenuSetRotationModeHandler,
         _manager = self,

@@ -1,23 +1,33 @@
 --[[--
-An InputContainer is a WidgetContainer that handles user input events including multi touches
-and key presses.
+An InputContainer is a WidgetContainer that handles user input events including multi touches and key presses.
 
 See @{InputContainer:registerTouchZones} for examples of how to listen for multi touch input.
 
-This example illustrates how to listen for a key press input event:
+This example illustrates how to listen for a key press input event via the `key_events` hashmap:
 
-    PanBy20 = {
-        { "Shift", Input.group.Cursor },
-        seqtext = "Shift+Cursor",
-        doc = "pan by 20px",
-        event = "Pan", args = 20, is_inactive = true,
+    key_events = {
+        PanBy20 = {
+            { "Shift", Input.group.Cursor }, -- Shift + (any member of) Cursor
+            event = "Pan",
+            args = 20,
+            is_inactive = true,
+        },
+        PanNormal = {
+            { Input.group.Cursor }, -- Any member of Cursor (itself an array)
+            event = "Pan",
+            args = 10,
+        },
+        Exit = {
+            { "Alt", "F4" }, -- Alt + F4
+            { "Ctrl", "Q" }, -- Ctrl + Q
+        },
+        Home = {
+            { { "Home", "H" } }, -- Any of Home or H (note the extra nesting!)
+        },
+        End = {
+            { "End" }, -- NOTE: For a *single* key, we can forgo the nesting (c.f., match @ device/key).
+        },
     },
-    PanNormal = {
-        { Input.group.Cursor },
-        seqtext = "Cursor",
-        doc = "pan by 10 px", event = "Pan", args = 10,
-    },
-    Quit = { {"Home"} },
 
 It is recommended to reference configurable sequences from another table
 and to store that table as a configuration setting.
@@ -124,7 +134,7 @@ function InputContainer:registerTouchZones(zones)
         if self._zones[zone.id] then
             self.touch_zone_dg:removeNode(zone.id)
         end
-        self._zones[zone.id]= {
+        self._zones[zone.id] = {
             def = zone,
             handler = zone.handler,
             gs_range = GestureRange:new{
@@ -214,6 +224,7 @@ function InputContainer:onKeyPress(key)
     for name, seq in pairs(self.key_events) do
         if not seq.is_inactive then
             for _, oneseq in ipairs(seq) do
+                -- NOTE: key is a device/key object, this isn't string.match!
                 if key:match(oneseq) then
                     local eventname = seq.event or name
                     return self:handleEvent(Event:new(eventname, seq.args, key))
@@ -258,6 +269,76 @@ function InputContainer:onGesture(ev)
     end
 end
 
+-- Will be overloaded by the Gestures plugin, if enabled, for use in _onGestureFiltered
+function InputContainer:_isGestureAlwaysActive(ges, multiswipe_directions)
+    -- If the plugin isn't enabled, IgnoreTouchInput can still be emitted by Dispatcher (e.g., via Profile or QuickMenu).
+    -- Regardless of that, we still want to block all gestures anyway, as our own onResume handler will ensure
+    -- that the standard onGesture handler is restored on the next resume cycle,
+    -- allowing one to restore input handling automatically.
+    return false
+end
+InputContainer.isGestureAlwaysActive = InputContainer._isGestureAlwaysActive
+
+-- Filtered variant that only lets specific touch zones marked as "always active" through.
+-- (This is used by the "toggle_touch_input" Dispatcher action).
+function InputContainer:_onGestureFiltered(ev)
+    for _, tzone in ipairs(self._ordered_touch_zones) do
+        if self:isGestureAlwaysActive(tzone.def.id, ev.multiswipe_directions) and tzone.gs_range:match(ev) and tzone.handler(ev) then
+            return true
+        end
+    end
+    -- No ges_events at all, although if the need ever arises, we could also support an "always active" marker for those ;).
+    if self.stop_events_propagation then
+        return true
+    end
+end
+
+-- NOTE: Monkey-patching InputContainer.onGesture allows us to effectively disable touch input,
+--       because barely any InputContainer subclasses implement onGesture, meaning they all inherit this one,
+--       making this specific method in this specific widget the only piece of code that handles the Gesture
+--       Events sent by GestureDetector.
+--       We would need to be slightly more creative if subclassed widgets did overload it in in any meaningful way[1].
+--       (i.e., use a broadcast Event, don't stop its propagation, and swap self.onGesture in every instance
+--       while still only swapping Input.onGesture once...).
+--
+--       [1] The most common implementation you'll see is a NOP for ReaderUI modules that defer gesture handling to ReaderUI.
+--           Notification also implements a simple one to dismiss notifications on any user input,
+--           which is something that doesn't impede our goal, which is why we don't need to deal with it.
+function InputContainer:onIgnoreTouchInput(toggle)
+    local Notification = require("ui/widget/notification")
+    if toggle == false then
+        -- Restore the proper onGesture handler if we disabled it
+        if InputContainer._onGesture then
+            InputContainer.onGesture = InputContainer._onGesture
+            InputContainer._onGesture = nil
+            Notification:notify("Restored touch input")
+        end
+    elseif toggle == true then
+        -- Replace the onGesture handler w/ the minimal one if that's not already the case
+        if not InputContainer._onGesture then
+            InputContainer._onGesture = InputContainer.onGesture
+            InputContainer.onGesture = InputContainer._onGestureFiltered
+            Notification:notify("Disabled touch input")
+        end
+    else
+        -- Toggle the current state
+        if InputContainer._onGesture then
+            self:onIgnoreTouchInput(false)
+        else
+            self:onIgnoreTouchInput(true)
+        end
+    end
+
+    -- We only affect the base class, once is enough ;).
+    return true
+end
+
+function InputContainer:onResume()
+    -- Always restore touch input on resume, to avoid confusion for scatter-brained users ;).
+    -- It's also helpful when the IgnoreTouchInput event is emitted by Dispatcher through other means than Gestures.
+    self:onIgnoreTouchInput(false)
+end
+
 function InputContainer:onInput(input, ignore_first_hold_release)
     local InputDialog = require("ui/widget/inputdialog")
     self.input_dialog = InputDialog:new{
@@ -292,6 +373,15 @@ end
 
 function InputContainer:closeInputDialog()
     UIManager:close(self.input_dialog)
+end
+
+function InputContainer:onPhysicalKeyboardDisconnected()
+    -- Clear the key bindings if Device no longer has keys
+    -- NOTE: hasKeys is the lowest common denominator of key-related Device caps,
+    --       hasDPad/hasFewKeys/hasKeyboard all imply hasKeys ;).
+    if not Device:hasKeys() then
+        self.key_events = {}
+    end
 end
 
 return InputContainer

@@ -292,12 +292,13 @@ function Device:initNetworkManager(NetworkMgr)
         android.openWifiSettings()
     end
 
-    function NetworkMgr:isWifiOn()
+    function NetworkMgr:isConnected()
         local ok = android.getNetworkInfo()
         ok = tonumber(ok)
         if not ok then return false end
         return ok == 1
     end
+    NetworkMgr.isWifiOn = NetworkMgr.isConnected
 end
 
 function Device:performHapticFeedback(type)
@@ -330,8 +331,8 @@ function Device:retrieveNetworkInfo()
     end
 end
 
-function Device:setViewport(x,y,w,h)
-    logger.info(string.format("Switching viewport to new geometry [x=%d,y=%d,w=%d,h=%d]",x, y, w, h))
+function Device:setViewport(x, y, w, h)
+    logger.info(string.format("Switching viewport to new geometry [x=%d,y=%d,w=%d,h=%d]", x, y, w, h))
     local viewport = Geom:new{x=x, y=y, w=w, h=h}
     self.screen:setViewport(viewport)
 end
@@ -379,12 +380,13 @@ function Device:_toggleStatusBarVisibility()
     local statusbar_height = android.getStatusBarHeight()
     local new_height = height - statusbar_height
 
+    local Input = require("device/input")
     if not is_fullscreen and self.viewport then
         statusbar_height = 0
         -- reset touchTranslate to normal
-        self.input:registerEventAdjustHook(
-            self.input.adjustTouchTranslate,
-            {x = 0 + self.viewport.x, y = 0 + self.viewport.y})
+        -- (since we don't setup any hooks besides the viewport one,
+        -- (we can just reset the hook to the default NOP instead of piling on +/- translations...)
+        self.input.eventAdjustHook = Input.eventAdjustHook
     end
 
     local viewport = Geom:new{x=0, y=statusbar_height, w=width, h=new_height}
@@ -392,10 +394,11 @@ function Device:_toggleStatusBarVisibility()
         0, statusbar_height, width, new_height))
 
     self.screen:setViewport(viewport)
-    if is_fullscreen and self.viewport then
+    if is_fullscreen and self.viewport and self.viewport.y ~= 0 then
         self.input:registerEventAdjustHook(
             self.input.adjustTouchTranslate,
-            {x = 0 - self.viewport.x, y = 0 - self.viewport.y})
+            {x = 0 - self.viewport.x, y = 0 - self.viewport.y}
+        )
     end
 
     self.fullscreen = is_fullscreen
@@ -422,8 +425,8 @@ function Device:info()
     local is_eink, eink_platform = android.isEink()
     local product_type = android.getPlatformName()
 
-    local common_text = T(_("%1\n\nOS: Android %2, api %3\nBuild flavor: %4\n"),
-        android.prop.product, getCodename(), Device.firmware_rev, android.prop.flavor)
+    local common_text = T(_("%1\n\nOS: Android %2, api %3 on %4\nBuild flavor: %5\n"),
+        android.prop.product, getCodename(), Device.firmware_rev, jit.arch, android.prop.flavor)
 
     local platform_text = ""
     if product_type ~= "android" then

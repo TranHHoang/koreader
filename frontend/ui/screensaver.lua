@@ -13,12 +13,14 @@ local ImageWidget = require("ui/widget/imagewidget")
 local Math = require("optmath")
 local OverlapGroup = require("ui/widget/overlapgroup")
 local ScreenSaverWidget = require("ui/widget/screensaverwidget")
+local ScreenSaverLockWidget = require("ui/widget/screensaverlockwidget")
 local SpinWidget = require("ui/widget/spinwidget")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local TopContainer = require("ui/widget/container/topcontainer")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
+local datetime = require("datetime")
 local ffiUtil = require("ffi/util")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
@@ -130,21 +132,22 @@ function Screensaver:_calcAverageTimeForPages(pages)
     -- Compare average_time_per_page against itself to make sure it's not nan
     if average_time_per_page and average_time_per_page == average_time_per_page and pages then
         local user_duration_format = G_reader_settings:readSetting("duration_format", "classic")
-        sec = util.secondsToClockDuration(user_duration_format, pages * average_time_per_page, true)
+        sec = datetime.secondsToClockDuration(user_duration_format, pages * average_time_per_page, true)
     end
     return sec
 end
 
 function Screensaver:expandSpecial(message, fallback)
     -- Expand special character sequences in given message.
-    -- %p percentage read
-    -- %c current page
-    -- %t total pages
     -- %T document title
     -- %A document authors
     -- %S document series
+    -- %c current page (if there are hidden flows, current page in current flow)
+    -- %t total pages (if there are hidden flows, total pages in current flow)
+    -- %p percentage read (if there are hidden flows, percentage read of current flow)
     -- %h time left in chapter
-    -- %H time left in document
+    -- %H time left in document (if there are hidden flows, time left in current flow)
+    -- %b battery level
 
     if G_reader_settings:hasNot("lastfile") then
         return fallback
@@ -161,14 +164,25 @@ function Screensaver:expandSpecial(message, fallback)
     local series = _("N/A")
     local time_left_chapter = _("N/A")
     local time_left_document = _("N/A")
+    local batt_lvl = _("N/A")
 
     local ReaderUI = require("apps/reader/readerui")
     local ui = ReaderUI:_getRunningInstance()
     if ui and ui.document then
         -- If we have a ReaderUI instance, use it.
         local doc = ui.document
-        currentpage = ui.view.state.page or currentpage
-        totalpages = doc:getPageCount() or totalpages
+        if doc:hasHiddenFlows() then
+            local currentpageAll = ui.view.state.page or currentpage
+            currentpage = doc:getPageNumberInFlow(ui.view.state.page or currentpageAll)
+            totalpages = doc:getTotalPagesInFlow(doc:getPageFlow(currentpageAll))
+            time_left_chapter = self:_calcAverageTimeForPages(ui.toc:getChapterPagesLeft(currentpageAll) or (totalpages - currentpage))
+            time_left_document = self:_calcAverageTimeForPages(totalpages - currentpage)
+        else
+            currentpage = ui.view.state.page or currentpage
+            totalpages = doc:getPageCount() or totalpages
+            time_left_chapter = self:_calcAverageTimeForPages(ui.toc:getChapterPagesLeft(currentpage) or doc:getTotalPagesLeft(currentpage))
+            time_left_document = self:_calcAverageTimeForPages(doc:getTotalPagesLeft(currentpage))
+        end
         percent = Math.round((currentpage * 100) / totalpages)
         local props = doc:getProps()
         if props then
@@ -176,32 +190,40 @@ function Screensaver:expandSpecial(message, fallback)
             authors = props.authors and props.authors ~= "" and props.authors or authors
             series = props.series and props.series ~= "" and props.series or series
         end
-        time_left_chapter = self:_calcAverageTimeForPages(ui.toc:getChapterPagesLeft(currentpage) or doc:getTotalPagesLeft(currentpage))
-        time_left_document = self:_calcAverageTimeForPages(doc:getTotalPagesLeft(currentpage))
     elseif DocSettings:hasSidecarFile(lastfile) then
         -- If there's no ReaderUI instance, but the file has sidecar data, use that
-        local docinfo = DocSettings:open(lastfile)
-        totalpages = docinfo.data.doc_pages or totalpages
-        percent = docinfo.data.percent_finished or percent
+        local doc_settings = DocSettings:open(lastfile)
+        totalpages = doc_settings:readSetting("doc_pages") or totalpages
+        percent = doc_settings:readSetting("percent_finished") or percent
         currentpage = Math.round(percent * totalpages)
         percent = Math.round(percent * 100)
-        if docinfo.data.doc_props then
-            title = docinfo.data.doc_props.title and docinfo.data.doc_props.title ~= "" and docinfo.data.doc_props.title or title
-            authors = docinfo.data.doc_props.authors and docinfo.data.doc_props.authors ~= "" and docinfo.data.doc_props.authors or authors
-            series = docinfo.data.doc_props.series and docinfo.data.doc_props.series ~= "" and docinfo.data.doc_props.series or series
+        local doc_props = doc_settings:readSetting("doc_props")
+        if doc_props then
+            title = doc_props.title and doc_props.title ~= "" and doc_props.title or title
+            authors = doc_props.authors and doc_props.authors ~= "" and doc_props.authors or authors
+            series = doc_props.series and doc_props.series ~= "" and doc_props.series or series
         end
         -- Unable to set time_left_chapter and time_left_document without ReaderUI, so leave N/A
     end
+    if Device:hasBattery() then
+        local powerd = Device:getPowerDevice()
+        if Device:hasAuxBattery() and powerd:isAuxBatteryConnected() then
+            batt_lvl = powerd:getCapacity() + powerd:getAuxCapacity()
+        else
+            batt_lvl = powerd:getCapacity()
+        end
+    end
 
     local replace = {
-        ["%c"] = currentpage,
-        ["%t"] = totalpages,
-        ["%p"] = percent,
         ["%T"] = title,
         ["%A"] = authors,
         ["%S"] = series,
+        ["%c"] = currentpage,
+        ["%t"] = totalpages,
+        ["%p"] = percent,
         ["%h"] = time_left_chapter,
         ["%H"] = time_left_document,
+        ["%b"] = batt_lvl,
     }
     ret = ret:gsub("(%%%a)", replace)
 
@@ -391,8 +413,18 @@ function Screensaver:setMessage()
                              or self.default_screensaver_message
     local input_dialog
     input_dialog = InputDialog:new{
-        title = "Screensaver message",
-        description = _("Enter the message to be displayed by the screensaver. The following escape sequences can be used:\n  %p percentage read\n  %c current page number\n  %t total number of pages\n  %T title\n  %A authors\n  %S series\n  %h time left in chapter\n  %H time left in document"),
+        title = _("Screensaver message"),
+        description = _([[
+Enter the message to be displayed by the screensaver. The following escape sequences can be used:
+  %T title
+  %A author(s)
+  %S series
+  %c current page number
+  %t total page number
+  %p percentage read
+  %h time left in chapter
+  %H time left in document
+  %b battery level]]),
         input = screensaver_message,
         buttons = {
             {
@@ -538,39 +570,32 @@ function Screensaver:setup(event, event_message)
         end
     end
     if self.screensaver_type == "bookstatus" then
-        if lastfile and lfs.attributes(lastfile, "mode") == "file" then
-            if not ui then
-                self.screensaver_type = "disable"
-                self.show_message = true
-            end
-        else
-            self.screensaver_type = "disable"
-            self.show_message = true
-        end
-    end
-    if self.screensaver_type == "random_image" then
-        local screensaver_dir = G_reader_settings:readSetting(self.prefix .. "screensaver_dir")
-                             or G_reader_settings:readSetting("screensaver_dir")
-        self.image_file = self:_getRandomImage(screensaver_dir)
-        if self.image_file == nil then
-            self.screensaver_type = "disable"
-            self.show_message = true
+        if not ui or not lastfile or lfs.attributes(lastfile, "mode") ~= "file" or (ui.doc_settings and ui.doc_settings:isTrue("exclude_screensaver")) then
+            self.screensaver_type = "random_image"
         end
     end
     if self.screensaver_type == "image_file" then
         self.image_file = G_reader_settings:readSetting(self.prefix .. "screensaver_image")
                        or G_reader_settings:readSetting("screensaver_image")
         if self.image_file == nil or lfs.attributes(self.image_file, "mode") ~= "file" then
-            self.screensaver_type = "disable"
-            self.show_message = true
+            self.screensaver_type = "random_image"
         end
     end
     if self.screensaver_type == "readingprogress" then
         -- This is implemented by the Statistics plugin
         if Screensaver.getReaderProgress == nil then
-            self.screensaver_type = "disable"
-            self.show_message = true
+            self.screensaver_type = "random_image"
         end
+    end
+    if self.screensaver_type == "disable" then
+        if ui and ui.doc_settings and ui.doc_settings:isTrue("exclude_screensaver") then
+            self.screensaver_type = "random_image"
+        end
+    end
+    if self.screensaver_type == "random_image" then
+        local screensaver_dir = G_reader_settings:readSetting(self.prefix .. "screensaver_dir")
+                             or G_reader_settings:readSetting("screensaver_dir")
+        self.image_file = self:_getRandomImage(screensaver_dir) or "resources/koreader.png" -- Fallback image
     end
 
     -- Use the right background setting depending on the effective mode, now that fallbacks have kicked in.
@@ -582,13 +607,14 @@ function Screensaver:setup(event, event_message)
 end
 
 function Screensaver:show()
-    if self.screensaver_widget then
-        UIManager:close(self.screensaver_widget)
-        self.screensaver_widget = nil
-    end
+    -- Notify Device methods that we're in screen saver mode, so they know whether to suspend or resume on Power events.
+    Device.screen_saver_mode = true
 
-    -- In as-is mode with no message and no overlay, we've got nothing to show :)
-    if self.screensaver_type == "disable" and not self.show_message and not self.overlay_message then
+    -- Check if we requested a lock gesture
+    local with_gesture_lock = Device:isTouchDevice() and G_reader_settings:readSetting("screensaver_delay") == "gesture"
+
+    -- In as-is mode with no message, no overlay and no lock, we've got nothing to show :)
+    if self.screensaver_type == "disable" and not self.show_message and not self.overlay_message and not with_gesture_lock then
         return
     end
 
@@ -602,7 +628,7 @@ function Screensaver:show()
         -- Leave Portrait & Inverted Portrait alone, that works just fine.
         if bit.band(Device.orig_rotation_mode, 1) == 1 then
             -- i.e., only switch to Portrait if we're currently in *any* Landscape orientation (odd number)
-            Screen:setRotationMode(Screen.ORIENTATION_PORTRAIT)
+            Screen:setRotationMode(Screen.DEVICE_ROTATED_UPRIGHT)
         else
             Device.orig_rotation_mode = nil
         end
@@ -780,19 +806,15 @@ function Screensaver:show()
         self.screensaver_widget.modal = true
         self.screensaver_widget.dithered = true
 
-        -- NOTE: ScreenSaver itself is not a widget, so make sure we cleanup behind us...
-        self.screensaver_widget.onCloseWidget = function(this)
-            -- this is self.screensaver_widget (i.e., an object instantiated from ScreenSaverWidget)
-            local super = getmetatable(this)
-            -- super is the class object of self.screensaver_widget (i.e., ScreenSaverWidget)
-            if super.onCloseWidget then
-                super.onCloseWidget(this)
-            end
-            -- self is ScreenSaver (upvalue)
-            self:cleanup()
-        end
-
         UIManager:show(self.screensaver_widget, "full")
+    end
+
+    -- Setup the gesture lock through an additional invisible widget, so that it works regardless of the configuration.
+    if with_gesture_lock then
+        self.screensaver_lock_widget = ScreenSaverLockWidget:new{}
+
+        -- It's flagged as modal, so it'll stay on top
+        UIManager:show(self.screensaver_lock_widget)
     end
 end
 
@@ -803,7 +825,9 @@ function Screensaver:close_widget()
 end
 
 function Screensaver:close()
-    if self.screensaver_widget == nil then
+    if self.screensaver_widget == nil and self.screensaver_lock_widget == nil then
+        -- When we *do* have a widget, this is handled by ScreenSaver(Lock)Widget:onCloseWidget ;).
+        self:cleanup()
         return
     end
 
@@ -818,8 +842,8 @@ function Screensaver:close()
         --       that we've actually closed the widget *right now*.
         return true
     elseif screensaver_delay == "gesture" then
-        if self.screensaver_widget then
-            self.screensaver_widget:showWaitForGestureMessage()
+        if self.screensaver_lock_widget then
+            self.screensaver_lock_widget:showWaitForGestureMessage()
         end
     else
         logger.dbg("tap to exit from screensaver")
@@ -839,6 +863,12 @@ function Screensaver:cleanup()
 
     self.delayed_close = nil
     self.screensaver_widget = nil
+
+    self.screensaver_lock_widget = nil
+
+    -- We run *after* the screensaver has been dismissed, so reset the Device flags
+    Device.screen_saver_mode = false
+    Device.screen_saver_lock = false
 end
 
 return Screensaver

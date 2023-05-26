@@ -45,12 +45,15 @@ local BookInfoManager = require("bookinfomanager")
 -- recreated if height changes)
 local corner_mark_size = -1
 local corner_mark
+local reading_mark
+local abandoned_mark
+local complete_mark
 local progress_widget
 
 -- ItemShortCutIcon (for keyboard navigation) is private to menu.lua and can't be accessed,
 -- so we need to redefine it
-local ItemShortCutIcon = WidgetContainer:extend{
-    dimen = Geom:new{ w = Screen:scaleBySize(22), h = Screen:scaleBySize(22) },
+local ItemShortCutIcon = WidgetContainer:extend {
+    dimen = Geom:new { w = Screen:scaleBySize(22), h = Screen:scaleBySize(22) },
     key = nil,
     bordersize = Size.border.default,
     radius = 0,
@@ -64,7 +67,7 @@ function ItemShortCutIcon:init()
     local radius = 0
     local background = Blitbuffer.COLOR_WHITE
     if self.style == "rounded_corner" then
-        radius = math.floor(self.width/2)
+        radius = math.floor(self.width / 2)
     elseif self.style == "grey_square" then
         background = Blitbuffer.COLOR_LIGHT_GRAY
     end
@@ -74,15 +77,15 @@ function ItemShortCutIcon:init()
     else
         sc_face = Font:getFace("scfont", 22)
     end
-    self[1] = FrameContainer:new{
+    self[1] = FrameContainer:new {
         padding = 0,
         bordersize = self.bordersize,
         radius = radius,
         background = background,
         dimen = self.dimen,
-        CenterContainer:new{
+        CenterContainer:new {
             dimen = self.dimen,
-            TextWidget:new{
+            TextWidget:new {
                 text = self.key,
                 face = sc_face,
             },
@@ -90,19 +93,19 @@ function ItemShortCutIcon:init()
     }
 end
 
-
 -- We may find a better algorithm, or just a set of
 -- nice looking combinations of 3 sizes to iterate thru
 -- The rendering of the TextBoxWidget we're doing below
 -- with decreasing font sizes till it fits is quite expensive.
 
-local FakeCover = FrameContainer:extend{
+local FakeCover = FrameContainer:extend {
     width = nil,
     height = nil,
     margin = 0,
     padding = 0,
     bordersize = Size.border.thin,
     dim = nil,
+    bottom_right_compensate = false,
     -- Provided filename, title and authors should not be BD wrapped
     filename = nil,
     file_deleted = nil,
@@ -150,7 +153,7 @@ function FakeCover:init()
     -- If no authors, and title is filename without extension, it was
     -- probably made by an engine, and we can consider it a filename, and
     -- act according to common usage in naming files.
-    if not authors and title and self.filename and self.filename:sub(1,title:len()) == title then
+    if not authors and title and self.filename and self.filename:sub(1, title:len()) == title then
         bd_wrap_title_as_filename = true
         -- Replace a hyphen surrounded by spaces (which most probably was
         -- used to separate Authors/Title/Serie/Year/Categorie in the
@@ -181,7 +184,7 @@ function FakeCover:init()
     -- append "et al." on a 4th line if there are more
     if authors and authors:find("\n") then
         authors = util.splitToArray(authors, "\n")
-        for i=1, #authors do
+        for i = 1, #authors do
             authors[i] = BD.auto(authors[i])
         end
         if #authors > 3 then
@@ -204,9 +207,9 @@ function FakeCover:init()
 
     -- We build the VerticalGroup widget with decreasing font sizes till
     -- the widget fits into available height
-    local width = self.width - 2*(self.bordersize + self.margin + self.padding)
-    local height = self.height - 2*(self.bordersize + self.margin + self.padding)
-    local text_width = 7/8 * width -- make width of text smaller to have some padding
+    local width = self.width - 2 * (self.bordersize + self.margin + self.padding)
+    local height = self.height - 2 * (self.bordersize + self.margin + self.padding)
+    local text_width = 7 / 8 * width -- make width of text smaller to have some padding
     local inter_pad
     local sizedec = self.initial_sizedec
     local authors_wg, title_wg, filename_wg
@@ -228,7 +231,7 @@ function FakeCover:init()
         -- Build new widgets
         local texts_height = 0
         if authors then
-            authors_wg = TextBoxWidget:new{
+            authors_wg = TextBoxWidget:new {
                 text = authors,
                 lang = self.book_lang,
                 face = Font:getFace("cfont", math.max(self.authors_font_max - sizedec, self.authors_font_min)),
@@ -238,7 +241,7 @@ function FakeCover:init()
             texts_height = texts_height + authors_wg:getSize().h
         end
         if title then
-            title_wg = TextBoxWidget:new{
+            title_wg = TextBoxWidget:new {
                 text = title,
                 lang = self.book_lang,
                 face = Font:getFace("cfont", math.max(self.title_font_max - sizedec, self.title_font_min)),
@@ -248,11 +251,11 @@ function FakeCover:init()
             texts_height = texts_height + title_wg:getSize().h
         end
         if filename then
-            filename_wg = TextBoxWidget:new{
+            filename_wg = TextBoxWidget:new {
                 text = filename,
                 lang = self.book_lang, -- might as well use it for filename
                 face = Font:getFace("cfont", math.max(self.filename_font_max - sizedec, self.filename_font_min)),
-                width = text_width,
+                width = self.bottom_right_compensate and width - 2 * corner_mark_size or text_width,
                 alignment = "center",
             }
             texts_height = texts_height + filename_wg:getSize().h
@@ -284,7 +287,7 @@ function FakeCover:init()
         if sizedec > 20 then -- break out of loop when too small
             -- but try a 2nd loop with some cleanup to strings (for filenames
             -- with no space but hyphen or underscore instead)
-            if not loop2  then
+            if not loop2 then
                 loop2 = true
                 sizedec = self.initial_sizedec -- restart from initial big size
                 if G_reader_settings:nilOrTrue("use_xtext") then
@@ -312,19 +315,19 @@ function FakeCover:init()
         end
     end
 
-    local vgroup = VerticalGroup:new{}
+    local vgroup = VerticalGroup:new {}
     if authors then
-        table.insert(vgroup, VerticalSpan:new{ width = self.top_pad })
+        table.insert(vgroup, VerticalSpan:new { width = self.top_pad })
         table.insert(vgroup, authors_wg)
     end
-    table.insert(vgroup, VerticalSpan:new{ width = inter_pad })
+    table.insert(vgroup, VerticalSpan:new { width = inter_pad })
     if title then
         table.insert(vgroup, title_wg)
     end
-    table.insert(vgroup, VerticalSpan:new{ width = inter_pad })
+    table.insert(vgroup, VerticalSpan:new { width = inter_pad })
     if filename then
         table.insert(vgroup, filename_wg)
-        table.insert(vgroup, VerticalSpan:new{ width = self.bottom_pad })
+        table.insert(vgroup, VerticalSpan:new { width = self.bottom_pad })
     end
 
     if self.file_deleted then
@@ -333,8 +336,8 @@ function FakeCover:init()
     end
 
     -- As we are a FrameContainer, a border will be painted around self[1]
-    self[1] = CenterContainer:new{
-        dimen = Geom:new{
+    self[1] = CenterContainer:new {
+        dimen = Geom:new {
             w = width,
             h = height,
         },
@@ -342,9 +345,8 @@ function FakeCover:init()
     }
 end
 
-
 -- Based on menu.lua's MenuItem
-local MosaicMenuItem = InputContainer:extend{
+local MosaicMenuItem = InputContainer:extend {
     entry = nil, -- table, mandatory
     text = nil,
     show_parent = nil,
@@ -375,11 +377,11 @@ function MosaicMenuItem:init()
     -- Squared letter for keyboard navigation
     if self.shortcut then
         local shortcut_icon_dimen = Geom:new()
-        shortcut_icon_dimen.w = math.floor(self.dimen.h*1/5)
+        shortcut_icon_dimen.w = math.floor(self.dimen.h * 1 / 5)
         shortcut_icon_dimen.h = shortcut_icon_dimen.w
         -- To keep a simpler widget structure, this shortcut icon will not
         -- be part of it, but will be painted over the widget in our paintTo
-        self.shortcut_icon = ItemShortCutIcon:new{
+        self.shortcut_icon = ItemShortCutIcon:new {
             dimen = shortcut_icon_dimen,
             key = self.shortcut,
             style = self.shortcut_style,
@@ -388,22 +390,21 @@ function MosaicMenuItem:init()
 
     self.detail = self.text
     self.percent_finished = nil
+    self.status = nil
 
     -- we need this table per-instance, so we declare it here
     self.ges_events = {
         TapSelect = {
-            GestureRange:new{
+            GestureRange:new {
                 ges = "tap",
                 range = self.dimen,
             },
-            doc = "Select Menu Item",
         },
         HoldSelect = {
-            GestureRange:new{
+            GestureRange:new {
                 ges = "hold",
                 range = self.dimen,
             },
-            doc = "Hold Menu Item",
         },
     }
 
@@ -414,10 +415,10 @@ function MosaicMenuItem:init()
     -- (which does not seem to work well when multiple pages,
     -- even with classic menu)
     self.underline_h = 1 -- smaller than default (3), don't waste space
-    self._underline_container = UnderlineContainer:new{
+    self._underline_container = UnderlineContainer:new {
         vertical_align = "top",
         padding = 0,
-        dimen = Geom:new{
+        dimen = Geom:new {
             w = self.width,
             h = self.height
         },
@@ -426,9 +427,11 @@ function MosaicMenuItem:init()
     }
     self[1] = self._underline_container
 
-    -- Get thumbnails of contents inside folder
+    -- Get thumbnazils of contents inside folder
     local file_mode = lfs.attributes(self.filepath, "mode")
     if file_mode == "directory" then
+        require("logger").dbg(file_mode, require("ui/widget/filechooser")._thumbnails_map[self.filepath], self.filepath,
+            "AAAAAAAAAAAAAA")
         self.show_cover_files = require("ui/widget/filechooser")._thumbnails_map[self.filepath]
         self.bookinfo_notfound_books = util.tableDeepCopy(self.show_cover_files)
     end
@@ -440,7 +443,7 @@ function MosaicMenuItem:init()
 end
 
 function MosaicMenuItem:bookCoverWidget(path, scale)
-    local dimen = Geom:new{
+    local dimen = Geom:new {
         w = self.width * scale,
         h = (self.height - self.underline_h) * scale
     }
@@ -485,13 +488,13 @@ function MosaicMenuItem:bookCoverWidget(path, scale)
             cover_bb_used = true
             -- Let ImageWidget do the scaling and give us a bb that fit
             local scale_factor = math.min(max_img_w / bookinfo.cover_w, max_img_h / bookinfo.cover_h)
-            local image = ImageWidget:new{
+            local image = ImageWidget:new {
                 image = bookinfo.cover_bb,
                 scale_factor = scale_factor,
             }
             image:_render()
             local image_size = image:getSize()
-            widget = FrameContainer:new{
+            widget = FrameContainer:new {
                 width = image_size.w + border_size,
                 height = image_size.h + border_size,
                 margin = 0,
@@ -533,11 +536,11 @@ function MosaicMenuItem:bookCoverWidget(path, scale)
                     end
                 end
             end
-            widget = CenterContainer:new{
+            widget = CenterContainer:new {
                 dimen = dimen,
-                FakeCover:new{
+                FakeCover:new {
                     -- reduced width to make it look less squared, more like a book
-                    width = math.floor(dimen.w * 7/8),
+                    width = math.floor(dimen.w * 7 / 8),
                     height = dimen.h,
                     bordersize = border_size,
                     filename = self.text,
@@ -554,15 +557,15 @@ function MosaicMenuItem:bookCoverWidget(path, scale)
         if bookinfo.cover_bb and not cover_bb_used then
             bookinfo.cover_bb:free()
         end
-    else -- bookinfo not found
+    else                          -- bookinfo not found
         -- Same as real FakeCover, but let it be squared (like a file)
-        local hint = "…" -- display hint it's being loaded
+        local hint = "…"        -- display hint it's being loaded
         if self.file_deleted then -- unless file was deleted (can happen with History)
             hint = _("(deleted)")
         end
-        widget = CenterContainer:new{
+        widget = CenterContainer:new {
             dimen = dimen,
-            FakeCover:new{
+            FakeCover:new {
                 width = dimen.w,
                 height = dimen.h,
                 bordersize = 1,
@@ -587,13 +590,13 @@ function MosaicMenuItem:update()
     -- a pure white background (like rendered text page)
     local border_size = Size.border.thin
 
-    local dimen = Geom:new{
+    local dimen = Geom:new {
         w = self.width + 2 * border_size,
         h = self.height - self.underline_h - 2 * border_size
     }
 
-    local max_img_w = dimen.w - 2*border_size
-    local max_img_h = dimen.h - 2*border_size
+    local max_img_w = dimen.w - 2 * border_size
+    local max_img_h = dimen.h - 2 * border_size
     -- Make it available to our menu, for batch extraction
     -- to know what size is needed for current view
     if self.do_cover_image then
@@ -608,9 +611,9 @@ function MosaicMenuItem:update()
         -- Directory : rounded corners
         local margin = Screen:scaleBySize(0) -- make directories less wide
         local padding = Screen:scaleBySize(0)
-        local dimen_in = Geom:new{
-            w = dimen.w - (margin + padding + border_size)*2,
-            h = dimen.h - (margin + padding + border_size)*2
+        local dimen_in = Geom:new {
+            w = dimen.w - (margin + padding + border_size) * 2,
+            h = dimen.h - (margin + padding + border_size) * 2
         }
         local text = self.text
         if text:match('/$') then -- remove /, more readable
@@ -619,7 +622,7 @@ function MosaicMenuItem:update()
         text = BD.directory(text)
 
         -- Get cover images
-        local files_count = #self.show_cover_files
+        local files_count = #(self.show_cover_files or {})
         local is_series = false
         if self.show_cover_files then
             local bookinfo = BookInfoManager:getBookInfo(self.show_cover_files[1], self.do_cover_image)
@@ -638,7 +641,7 @@ function MosaicMenuItem:update()
             if directory then
                 directory:free(true)
             end
-            directory = TextBoxWidget:new{
+            directory = TextBoxWidget:new {
                 text = is_series and util.splitToWords(self.mandatory)[1] or text,
                 face = Font:getFace("infofont", dir_font_size),
                 width = is_series and Screen:scaleBySize(20) or dimen_in.w,
@@ -664,52 +667,55 @@ function MosaicMenuItem:update()
             end
         end
 
-        local mainCover = self.show_cover_files and self.show_cover_files[1] and self:bookCoverWidget(self.show_cover_files[1], files_count > 1 and 0.5 or 1)
+        local mainCover = self.show_cover_files and self.show_cover_files[1] and
+            self:bookCoverWidget(self.show_cover_files[1], files_count > 1 and 0.5 or 1)
         local subCovers = {}
         for i = 2, 4 do
-            table.insert(subCovers, self.show_cover_files and self.show_cover_files[i] and self:bookCoverWidget(self.show_cover_files[i], 0.5))
+            table.insert(subCovers,
+                self.show_cover_files and self.show_cover_files[i] and
+                self:bookCoverWidget(self.show_cover_files[i], 0.5))
         end
 
-        widget = FrameContainer:new{
+        widget = FrameContainer:new {
             width = dimen.w,
             height = dimen.h,
             padding = 0,
             bordersize = mainCover and 0 or 1,
             color = Blitbuffer.COLOR_DARK_GRAY,
-            OverlapGroup:new{
+            OverlapGroup:new {
                 dimen = dimen,
-                mainCover and (#subCovers == 0 and CenterContainer or LeftContainer):new{
+                mainCover and (#subCovers == 0 and CenterContainer or LeftContainer):new {
                     dimen = {
                         w = dimen_in.w,
                         h = dimen_in.h / math.ceil(files_count / 2) + (#subCovers > 2 and Screen:scaleBySize(8) or 0),
                     },
                     mainCover,
-                } or WidgetContainer:new{},
-                subCovers[1] and RightContainer:new{
+                } or WidgetContainer:new {},
+                subCovers[1] and RightContainer:new {
                     dimen = {
                         w = dimen_in.w,
                         h = dimen_in.h / math.ceil(files_count / 2) + (#subCovers > 2 and Screen:scaleBySize(8) or 0),
                     },
                     subCovers[1],
-                } or WidgetContainer:new{},
-                subCovers[2] and (files_count > 3 and LeftContainer or CenterContainer):new{
+                } or WidgetContainer:new {},
+                subCovers[2] and (files_count > 3 and LeftContainer or CenterContainer):new {
                     dimen = {
                         w = dimen_in.w,
                         h = dimen_in.h * 1.5 - (#subCovers > 2 and Screen:scaleBySize(8) or 0),
                     },
                     subCovers[2],
-                } or WidgetContainer:new{},
-                subCovers[3] and RightContainer:new{
+                } or WidgetContainer:new {},
+                subCovers[3] and RightContainer:new {
                     dimen = {
                         w = dimen_in.w,
                         h = dimen_in.h * 1.5 - (#subCovers > 2 and Screen:scaleBySize(8) or 0),
                     },
                     subCovers[3],
-                } or WidgetContainer:new{},
-                (is_series and RightContainer or CenterContainer):new{
+                } or WidgetContainer:new {},
+                (is_series and RightContainer or CenterContainer):new {
                     dimen = dimen_in,
                     bordersize = 0,
-                    AlphaContainer:new{
+                    AlphaContainer:new {
                         alpha = 0.9,
                         directory,
                     },
@@ -755,6 +761,27 @@ function MosaicMenuItem:update()
         end
 
         if bookinfo then -- This book is known
+            -- Current page / pages are available or more accurate in .sdr/metadata.lua
+            -- We use a cache (cleaned at end of this browsing session) to store
+            -- page, percent read and book status from sidecar files, to avoid
+            -- re-parsing them when re-rendering a visited page
+            -- This cache is shared with ListMenu, so we need to fill it with the same
+            -- info here than there, even if we don't need them all here.
+            if not self.menu.cover_info_cache then
+                self.menu.cover_info_cache = {}
+            end
+            local percent_finished, status
+            if DocSettings:hasSidecarFile(self.filepath) then
+                self.been_opened = true
+                self.menu:updateCache(self.filepath, nil, true, bookinfo.pages) -- create new cache entry if absent
+                dummy, percent_finished, status =
+                    unpack(self.menu.cover_info_cache[self.filepath], 1, self.menu.cover_info_cache[self.filepath].n)
+            end
+            self.percent_finished = percent_finished
+            self.status = status
+            self.show_progress_bar = self.status ~= "complete" and BookInfoManager:getSetting("show_progress_in_mosaic") and
+                self.percent_finished
+
             local cover_bb_used = false
             self.bookinfo_found = true
             -- For wikipedia saved as epub, we made a cover from the 1st pic of the page,
@@ -767,17 +794,17 @@ function MosaicMenuItem:update()
                 cover_bb_used = true
                 -- Let ImageWidget do the scaling and give us a bb that fit
                 local scale_factor = math.min(max_img_w / bookinfo.cover_w, max_img_h / bookinfo.cover_h)
-                local image= ImageWidget:new{
+                local image = ImageWidget:new {
                     image = bookinfo.cover_bb,
                     scale_factor = scale_factor,
                 }
                 image:_render()
                 local image_size = image:getSize()
-                widget = CenterContainer:new{
+                widget = CenterContainer:new {
                     dimen = dimen,
-                    FrameContainer:new{
-                        width = image_size.w + 2*border_size,
-                        height = image_size.h + 2*border_size,
+                    FrameContainer:new {
+                        width = image_size.w + 2 * border_size,
+                        height = image_size.h + 2 * border_size,
                         margin = 0,
                         padding = 0,
                         bordersize = border_size,
@@ -818,11 +845,17 @@ function MosaicMenuItem:update()
                         end
                     end
                 end
-                widget = CenterContainer:new{
+                local bottom_pad = Size.padding.default
+                if self.show_progress_bar and self.do_hint_opened then
+                    bottom_pad = corner_mark_size + Screen:scaleBySize(2)
+                elseif self.show_progress_bar then
+                    bottom_pad = corner_mark_size - Screen:scaleBySize(2)
+                end
+                widget = CenterContainer:new {
                     dimen = dimen,
-                    FakeCover:new{
+                    FakeCover:new {
                         -- reduced width to make it look less squared, more like a book
-                        width = math.floor(dimen.w * 7/8),
+                        width = math.floor(dimen.w * 7 / 8),
                         height = dimen.h,
                         bordersize = border_size,
                         filename = self.text,
@@ -832,6 +865,8 @@ function MosaicMenuItem:update()
                         authors_add = not bookinfo.ignore_meta and authors_add,
                         book_lang = not bookinfo.ignore_meta and bookinfo.language,
                         file_deleted = self.file_deleted,
+                        bottom_pad = bottom_pad,
+                        bottom_right_compensate = not self.show_progress_bar and self.do_hint_opened,
                     }
                 }
             end
@@ -843,43 +878,6 @@ function MosaicMenuItem:update()
             if bookinfo.description then
                 self.has_description = true
             end
-
-            -- Current page / pages are available or more accurate in .sdr/metadata.lua
-            -- We use a cache (cleaned at end of this browsing session) to store
-            -- page, percent read and book status from sidecar files, to avoid
-            -- re-parsing them when re-rendering a visited page
-            -- This cache is shared with ListMenu, so we need to fill it with the same
-            -- info here than there, even if we don't need them all here.
-            if not self.menu.cover_info_cache then
-                self.menu.cover_info_cache = {}
-            end
-            local percent_finished, status
-            local pages = bookinfo.pages
-            if DocSettings:hasSidecarFile(self.filepath) then
-                self.been_opened = true
-                if self.menu.cover_info_cache[self.filepath] then
-                    pages, percent_finished, status = unpack(self.menu.cover_info_cache[self.filepath]) -- luacheck: no unused
-                else
-                    local docinfo = DocSettings:open(self.filepath)
-                    -- We can get nb of page in the new 'doc_pages' setting, or from the old 'stats.page'
-                    if docinfo.data.doc_pages then
-                        pages = docinfo.data.doc_pages
-                    elseif docinfo.data.stats and docinfo.data.stats.pages then
-                        if docinfo.data.stats.pages ~= 0 then -- crengine with statistics disabled stores 0
-                            pages = docinfo.data.stats.pages
-                        end
-                    end
-                    if docinfo.data.summary and docinfo.data.summary.status then
-                        status = docinfo.data.summary.status
-                    end
-                    percent_finished = docinfo.data.percent_finished
-                    self.menu.cover_info_cache[self.filepath] = {pages, percent_finished, status}
-                end
-            end
-            if status == "completed" then
-                percent_finished = 100
-            end
-            self.percent_finished = percent_finished
         else -- bookinfo not found
             if self.init_done then
                 -- Non-initial update(), but our widget is still not found:
@@ -887,13 +885,13 @@ function MosaicMenuItem:update()
                 return
             end
             -- Same as real FakeCover, but let it be squared (like a file)
-            local hint = "…" -- display hint it's being loaded
+            local hint = "…"        -- display hint it's being loaded
             if self.file_deleted then -- unless file was deleted (can happen with History)
                 hint = _("(deleted)")
             end
-            widget = CenterContainer:new{
+            widget = CenterContainer:new {
                 dimen = dimen,
-                FakeCover:new{
+                FakeCover:new {
                     width = dimen.w,
                     height = dimen.h,
                     bordersize = border_size,
@@ -929,7 +927,7 @@ function MosaicMenuItem:paintTo(bb, x, y)
 
     -- to which we paint over the shortcut icon
     if self.shortcut_icon then
-        -- align it on bottom left corner of widget
+        -- align it on top left corner of widget
         local target = self
         local ix
         if BD.mirroredUILayout() then
@@ -937,34 +935,70 @@ function MosaicMenuItem:paintTo(bb, x, y)
         else
             ix = 0
         end
-        local iy = target.dimen.h - self.shortcut_icon.dimen.h
-        self.shortcut_icon:paintTo(bb, x+ix, y+iy)
+        local iy = 0
+        self.shortcut_icon:paintTo(bb, x + ix, y + iy)
     end
 
-    local show_progress_in_mosaic = BookInfoManager:getSetting("show_progress_in_mosaic")
-    -- to which we paint over a dogear if needed
-    if not show_progress_in_mosaic and corner_mark and self.do_hint_opened and self.been_opened then
+    if self.do_hint_opened and self.been_opened then
         -- align it on bottom right corner of sub-widget
-        local target =  self[1][1][1]
+        local target = self[1][1][1]
         local ix
         if BD.mirroredUILayout() then
-            ix = math.floor((self.width - target.dimen.w)/2) + 2
+            ix = math.floor((self.width - target.dimen.w) / 2) + 2
         else
-            ix = self.width - math.ceil((self.width - target.dimen.w)/2) - corner_mark:getSize().w + 2
+            ix = self.width - math.ceil((self.width - target.dimen.w) / 2) - corner_mark:getSize().w + 2
         end
-        local iy = self.height - math.ceil((self.height - target.dimen.h)/2) - corner_mark:getSize().h - 3
+        local iy = self.height - math.ceil((self.height - target.dimen.h) / 2) - corner_mark:getSize().h - 3
         -- math.ceil() makes it looks better than math.floor()
-        corner_mark:paintTo(bb, x+ix, y+iy)
+        if self.status == "abandoned" then
+            corner_mark = abandoned_mark
+        elseif self.status == "complete" then
+            corner_mark = complete_mark
+        else
+            corner_mark = reading_mark
+        end
+        corner_mark:paintTo(bb, x + ix, y + iy)
     end
 
-    if show_progress_in_mosaic and self.percent_finished then
+    if self.show_progress_bar then
         local cover_item = self[1][1][1]
         local width = math.min(self.width * 0.60, cover_item.width)
         progress_widget.width = width
-        local pos_x = x + self.width - progress_widget.width - math.ceil((self.width - cover_item.width) / 2) - progress_widget.bordersize
+        local pos_x = x + self.width - progress_widget.width - math.ceil((self.width - cover_item.width) / 2) -
+            progress_widget.bordersize
         local pos_y = y + self.height - progress_widget.height - math.ceil((self.height - cover_item.height) / 2)
         progress_widget:setPercentage(self.percent_finished)
         progress_widget:paintTo(bb, pos_x, pos_y)
+    end
+
+    -- to which we paint a small indicator if this book has a description
+    if self.has_description and not BookInfoManager:getSetting("no_hint_description") then
+        -- On book's right (for similarity to ListMenuItem)
+        local target = self[1][1][1]
+        local d_w = Screen:scaleBySize(3)
+        local d_h = math.ceil(target.dimen.h / 8)
+        -- Paint it directly relative to target.dimen.x/y which has been computed at this point
+        local ix
+        if BD.mirroredUILayout() then
+            ix = -d_w + 1
+            -- Set alternate dimen to be marked as dirty to include this description in refresh
+            local x_overflow_left = x - target.dimen.x + ix -- positive if overflow
+            if x_overflow_left > 0 then
+                self.refresh_dimen = self[1].dimen:copy()
+                self.refresh_dimen.x = self.refresh_dimen.x - x_overflow_left
+                self.refresh_dimen.w = self.refresh_dimen.w + x_overflow_left
+            end
+        else
+            ix = target.dimen.w - 1
+            -- Set alternate dimen to be marked as dirty to include this description in refresh
+            local x_overflow_right = target.dimen.x + ix + d_w - x - self.dimen.w
+            if x_overflow_right > 0 then
+                self.refresh_dimen = self[1].dimen:copy()
+                self.refresh_dimen.w = self.refresh_dimen.w + x_overflow_right
+            end
+        end
+        local iy = 0
+        bb:paintBorder(target.dimen.x + ix, target.dimen.y + iy, d_w, d_h, 1)
     end
 end
 
@@ -980,7 +1014,7 @@ function MosaicMenuItem:onUnfocus()
 end
 
 function MosaicMenuItem:onShowItemDetail()
-    UIManager:show(InfoMessage:new{ text = self.detail, })
+    UIManager:show(InfoMessage:new { text = self.detail, })
     return true
 end
 
@@ -997,7 +1031,6 @@ function MosaicMenuItem:onHoldSelect(arg, ges)
     self.menu:onMenuHold(self.entry)
     return true
 end
-
 
 -- Simple holder of methods that will replace those
 -- in the real Menu class or instance
@@ -1040,46 +1073,62 @@ function MosaicMenu:_recalculateDimen()
 
     -- Set our items target size
     self.item_margin = Screen:scaleBySize(10)
-    self.item_height = math.floor((self.inner_dimen.h - self.others_height - (1+self.nb_rows)*self.item_margin) / self.nb_rows)
-    self.item_width = math.floor((self.inner_dimen.w - (1+self.nb_cols)*self.item_margin) / self.nb_cols)
-    self.item_dimen = Geom:new{
+    self.item_height = math.floor((self.inner_dimen.h - self.others_height - (1 + self.nb_rows) * self.item_margin) /
+        self.nb_rows)
+    self.item_width = math.floor((self.inner_dimen.w - (1 + self.nb_cols) * self.item_margin) / self.nb_cols)
+    self.item_dimen = Geom:new {
         w = self.item_width,
         h = self.item_height
     }
     self.cover_specs = {
         sizetag = "M",
-        max_cover_w = math.floor((self.inner_dimen.h - self.others_height - (1+nb_spec_rows)*self.item_margin) / nb_spec_rows),
-        max_cover_h = math.floor((self.inner_dimen.w - (1+nb_spec_cols)*self.item_margin) / nb_spec_cols)
+        max_cover_w = math.floor((self.inner_dimen.h - self.others_height - (1 + nb_spec_rows) * self.item_margin) /
+            nb_spec_rows),
+        max_cover_h = math.floor((self.inner_dimen.w - (1 + nb_spec_cols) * self.item_margin) / nb_spec_cols)
     }
 
     -- Create or replace corner_mark if needed
     -- 1/12 (larger) or 1/16 (smaller) of cover looks allright
-    local mark_size = math.floor(math.min(self.item_width, self.item_height) / 12)
+    local mark_size = math.floor(math.min(self.item_width, self.item_height) / 8)
     if mark_size ~= corner_mark_size then
         corner_mark_size = mark_size
         if corner_mark then
-            corner_mark:free()
+            reading_mark:free()
+            abandoned_mark:free()
+            complete_mark:free()
         end
-        corner_mark = IconWidget:new{
-            icon = "dogear.opaque",
-            rotation_angle = BD.mirroredUILayout() and 180 or 270,
+        reading_mark = IconWidget:new {
+            icon = "dogear.reading",
+            rotation_angle = BD.mirroredUILayout() and 270 or 0,
             width = corner_mark_size,
             height = corner_mark_size,
         }
+        abandoned_mark = IconWidget:new {
+            icon = BD.mirroredUILayout() and "dogear.abandoned.rtl" or "dogear.abandoned",
+            width = corner_mark_size,
+            height = corner_mark_size,
+        }
+        complete_mark = IconWidget:new {
+            icon = BD.mirroredUILayout() and "dogear.complete.rtl" or "dogear.complete",
+            alpha = true,
+            width = corner_mark_size,
+            height = corner_mark_size,
+        }
+        corner_mark = reading_mark
     end
 
     -- Create or replace progress_widget if needed
-    local progress_bar_width =  self.item_width * 0.60;
+    local progress_bar_width = self.item_width * 0.60;
     if not progress_widget or progress_widget.width ~= progress_bar_width then
-        progress_widget = ProgressWidget:new{
+        progress_widget = ProgressWidget:new {
             bgcolor = Blitbuffer.COLOR_WHITE,
             fillcolor = Blitbuffer.COLOR_BLACK,
             bordercolor = Blitbuffer.COLOR_BLACK,
-            height = Screen:scaleBySize(6),
+            height = Screen:scaleBySize(8),
             margin_h = Screen:scaleBySize(1),
             width = progress_bar_width,
             radius = Size.border.thin,
-            bordersize = Size.border.thin,
+            bordersize = Size.border.default,
         }
     end
 end
@@ -1093,12 +1142,12 @@ function MosaicMenu:_updateItemsBuildUI()
         if entry == nil then break end
 
         if idx % self.nb_cols == 1 then -- new row
-            table.insert(self.item_group, VerticalSpan:new{ width = self.item_margin })
-            cur_row = HorizontalGroup:new{}
+            table.insert(self.item_group, VerticalSpan:new { width = self.item_margin })
+            cur_row = HorizontalGroup:new {}
             -- Have items on the possibly non-fully filled last row aligned to the left
             local container = self._do_center_partial_rows and CenterContainer or LeftContainer
-            table.insert(self.item_group, container:new{
-                dimen = Geom:new{
+            table.insert(self.item_group, container:new {
+                dimen = Geom:new {
                     w = self.inner_dimen.w,
                     h = self.item_height
                 },
@@ -1119,26 +1168,26 @@ function MosaicMenu:_updateItemsBuildUI()
             item_shortcut = self.item_shortcuts[idx]
         end
 
-        local item_tmp = MosaicMenuItem:new{
-                height = self.item_height,
-                width = self.item_width,
-                entry = entry,
-                text = getMenuText(entry),
-                show_parent = self.show_parent,
-                mandatory = entry.mandatory,
-                dimen = self.item_dimen:new(),
-                shortcut = item_shortcut,
-                shortcut_style = shortcut_style,
-                menu = self,
-                do_cover_image = self._do_cover_images,
-                do_hint_opened = self._do_hint_opened,
-                cover_specs = self.cover_specs,
-            }
+        local item_tmp = MosaicMenuItem:new {
+            height = self.item_height,
+            width = self.item_width,
+            entry = entry,
+            text = getMenuText(entry),
+            show_parent = self.show_parent,
+            mandatory = entry.mandatory,
+            dimen = self.item_dimen:new(),
+            shortcut = item_shortcut,
+            shortcut_style = shortcut_style,
+            menu = self,
+            do_cover_image = self._do_cover_images,
+            do_hint_opened = self._do_hint_opened,
+            cover_specs = self.cover_specs,
+        }
         table.insert(cur_row, item_tmp)
         table.insert(cur_row, HorizontalSpan:new({ width = self.item_margin }))
 
         -- this is for focus manager
-        table.insert(self.layout, {item_tmp})
+        table.insert(self.layout, { item_tmp })
 
         if not item_tmp.bookinfo_found and not item_tmp.is_directory and not item_tmp.file_deleted then
             -- Register this item for update
@@ -1146,7 +1195,7 @@ function MosaicMenu:_updateItemsBuildUI()
         elseif item_tmp.is_directory and #item_tmp.bookinfo_notfound_books > 0 then
             -- Insert dummy menu items to get bookinfo extracted
             for _, v in pairs(item_tmp.bookinfo_notfound_books) do
-                table.insert(self.items_to_update, MosaicMenuItem:new{
+                table.insert(self.items_to_update, MosaicMenuItem:new {
                     height = self.item_height,
                     width = self.item_width,
                     entry = { file = v },
@@ -1159,7 +1208,7 @@ function MosaicMenu:_updateItemsBuildUI()
             end
         end
     end
-    table.insert(self.item_group, VerticalSpan:new{ width = self.item_margin }) -- bottom padding
+    table.insert(self.item_group, VerticalSpan:new { width = self.item_margin }) -- bottom padding
 end
 
 return MosaicMenu

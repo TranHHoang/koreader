@@ -7,6 +7,9 @@ local exit_settings = {}
 
 exit_settings.exit_menu = {
     text = _("Exit"),
+    hold_callback = function()
+        UIManager:broadcastEvent(Event:new("Exit"))
+    end,
     -- submenu entries will be appended by xyz_menu_order_lua
 }
 exit_settings.exit = {
@@ -39,7 +42,7 @@ if Device:canReboot() then
         text = _("Reboot the device"),
         keep_menu_open = true,
         callback = function()
-            UIManager:reboot()
+            UIManager:askForReboot()
         end
     }
 end
@@ -48,7 +51,7 @@ if Device:canPowerOff() then
         text = _("Power off"),
         keep_menu_open = true,
         callback = function()
-            UIManager:powerOff()
+            UIManager:askForPowerOff()
         end
     }
 end

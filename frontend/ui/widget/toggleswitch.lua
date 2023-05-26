@@ -118,14 +118,12 @@ function ToggleSwitch:init()
                 ges = "tap",
                 range = self.dimen,
             },
-            doc = "Toggle switch",
         },
         HoldSelect = {
             GestureRange:new{
                 ges = "hold",
                 range = self.dimen,
             },
-            doc = "Hold switch",
         },
     }
 end
@@ -231,7 +229,7 @@ function ToggleSwitch:onTapSelect(arg, gev)
         end)
 
         UIManager:tickAfterNext(function()
-            Notification:setNotifySource(Notification.SOURCE_OTHER) -- only allow events, if they are activated
+            Notification:resetNotifySource()
         end)
     end
     return true

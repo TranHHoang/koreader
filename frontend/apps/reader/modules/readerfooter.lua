@@ -20,8 +20,8 @@ local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
+local datetime = require("datetime")
 local logger = require("logger")
-local util = require("util")
 local T = require("ffi/util").template
 local _ = require("gettext")
 local C_ = _.pgettext
@@ -97,8 +97,7 @@ local symbol_prefix = {
         pages_left_book = BD.mirroredUILayout() and "‹" or "›",
         pages_left = BD.mirroredUILayout() and "‹" or "›",
         battery = "",
-        -- @translators This is the footer compact item prefix for the number of bookmarks (bookmark count).
-        bookmark_count = C_("FooterCompactItemsPrefix", "BM"),
+        bookmark_count = "☆",
         percentage = nil,
         book_time_to_read = nil,
         chapter_time_to_read = BD.mirroredUILayout() and "«" or "»",
@@ -229,7 +228,7 @@ local footerTextGeneratorMap = {
     time = function(footer)
         local symbol_type = footer.settings.item_prefix
         local prefix = symbol_prefix[symbol_type].time
-        local clock = util.secondsToHour(os.time(), G_reader_settings:isTrue("twelve_hour_clock"))
+        local clock = datetime.secondsToHour(os.time(), G_reader_settings:isTrue("twelve_hour_clock"))
         if not prefix then
             return clock
         else
@@ -438,7 +437,6 @@ local ReaderFooter = WidgetContainer:extend{
     mode = MODE.page_progress,
     pageno = nil,
     pages = nil,
-    progress_percentage = 0.0,
     footer_text = nil,
     text_font_face = "ffont",
     height = Screen:scaleBySize(G_defaults:readSetting("DMINIBAR_CONTAINER_HEIGHT")),
@@ -497,6 +495,7 @@ ReaderFooter.default_settings = {
     progress_pct_format = "0",
     progress_margin = false,
     pages_left_includes_current_page = false,
+    initial_marker = false,
 }
 
 function ReaderFooter:init()
@@ -585,10 +584,11 @@ function ReaderFooter:init()
     self.progress_bar = ProgressWidget:new{
         width = nil,
         height = nil,
-        percentage = self.progress_percentage,
+        percentage = nil,
         tick_width = Screen:scaleBySize(self.settings.toc_markers_width),
         ticks = nil, -- ticks will be populated in self:updateFooterText
         last = nil, -- last will be initialized in self:updateFooterText
+        initial_pos_marker = self.settings.initial_marker,
     }
 
     if self.settings.progress_style_thin then
@@ -627,7 +627,7 @@ end
 function ReaderFooter:set_custom_text(touchmenu_instance)
     local text_dialog
     text_dialog = MultiInputDialog:new{
-        title = "Enter a custom text",
+        title = _("Enter a custom text"),
         fields = {
             {
                 text = self.custom_text or "",
@@ -771,6 +771,26 @@ function ReaderFooter:unscheduleFooterAutoRefresh()
     UIManager:unschedule(self.autoRefreshFooter)
 end
 
+function ReaderFooter:shouldBeRepainted()
+    if not self.view.footer_visible then
+        return false
+    end
+
+    local top_wg = UIManager:getTopmostVisibleWidget() or {}
+    if top_wg.name == "ReaderUI" then
+        -- No overlap possible, it's safe to request a targeted widget repaint
+        return true
+    elseif top_wg.covers_fullscreen or top_wg.covers_footer then
+        -- No repaint necessary at all
+        return false
+    end
+
+    -- The topmost visible widget might overlap with us, but dimen isn't reliable enough to do a proper bounds check
+    -- (as stuff often just sets it to the Screen dimensions),
+    -- so request a full ReaderUI repaint to avoid out-of-order repaints.
+    return true, true
+end
+
 function ReaderFooter:rescheduleFooterAutoRefreshIfNeeded()
     if not self.autoRefreshFooter then
         -- Create this function the first time we're called
@@ -779,13 +799,8 @@ function ReaderFooter:rescheduleFooterAutoRefreshIfNeeded()
             -- (We want to avoid the footer to be painted over a widget covering it - we would
             -- be fine refreshing it if the widget is not covering it, but this is hard to
             -- guess from here.)
-            if UIManager:getTopWidget() == "ReaderUI" then
-                self:onUpdateFooter(self.view.footer_visible)
-            else
-                logger.dbg("Skipping ReaderFooter repaint, because ReaderUI is not the top-level widget")
-                -- NOTE: We *do* keep its content up-to-date, though
-                self:onUpdateFooter()
-            end
+            self:onUpdateFooter(self:shouldBeRepainted())
+
             self:rescheduleFooterAutoRefreshIfNeeded() -- schedule (or not) next refresh
         end
     end
@@ -908,7 +923,6 @@ function ReaderFooter:disableFooter()
     self.resetLayout = function() end
     self.updateFooterPage = function() end
     self.updateFooterPos = function() end
-    self.onUpdatePos = function() end
     self.mode = self.mode_list.off
     self.view.footer_visible = false
 end
@@ -1398,13 +1412,13 @@ function ReaderFooter:addToMainMenu(menu_items)
                 text_func = function()
                     local prefix_text = ""
                     if self.settings.item_prefix == "icons" then
-                        prefix_text = _("Icons")
+                        prefix_text = C_("Status bar", "Icons")
                     elseif self.settings.item_prefix == "compact_items" then
-                        prefix_text = _("Compact items")
+                        prefix_text = C_("Status bar", "Compact")
                     elseif self.settings.item_prefix == "letters" then
-                        prefix_text = _("Letters")
+                        prefix_text = C_("Status bar", "Letters")
                     end
-                    return T(_("Prefix: %1"), prefix_text)
+                    return T(_("Item style: %1"), prefix_text)
                 end,
                 sub_item_table = {
                     {
@@ -1413,7 +1427,7 @@ function ReaderFooter:addToMainMenu(menu_items)
                             for _, letter in pairs(symbol_prefix.icons) do
                                 table.insert(sym_tbl, letter)
                             end
-                            return T(_("Icons (%1)"), table.concat(sym_tbl, " "))
+                            return T(C_("Status bar", "Icons (%1)"), table.concat(sym_tbl, " "))
                         end,
                         checked_func = function()
                             return self.settings.item_prefix == "icons"
@@ -1426,32 +1440,32 @@ function ReaderFooter:addToMainMenu(menu_items)
                     {
                         text_func = function()
                             local sym_tbl = {}
-                            for _, letter in pairs(symbol_prefix.compact_items) do
-                                table.insert(sym_tbl, letter)
-                            end
-                            return T(_("Compact Items (%1)"), table.concat(sym_tbl, " "))
-                        end,
-                        checked_func = function()
-                            return self.settings.item_prefix == "compact_items"
-                        end,
-                        callback = function()
-                            self.settings.item_prefix = "compact_items"
-                            self:refreshFooter(true)
-                        end,
-                    },
-                    {
-                        text_func = function()
-                            local sym_tbl = {}
                             for _, letter in pairs(symbol_prefix.letters) do
                                 table.insert(sym_tbl, letter)
                             end
-                            return T(_("Letters (%1)"), table.concat(sym_tbl, " "))
+                            return T(C_("Status bar", "Letters (%1)"), table.concat(sym_tbl, " "))
                         end,
                         checked_func = function()
                             return self.settings.item_prefix == "letters"
                         end,
                         callback = function()
                             self.settings.item_prefix = "letters"
+                            self:refreshFooter(true)
+                        end,
+                    },
+                    {
+                        text_func = function()
+                            local sym_tbl = {}
+                            for _, letter in pairs(symbol_prefix.compact_items) do
+                                table.insert(sym_tbl, letter)
+                            end
+                            return T(C_("Status bar", "Compact (%1)"), table.concat(sym_tbl, " "))
+                        end,
+                        checked_func = function()
+                            return self.settings.item_prefix == "compact_items"
+                        end,
+                        callback = function()
+                            self.settings.item_prefix = "compact_items"
                             self:refreshFooter(true)
                         end,
                     },
@@ -1827,6 +1841,17 @@ With this enabled, the current page is included, so the count goes from n to 1 i
                             },
                         },
                     },
+                    {
+                        text = _("Show initial position marker"),
+                        checked_func = function()
+                            return self.settings.initial_marker == true
+                        end,
+                        callback = function()
+                            self.settings.initial_marker = not self.settings.initial_marker
+                            self.progress_bar.initial_pos_marker = self.settings.initial_marker
+                            self:refreshFooter(true)
+                        end
+                    },
                 },
             },
             {
@@ -2088,47 +2113,47 @@ function ReaderFooter:getDataFromStatistics(title, pages)
     local average_time_per_page = self:getAvgTimePerPage()
     local user_duration_format = G_reader_settings:readSetting("duration_format", "classic")
     if average_time_per_page then
-        sec = util.secondsToClockDuration(user_duration_format, pages * average_time_per_page, true)
+        sec = datetime.secondsToClockDuration(user_duration_format, pages * average_time_per_page, true)
     end
     return title .. sec
 end
 
-function ReaderFooter:onUpdateFooter(force_repaint, force_recompute)
+function ReaderFooter:onUpdateFooter(force_repaint, full_repaint)
     if self.pageno then
-        self:updateFooterPage(force_repaint, force_recompute)
+        self:updateFooterPage(force_repaint, full_repaint)
     else
-        self:updateFooterPos(force_repaint, force_recompute)
+        self:updateFooterPos(force_repaint, full_repaint)
     end
 end
 
-function ReaderFooter:updateFooterPage(force_repaint, force_recompute)
+function ReaderFooter:updateFooterPage(force_repaint, full_repaint)
     if type(self.pageno) ~= "number" then return end
     if self.ui.document:hasHiddenFlows() then
         local flow = self.ui.document:getPageFlow(self.pageno)
         local page = self.ui.document:getPageNumberInFlow(self.pageno)
         local pages = self.ui.document:getTotalPagesInFlow(flow)
-        self.progress_bar.percentage = page / pages
+        self.progress_bar:setPercentage(page / pages)
     else
-        self.progress_bar.percentage = self.pageno / self.pages
+        self.progress_bar:setPercentage(self.pageno / self.pages)
     end
-    self:updateFooterText(force_repaint, force_recompute)
+    self:updateFooterText(force_repaint, full_repaint)
 end
 
-function ReaderFooter:updateFooterPos(force_repaint, force_recompute)
+function ReaderFooter:updateFooterPos(force_repaint, full_repaint)
     if type(self.position) ~= "number" then return end
-    self.progress_bar.percentage = self.position / self.doc_height
-    self:updateFooterText(force_repaint, force_recompute)
+    self.progress_bar:setPercentage(self.position / self.doc_height)
+    self:updateFooterText(force_repaint, full_repaint)
 end
 
 -- updateFooterText will start as a noop. After onReaderReady event is
 -- received, it will initialized as _updateFooterText below
-function ReaderFooter:updateFooterText(force_repaint, force_recompute)
+function ReaderFooter:updateFooterText(force_repaint, full_repaint)
 end
 
 -- only call this function after document is fully loaded
-function ReaderFooter:_updateFooterText(force_repaint, force_recompute)
+function ReaderFooter:_updateFooterText(force_repaint, full_repaint)
     -- footer is invisible, we need neither a repaint nor a recompute, go away.
-    if not self.view.footer_visible and not force_repaint and not force_recompute then
+    if not self.view.footer_visible and not force_repaint and not full_repaint then
         return
     end
     local text = self:genFooterText()
@@ -2190,8 +2215,8 @@ function ReaderFooter:_updateFooterText(force_repaint, force_recompute)
     if force_repaint then
         -- If there was a visibility change, notify ReaderView
         if self.visibility_change then
-            self.ui:handleEvent(Event:new("ReaderFooterVisibilityChange"))
             self.visibility_change = nil
+            self.ui:handleEvent(Event:new("ReaderFooterVisibilityChange"))
         end
 
         -- NOTE: Getting the dimensions of the widget is impossible without having drawn it first,
@@ -2206,7 +2231,7 @@ function ReaderFooter:_updateFooterText(force_repaint, force_recompute)
             refresh_dim.y = self._saved_screen_height - refresh_dim.h
         end
         -- If we're making the footer visible (or it already is), we don't need to repaint ReaderUI behind it
-        if self.view.footer_visible then
+        if self.view.footer_visible and not full_repaint then
             -- Unfortunately, it's not a modal (we never show() it), so it's not in the window stack,
             -- instead, it's baked inside ReaderUI, so it gets slightly trickier...
             -- NOTE: self.view.footer -> self ;).
@@ -2218,6 +2243,7 @@ function ReaderFooter:_updateFooterText(force_repaint, force_recompute)
                 return self.view.currently_scrolling and "fast" or "ui", self.footer_content.dimen
             end)
         else
+            -- If the footer is invisible or might be hidden behind another widget, we need to repaint the full ReaderUI stack.
             UIManager:setDirty(self.view.dialog, function()
                 return self.view.currently_scrolling and "fast" or "ui", refresh_dim
             end)
@@ -2225,6 +2251,8 @@ function ReaderFooter:_updateFooterText(force_repaint, force_recompute)
     end
 end
 
+-- Note: no need for :onDocumentRerendered(), ReaderToc will catch "DocumentRerendered"
+-- and will then emit a "TocReset" after the new ToC is made.
 function ReaderFooter:onTocReset()
     self:setTocMarkers(true)
     if self.view.view_mode == "page" then
@@ -2262,10 +2290,6 @@ function ReaderFooter:onPosUpdate(pos, pageno)
     end
     self:updateFooterPos()
 end
-
--- recalculate footer sizes when document page count is updated
--- see documentation for more info about this event.
-ReaderFooter.onUpdatePos = ReaderFooter.onUpdateFooter
 
 function ReaderFooter:onReaderReady()
     self.ui.menu:registerToMainMenu(self)
@@ -2447,16 +2471,11 @@ function ReaderFooter:onOutOfScreenSaver()
     self:rescheduleFooterAutoRefreshIfNeeded()
 end
 
-function ReaderFooter:onLeaveStandby()
-    self:maybeUpdateFooter()
-    self:rescheduleFooterAutoRefreshIfNeeded()
-end
-
 function ReaderFooter:onSuspend()
     self:unscheduleFooterAutoRefresh()
+    -- Reset the initial marker
+    self.progress_bar.inital_percentage = nil
 end
-
-ReaderFooter.onEnterStandby = ReaderFooter.onSuspend
 
 function ReaderFooter:onCloseDocument()
     self:unscheduleFooterAutoRefresh()
@@ -2465,21 +2484,12 @@ end
 -- Used by event handlers that can trip without direct UI interaction...
 function ReaderFooter:maybeUpdateFooter()
     -- ...so we need to avoid stomping over unsuspecting widgets (usually, ScreenSaver).
-    if UIManager:getTopWidget() == "ReaderUI" then
-        self:onUpdateFooter(self.view.footer_visible)
-    else
-        self:onUpdateFooter()
-    end
+    self:onUpdateFooter(self:shouldBeRepainted())
 end
 
+-- is the same as maybeUpdateFooter
 function ReaderFooter:onFrontlightStateChanged()
-    -- Custom variant of maybeUpdateFooter that *also* whitelists the FL widget...
-    local top_wg = UIManager:getTopWidget()
-    if top_wg == "ReaderUI" or top_wg == "FrontLightWidget" then
-        self:onUpdateFooter(self.view.footer_visible)
-    else
-        self:onUpdateFooter()
-    end
+    self:onUpdateFooter(self:shouldBeRepainted())
 end
 
 function ReaderFooter:onNetworkConnected()
@@ -2522,6 +2532,10 @@ end
 
 function ReaderFooter:onTimeFormatChanged()
     self:refreshFooter(true, true)
+end
+
+function ReaderFooter:onCloseWidget()
+    self:free()
 end
 
 return ReaderFooter

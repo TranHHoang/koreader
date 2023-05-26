@@ -190,6 +190,14 @@ function ReaderView:paintTo(bb, x, y)
         elseif self.view_mode == "scroll" then
             self:drawScrollView(bb, x, y)
         end
+        local should_repaint = self.ui.rolling:handlePartialRerendering()
+        if should_repaint then
+            -- ReaderRolling may have repositionned on another page containing
+            -- the xpointer of the top of the original page: recalling this is
+            -- all there is to do.
+            self:paintTo(bb, x, y)
+            return
+        end
     end
 
     -- dim last read area
@@ -225,10 +233,9 @@ function ReaderView:paintTo(bb, x, y)
     if self.footer_visible then
         self.footer:paintTo(bb, x, y)
     end
-    -- paint flipping
-    if self.flipping_visible then
-        self.flipping:paintTo(bb, x, y)
-    end
+    -- paint top left corner indicator
+    self.flipping:paintTo(bb, x, y)
+    -- paint view modules
     for _, m in pairs(self.view_modules) do
         m:paintTo(bb, x, y)
     end
@@ -250,7 +257,7 @@ function ReaderView:paintTo(bb, x, y)
         if img_count and img_count > 0 and img_coverage and img_coverage >= 0.075 then
             self.dialog.dithered = true
             -- Request a flashing update while we're at it, but only if it's the first time we're painting it
-            if self.state.drawn == false then
+            if self.state.drawn == false and G_reader_settings:nilOrTrue("refresh_on_pages_with_images") then
                 UIManager:setDirty(nil, "full")
             end
         end
@@ -506,32 +513,53 @@ function ReaderView:drawSavedHighlight(bb, x, y)
     end
 end
 
+-- Returns the list of highlights in page.
+-- The list includes full single-page highlights and parts of multi-page highlights.
+function ReaderView:getPageSavedHighlights(page)
+    local highlights = {}
+    local is_reflow = self.document.configurable.text_wrap
+    self.document.configurable.text_wrap = 0
+    for page_num, page_highlights in pairs(self.highlight.saved) do
+        for i, highlight in ipairs(page_highlights) do
+            -- old single-page reflow highlights do not have page in position
+            local pos0_page = highlight.pos0.page or page_num
+            local pos1_page = highlight.pos1.page or page_num
+            if pos0_page <= page and page <= pos1_page then
+                if pos0_page == pos1_page then -- single-page highlight
+                    table.insert(highlights, highlight)
+                else -- multi-page highlight
+                    local item = self.ui.highlight:getSavedExtendedHighlightPage(highlight, page, i)
+                    table.insert(highlights, item)
+                end
+            end
+        end
+    end
+    self.document.configurable.text_wrap = is_reflow
+    return highlights
+end
+
 function ReaderView:drawPageSavedHighlight(bb, x, y)
     local pages = self:getCurrentPageList()
-    for _, page in pairs(pages) do
-        local items = self.highlight.saved[page]
-        if items then
-            for i = 1, #items do
-                local item = items[i]
-                local pos0, pos1 = item.pos0, item.pos1
-                local boxes = self.document:getPageBoxesFromPositions(page, pos0, pos1)
-                if boxes then
-                    local drawer = item.drawer or self.highlight.saved_drawer
-                    local draw_note_mark = self.highlight.note_mark and
-                        self.ui.bookmark:getBookmarkNote({ page = page, datetime = item.datetime, })
-                    for _, box in pairs(boxes) do
-                        local rect = self:pageToScreenTransform(page, box)
-                        if rect then
-                            self:drawHighlightRect(bb, x, y, rect, drawer, draw_note_mark)
-                            if draw_note_mark and self.highlight.note_mark == "sidemark" then
-                                draw_note_mark = false -- side mark in the first line only
-                            end
+    for _, page in ipairs(pages) do
+        local items = self:getPageSavedHighlights(page)
+        for _, item in ipairs(items) do
+            local boxes = self.document:getPageBoxesFromPositions(page, item.pos0, item.pos1)
+            if boxes then
+                local drawer = item.drawer or self.highlight.saved_drawer
+                local draw_note_mark = self.highlight.note_mark and
+                    self.ui.bookmark:getBookmarkNote({datetime = item.datetime})
+                for _, box in ipairs(boxes) do
+                    local rect = self:pageToScreenTransform(page, box)
+                    if rect then
+                        self:drawHighlightRect(bb, x, y, rect, drawer, draw_note_mark)
+                        if draw_note_mark and self.highlight.note_mark == "sidemark" then
+                            draw_note_mark = false -- side mark in the first line only
                         end
-                    end -- end for each box
-                end -- end if boxes
-            end -- end for each highlight
+                    end
+                end
+            end
         end
-    end -- end for each page
+    end
 end
 
 function ReaderView:drawXPointerSavedHighlight(bb, x, y)
@@ -567,11 +595,13 @@ function ReaderView:drawXPointerSavedHighlight(bb, x, y)
                     if boxes then
                         local drawer = item.drawer or self.highlight.saved_drawer
                         local draw_note_mark = self.highlight.note_mark and
-                            self.ui.bookmark:getBookmarkNote({ page = item.pos0, datetime = item.datetime, })
-                        for _, box in pairs(boxes) do
-                            self:drawHighlightRect(bb, x, y, box, drawer, draw_note_mark)
-                            if draw_note_mark and self.highlight.note_mark == "sidemark" then
-                                draw_note_mark = false -- side mark in the first line only
+                            self.ui.bookmark:getBookmarkNote({datetime = item.datetime})
+                        for _, box in ipairs(boxes) do
+                            if box.h ~= 0 then
+                                self:drawHighlightRect(bb, x, y, box, drawer, draw_note_mark)
+                                if draw_note_mark and self.highlight.note_mark == "sidemark" then
+                                    draw_note_mark = false -- side mark in the first line only
+                                end
                             end
                         end -- end for each box
                     end -- end if boxes
@@ -836,9 +866,9 @@ function ReaderView:onReadSettings(config)
         else
             -- No doc specific rotation, pickup global defaults for the doc type
             if self.ui.paging then
-                rotation_mode = G_reader_settings:readSetting("kopt_rotation_mode") or Screen.ORIENTATION_PORTRAIT
+                rotation_mode = G_reader_settings:readSetting("kopt_rotation_mode") or Screen.DEVICE_ROTATED_UPRIGHT
             else
-                rotation_mode = G_reader_settings:readSetting("copt_rotation_mode") or Screen.ORIENTATION_PORTRAIT
+                rotation_mode = G_reader_settings:readSetting("copt_rotation_mode") or Screen.DEVICE_ROTATED_UPRIGHT
             end
         end
     end
@@ -945,19 +975,15 @@ end
 function ReaderView:onReaderFooterVisibilityChange()
     -- Don't bother ReaderRolling with this nonsense, the footer's height is NOT handled via visible_area there ;)
     if self.ui.paging and self.state.page then
-        -- NOTE: Simply relying on recalculate would be a wee bit too much: it'd reset the in-page offsets,
-        --       which would be wrong, and is also not necessary, since the footer is at the bottom of the screen ;).
-        --       So, simply mangle visible_area's height ourselves...
+        -- We don't need to do anything if reclaim is enabled ;).
         if not self.footer.settings.reclaim_height then
-            -- NOTE: Yes, this means that toggling reclaim_height requires a page switch (for a proper recalculate).
-            --       Thankfully, most of the time, the quirks are barely noticeable ;).
-            if self.footer_visible then
-                self.visible_area.h = self.visible_area.h - self.footer:getHeight()
-            else
-                self.visible_area.h = self.visible_area.h + self.footer:getHeight()
-            end
+            -- NOTE: Mimic what onSetFullScreen does, since, without reclaim, toggling the footer affects the available area,
+            --       so we need to recompute the full layout.
+            self.ui:handleEvent(Event:new("SetDimensions", Screen:getSize()))
+            -- NOTE: Scroll mode's behavior after this might be suboptimal (until next page),
+            --       but I'm not familiar enough with it to make it behave...
+            --       (e.g., RedrawCurrentPage & co will snap to the top of the "current" page).
         end
-        self.ui:handleEvent(Event:new("ViewRecalculate", self.visible_area, self.page_area))
     end
 end
 
@@ -997,8 +1023,10 @@ function ReaderView:onSWDitheringUpdate(toggle)
 end
 
 function ReaderView:onFontSizeUpdate(font_size)
-    self.ui:handleEvent(Event:new("ReZoom", font_size))
-    Notification:notify(T(_("Font zoom set to: %1."), font_size))
+    if self.ui.paging then
+        self.ui:handleEvent(Event:new("ReZoom", font_size))
+        Notification:notify(T(_("Font zoom set to: %1."), font_size))
+    end
 end
 
 function ReaderView:onDefectSizeUpdate()
@@ -1135,9 +1163,7 @@ function ReaderView:onToggleReadingOrder()
     self.inverse_reading_order = not self.inverse_reading_order
     self:setupTouchZones()
     local is_rtl = self.inverse_reading_order ~= BD.mirroredUILayout() -- mirrored reading
-    UIManager:show(Notification:new{
-        text = is_rtl and _("RTL page turning.") or _("LTR page turning."),
-    })
+    Notification:notify(is_rtl and _("RTL page turning.") or _("LTR page turning."))
     return true
 end
 
@@ -1157,10 +1183,10 @@ function ReaderView:getTapZones()
         }
     else -- user defined page turns tap zones
         local tap_zone_forward_w = G_reader_settings:readSetting("page_turns_tap_zone_forward_size_ratio", G_defaults:readSetting("DTAP_ZONE_FORWARD").w)
-        local tap_zone_backward_w = 1 - tap_zone_forward_w
+        local tap_zone_backward_w = G_reader_settings:readSetting("page_turns_tap_zone_backward_size_ratio", G_defaults:readSetting("DTAP_ZONE_BACKWARD").w)
         if tap_zones_type == "left_right" then
             forward_zone = {
-                ratio_x = tap_zone_backward_w, ratio_y = 0,
+                ratio_x = 1 - tap_zone_forward_w, ratio_y = 0,
                 ratio_w = tap_zone_forward_w, ratio_h = 1,
             }
             backward_zone = {
@@ -1169,7 +1195,7 @@ function ReaderView:getTapZones()
             }
         else
             forward_zone = {
-                ratio_x = 0, ratio_y = tap_zone_backward_w,
+                ratio_x = 0, ratio_y = 1 - tap_zone_forward_w,
                 ratio_w = 1, ratio_h = tap_zone_forward_w,
             }
             backward_zone = {

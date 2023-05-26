@@ -64,7 +64,7 @@ function SonyPRSTUX:init()
     self.input.open("fake_events") -- usb plug-in/out and charging/not-charging
     self.input:registerEventAdjustHook(adjustTouchEvt)
 
-    local rotation_mode = self.screen.ORIENTATION_LANDSCAPE_ROTATED
+    local rotation_mode = self.screen.DEVICE_ROTATED_COUNTER_CLOCKWISE
     self.screen.native_rotation_mode = rotation_mode
     self.screen.cur_rotation_mode = rotation_mode
 
@@ -91,23 +91,21 @@ end
 
 function SonyPRSTUX:intoScreenSaver()
     local Screensaver = require("ui/screensaver")
-    if self.screen_saver_mode == false then
+    if not self.screen_saver_mode then
         Screensaver:setup()
         Screensaver:show()
     end
     self.powerd:beforeSuspend()
-    self.screen_saver_mode = true
 end
 
 function SonyPRSTUX:outofScreenSaver()
-    if self.screen_saver_mode == true then
+    if self.screen_saver_mode then
         local Screensaver = require("ui/screensaver")
         Screensaver:close()
         local UIManager = require("ui/uimanager")
         UIManager:nextTick(function() UIManager:setDirty("all", "full") end)
     end
     self.powerd:afterResume()
-    self.screen_saver_mode = false
 end
 
 function SonyPRSTUX:suspend()
@@ -174,9 +172,13 @@ function SonyPRSTUX:initNetworkManager(NetworkMgr)
         -- os.execute("./restore-wifi-async.sh")
     end
 
+    --[[
     function NetworkMgr:isWifiOn()
         return 0 == os.execute("wmiconfig -i wlan0 --wlan query | grep -q enabled")
     end
+    --]]
+    NetworkMgr.isWifiOn = NetworkMgr.sysfsWifiOn
+    NetworkMgr.isConnected = NetworkMgr.ifHasAnAddress
 end
 
 

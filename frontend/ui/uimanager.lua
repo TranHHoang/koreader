@@ -29,7 +29,6 @@ local UIManager = {
 
     event_handlers = nil,
 
-    _running = true,
     _now = time.now(),
     _window_stack = {},
     _task_queue = {},
@@ -57,6 +56,16 @@ function UIManager:init()
         Power = function(input_event)
             Device:onPowerEvent(input_event)
         end,
+        -- This is for hotpluggable evdev input devices (e.g., USB OTG)
+        UsbDevicePlugIn = function(input_event)
+            -- Retrieve the argument set by Input:handleKeyBoardEv
+            local evdev = table.remove(Input.fake_event_args[input_event])
+            self:broadcastEvent(Event:new("EvdevInputInsert", evdev))
+        end,
+        UsbDevicePlugOut = function(input_event)
+            local evdev = table.remove(Input.fake_event_args[input_event])
+            self:broadcastEvent(Event:new("EvdevInputRemove", evdev))
+        end,
     }
     self.poweroff_action = function()
         self._entered_poweroff_stage = true
@@ -68,7 +77,11 @@ function UIManager:init()
         self:nextTick(function()
             Device:saveSettings()
             Device:powerOff()
-            self:quit(Device:isKobo() and 88)
+            if Device:isKobo() then
+                self:quit(88)
+            else
+                self:quit()
+            end
         end)
     end
     self.reboot_action = function()
@@ -81,11 +94,19 @@ function UIManager:init()
         self:nextTick(function()
             Device:saveSettings()
             Device:reboot()
-            self:quit(Device:isKobo() and 88)
+            if Device:isKobo() then
+                self:quit(88)
+            else
+                self:quit()
+            end
         end)
     end
 
     Device:_setEventHandlers(self)
+
+    -- A simple wrapper for UIManager:quit()
+    -- This may be overwritten by setRunForeverMode(); for testing purposes
+    self:unsetRunForeverMode()
 end
 
 --[[--
@@ -116,7 +137,6 @@ function UIManager:show(widget, refreshtype, refreshregion, x, y, refreshdither)
     end
     logger.dbg("show widget:", widget.id or widget.name or tostring(widget))
 
-    self._running = true
     local window = {x = x or 0, y = y or 0, widget = widget}
     -- put this window on top of the topmost non-modal window
     for i = #self._window_stack, 0, -1 do
@@ -138,11 +158,7 @@ function UIManager:show(widget, refreshtype, refreshregion, x, y, refreshdither)
     -- tell the widget that it is shown now
     widget:handleEvent(Event:new("Show"))
     -- check if this widget disables double tap gesture
-    if widget.disable_double_tap == false then
-        Input.disable_double_tap = false
-    else
-        Input.disable_double_tap = true
-    end
+    Input.disable_double_tap = widget.disable_double_tap ~= false
     -- a widget may override tap interval (when it doesn't, nil restores the default)
     Input.tap_interval_override = widget.tap_interval_override
 end
@@ -186,24 +202,26 @@ function UIManager:close(widget, refreshtype, refreshregion, refreshdither)
             table.remove(self._window_stack, i)
             dirty = true
         else
-            -- If anything else on the stack not already hidden by (i.e., below) a fullscreen widget was dithered, honor the hint
-            if w.dithered and not is_covered then
-                refreshdither = true
-                logger.dbg("Lower widget", w.name or w.id or tostring(w), "was dithered, honoring the dithering hint")
-            end
+            if not is_covered then
+                -- If anything else on the stack not already hidden by (i.e., below) a fullscreen widget was dithered, honor the hint
+                if w.dithered then
+                    refreshdither = true
+                    logger.dbg("Lower widget", w.name or w.id or tostring(w), "was dithered, honoring the dithering hint")
+                end
 
-            -- Remember the uppermost widget that covers the full screen, so we don't bother calling setDirty on hidden (i.e., lower) widgets in the following dirty loop.
-            -- _repaint already does that later on to skip the actual paintTo calls, so this ensures we limit the refresh queue to stuff that will actually get painted.
-            if not is_covered and w.covers_fullscreen then
-                is_covered = true
-                start_idx = i
-                logger.dbg("Lower widget", w.name or w.id or tostring(w), "covers the full screen")
-                if i > 1 then
-                    logger.dbg("not refreshing", i-1, "covered widget(s)")
+                -- Remember the uppermost widget that covers the full screen, so we don't bother calling setDirty on hidden (i.e., lower) widgets in the following dirty loop.
+                -- _repaint already does that later on to skip the actual paintTo calls, so this ensures we limit the refresh queue to stuff that will actually get painted.
+                if w.covers_fullscreen then
+                    is_covered = true
+                    start_idx = i
+                    logger.dbg("Lower widget", w.name or w.id or tostring(w), "covers the full screen")
+                    if i > 1 then
+                        logger.dbg("not refreshing", i-1, "covered widget(s)")
+                   end
                 end
             end
 
-            -- Set double tap to how the topmost specifying widget wants it
+            -- Set double tap to how the topmost widget with that flag wants it
             if requested_disable_double_tap == nil and w.disable_double_tap ~= nil then
                 requested_disable_double_tap = w.disable_double_tap
             end
@@ -225,10 +243,20 @@ function UIManager:close(widget, refreshtype, refreshregion, refreshdither)
     end
 end
 
--- Schedule an execution task; task queue is in ascending order
+--- Shift the execution times of all scheduled tasks.
+-- UIManager uses CLOCK_MONOTONIC (which doesn't tick during standby), so shifting the execution
+-- time by a negative value will lead to an execution at the expected time.
+-- @param time if positive execute the tasks later, if negative they should be executed earlier
+function UIManager:shiftScheduledTasksBy(shift_time)
+    for i, v in ipairs(self._task_queue) do
+        v.time = v.time + shift_time
+    end
+end
+
+-- Schedule an execution task; task queue is in descending order
 function UIManager:schedule(sched_time, action, ...)
     local lo, hi = 1, #self._task_queue
-    -- Rightmost binary insertion
+    -- Leftmost binary insertion
     while lo <= hi do
         -- NOTE: We should be (mostly) free from overflow here, thanks to LuaJIT's BitOp semantics.
         --       For more fun details about this particular overflow,
@@ -237,10 +265,10 @@ function UIManager:schedule(sched_time, action, ...)
         --       c.f., https://reprog.wordpress.com/2010/04/19/are-you-one-of-the-10-percent/
         local mid = bit.rshift(lo + hi, 1)
         local mid_time = self._task_queue[mid].time
-        if sched_time >= mid_time then
-            lo = mid + 1
-        else
+        if mid_time <= sched_time then
             hi = mid - 1
+        else
+            lo = mid + 1
         end
     end
 
@@ -316,6 +344,46 @@ function UIManager:tickAfterNext(action)
     return self:scheduleIn(0.001, action)
 end
 --]]
+
+function UIManager:debounce(seconds, immediate, action)
+    -- Ported from underscore.js
+    local args = nil
+    local previous_call_at = nil
+    local is_scheduled = false
+    local result = nil
+
+    local scheduled_action
+    scheduled_action = function()
+        local passed_from_last_call = time:now() - previous_call_at
+        if seconds > passed_from_last_call then
+            self:scheduleIn(seconds - passed_from_last_call, scheduled_action)
+            is_scheduled = true
+        else
+            is_scheduled = false
+            if not immediate then
+                result = action(unpack(args, 1, args.n))
+            end
+            if not is_scheduled then
+                -- This check is needed because action can recursively call debounced_action_wrapper
+                args = nil
+            end
+        end
+    end
+    local debounced_action_wrapper = function(...)
+        args = table.pack(...)
+        previous_call_at = time:now()
+        if not is_scheduled then
+            self:scheduleIn(seconds, scheduled_action)
+            is_scheduled = true
+            if immediate then
+                result = action(unpack(args, 1, args.n))
+            end
+        end
+        return result
+    end
+
+    return debounced_action_wrapper
+end
 
 --[[--
 Unschedules a previously scheduled task.
@@ -659,50 +727,41 @@ function UIManager:ToggleNightMode(night_mode)
     end
 end
 
---- Get top widget (name if possible, ref otherwise).
-function UIManager:getTopWidget()
-    if not self._window_stack[1] then
-        -- No widgets in the stack, bye!
+--- Get n.th topmost widget
+function UIManager:getNthTopWidget(n)
+    n = n and n-1 or 0
+    if #self._window_stack - n < 1 then
+        -- No or not enough widgets in the stack, bye!
         return nil
     end
 
-    local widget = self._window_stack[#self._window_stack].widget
-    if widget.name then
-        return widget.name
-    end
+    local widget = self._window_stack[#self._window_stack - n].widget
     return widget
 end
 
---[[--
-Get the *second* topmost widget, if there is one (name if possible, ref otherwise).
-
-Useful when VirtualKeyboard is involved, as it *always* steals the top spot ;).
-
-NOTE: Will skip over VirtualKeyboard instances, plural, in case there are multiple (because, apparently, we can do that.. ugh).
---]]
-function UIManager:getSecondTopmostWidget()
-    if #self._window_stack <= 1 then
-        -- Not enough widgets in the stack, bye!
-        return nil
+--- Top-to-bottom widgets iterator
+--- NOTE: VirtualKeyboard can be instantiated multiple times, and is a modal,
+--        so don't be suprised if you find a couple of instances of it at the top ;).
+function UIManager:topdown_widgets_iter()
+    local n = #self._window_stack
+    local i = n + 1
+    return function()
+        i = i - 1
+        if i > 0 then
+            return self._window_stack[i].widget
+        end
     end
+end
 
-    -- Because everything is terrible, you can actually instantiate multiple VirtualKeyboards,
-    -- and they'll stack at the top, so, loop until we get something that *isn't* VK...
-    for i = #self._window_stack - 1, 1, -1 do
+--- Get the topmost visible widget
+function UIManager:getTopmostVisibleWidget()
+    for i = #self._window_stack, 1, -1 do
         local widget = self._window_stack[i].widget
-
-        if widget.name then
-            if widget.name ~= "VirtualKeyboard" then
-                return widget.name
-            end
-            -- Meaning if name is set, and is set to VK => continue, as we want the *next* widget.
-            -- I *really* miss the continue keyword, Lua :/.
-        else
+        -- Skip invisible widgets (e.g., TrapWidget)
+        if not widget.invisible then
             return widget
         end
     end
-
-    return nil
 end
 
 --- Check if a widget is still in the window stack, or is a subwidget of a widget still in the window stack.
@@ -728,27 +787,65 @@ function UIManager:isWidgetShown(widget)
 end
 
 --- Signals to quit.
-function UIManager:quit(exit_code)
-    if not self._running then return end
-    logger.info("quitting uimanager with exit code:", exit_code or 0)
-    self._exit_code = exit_code
+-- An exit_code of false is not allowed.
+function UIManager:quit(exit_code, implicit)
+    if exit_code == false then
+        logger.err("UIManager:quit() called with false")
+        return
+    end
+    -- Also honor older exit codes; default to 0
+    self._exit_code = exit_code or self._exit_code or 0
+    if not implicit then
+        -- Explicit call via UIManager:quit (as opposed to self:_gated_quit)
+        if exit_code then
+            logger.info("Preparing to quit UIManager with exit code:", exit_code)
+        else
+            logger.info("Preparing to quit UIManager")
+        end
+    end
     self._task_queue_dirty = false
-    self._running = false
-    self._run_forever = nil
-    for i = #self._window_stack, 1, -1 do
-        table.remove(self._window_stack, i)
-    end
-    for i = #self._task_queue, 1, -1 do
-        table.remove(self._task_queue, i)
-    end
+    self._window_stack = {}
+    self._task_queue = {}
     for i = #self._zeromqs, 1, -1 do
         self._zeromqs[i]:stop()
-        table.remove(self._zeromqs, i)
     end
+    self._zeromqs = {}
     if self.looper then
         self.looper:close()
         self.looper = nil
     end
+    return self._exit_code
+end
+dbg:guard(UIManager, 'quit',
+    function(self, exit_code)
+        assert(exit_code ~= false, "exit_code == false is not supported")
+    end)
+
+-- Disable automatic UIManager quit; for testing purposes
+function UIManager:setRunForeverMode()
+    self._gated_quit = function() return false end
+end
+
+-- Enable automatic UIManager quit; for testing purposes
+function UIManager:unsetRunForeverMode()
+    self._gated_quit = function() return self:quit(nil, true) end
+end
+
+-- Ignore an empty window stack *once*; for startup w/ a missing last_file shenanigans...
+function UIManager:runOnce()
+    -- We don't actually want to call self.quit, and we need to deal with a bit of trickery in there anyway...
+    self._gated_quit = function()
+        -- We need this set to break the loop in UIManager:run()
+        self._exit_code = 0
+        -- And this is to break the loop in UIManager:handleInput()
+        return true
+    end
+    -- The idea being that we want to *return* from this run call, but *without* quitting.
+    -- NOTE: This implies that calling run multiple times across a single session *needs* to be safe.
+    self:run()
+    -- Restore standard behavior
+    self:unsetRunForeverMode()
+    self._exit_code = nil
 end
 
 --[[--
@@ -868,10 +965,9 @@ end
 --]]
 
 function UIManager:getNextTaskTime()
-    if self._task_queue[1] then
-        return self._task_queue[1].time - time:now()
-    else
-        return nil
+    local next_task = self._task_queue[#self._task_queue]
+    if next_task then
+        return next_task.time - time:now()
     end
 end
 
@@ -883,17 +979,17 @@ function UIManager:_checkTasks()
     -- Flipping this switch ensures we'll consume all such tasks *before* yielding to input polling.
     self._task_queue_dirty = false
     while self._task_queue[1] do
-        local task_time = self._task_queue[1].time
+        local task_time = self._task_queue[#self._task_queue].time
         if task_time <= self._now then
-            -- Pop the upcoming task, as it is due for execution...
-            local task = table.remove(self._task_queue, 1)
+            -- Remove the upcoming task, as it is due for execution...
+            local task =  table.remove(self._task_queue)
             -- ...so do it now.
             -- NOTE: Said task's action might modify _task_queue.
             --       To avoid race conditions and catch new upcoming tasks during this call,
             --       we repeatedly check the head of the queue (c.f., #1758).
-            task.action(unpack(task.args))
+            task.action(unpack(task.args, 1, task.args.n))
         else
-            -- As the queue is sorted in ascending order, it's safe to assume all items are currently future tasks.
+            -- As the queue is sorted in descending order, it's safe to assume all items are currently future tasks.
             wait_until = task_time
             break
         end
@@ -1037,7 +1133,7 @@ function UIManager:_refresh(mode, region, dither)
     --       (Putting "ui" in that list is problematic with a number of UI elements, most notably, ReaderHighlight,
     --       because it is implemented as "ui" over the full viewport, since we can't devise a proper bounding box).
     --       So we settle for only "partial", but treating full-screen ones slightly differently.
-    if mode == "partial" and not self.refresh_counted then
+    if mode == "partial" and self.FULL_REFRESH_COUNT > 0 and not self.refresh_counted then
         self.refresh_count = (self.refresh_count + 1) % self.FULL_REFRESH_COUNT
         if self.refresh_count == self.FULL_REFRESH_COUNT - 1 then
             -- NOTE: Promote to "full" if no region (reader), to "flashui" otherwise (UI)
@@ -1118,8 +1214,8 @@ function UIManager:_repaint()
     --[[
     if start_idx > 1 then
         for i = 1, start_idx-1 do
-            local widget = self._window_stack[i]
-            logger.dbg("NOT painting widget:", widget.widget.name or widget.widget.id or tostring(widget))
+            local widget = self._window_stack[i].widget
+            logger.dbg("NOT painting widget:", widget.name or widget.id or tostring(widget))
         end
     end
     --]]
@@ -1204,6 +1300,11 @@ function UIManager:forceRePaint()
     self:_repaint()
 end
 
+function UIManager:avoidFlashOnNextRepaint()
+    -- Avoid going through the "partial" to "full" refresh promotion: pretend we already checked that.
+    self.refresh_counted = true
+end
+
 --[[--
 Ask the EPDC to *block* until our previous refresh ioctl has completed.
 
@@ -1251,7 +1352,7 @@ This is an explicit repaint *now*: it bypasses and ignores the paint queue (unli
 function UIManager:widgetRepaint(widget, x, y)
     if not widget then return end
 
-    logger.dbg("Explicit widgetRepaint:", widget.name or widget.id or tostring(widget), "@ (", x, ",", y, ")")
+    logger.dbg("Explicit widgetRepaint:", widget.name or widget.id or tostring(widget), "@", x, y)
     if widget.show_parent and widget.show_parent.cropping_widget then
         -- The main widget parent of this subwidget has a cropping container: see if
         -- this widget is a child of this cropping container
@@ -1278,7 +1379,7 @@ Same idea as `widgetRepaint`, but does a simple `bb:invertRect` on the Screen bu
 function UIManager:widgetInvert(widget, x, y, w, h)
     if not widget then return end
 
-    logger.dbg("Explicit widgetInvert:", widget.name or widget.id or tostring(widget), "@ (", x, ",", y, ")")
+    logger.dbg("Explicit widgetInvert:", widget.name or widget.id or tostring(widget), "@", x, y)
     if widget.show_parent and widget.show_parent.cropping_widget then
         -- The main widget parent of this subwidget has a cropping container: see if
         -- this widget is a child of this cropping container
@@ -1333,19 +1434,23 @@ function UIManager:handleInput()
     -- for input events:
     repeat
         wait_until, now = self:_checkTasks()
-        --dbg("---------------------------------------------------")
-        --dbg("wait_until", wait_until)
-        --dbg("now", now)
-        --dbg("exec stack", self._task_queue)
-        --dbg("window stack", self._window_stack)
-        --dbg("dirty stack", self._dirty)
-        --dbg("---------------------------------------------------")
+        --[[
+        dbg("---------------------------------------------------")
+        dbg("wait_until", wait_until)
+        dbg("now       ", now)
+        dbg("#exec stack  ", #self._task_queue)
+        dbg("#window stack", #self._window_stack)
+        dbg("#dirty stack ", util.tableSize(self._dirty))
+        dbg("dirty?", self._task_queue_dirty)
+        dbg("---------------------------------------------------")
+        --]]
 
         -- stop when we have no window to show
-        if not self._window_stack[1] and not self._run_forever then
+        if not self._window_stack[1] then
             logger.info("no dialog left to show")
-            self:quit()
-            return nil
+            if self:_gated_quit() ~= false then
+                return nil
+            end
         end
 
         self:_repaint()
@@ -1443,8 +1548,6 @@ This is the main loop of the UI controller.
 It is intended to manage input events and delegate them to dialogs.
 --]]
 function UIManager:run()
-    self._running = true
-
     -- Tell PowerD that we're ready
     Device:getPowerDevice():readyUI()
 
@@ -1452,21 +1555,16 @@ function UIManager:run()
     -- currently there is no Turbo support for Windows
     -- use our own main loop
     if not self.looper then
-        while self._running do
+        repeat
             self:handleInput()
-        end
+        until self._exit_code
     else
         self.looper:add_callback(function() self:handleInput() end)
         self.looper:start()
     end
 
+    logger.info("Tearing down UIManager with exit code:", self._exit_code)
     return self._exit_code
-end
-
--- run uimanager forever for testing purpose
-function UIManager:runForever()
-    self._run_forever = true
-    return self:run()
 end
 
 --[[--
@@ -1483,21 +1581,30 @@ function UIManager:suspend()
     end
 end
 
-function UIManager:reboot()
+function UIManager:askForReboot(message_text)
     -- Should always exist, as defined in `generic/device` or overwritten with `setEventHandlers`
     if self.event_handlers.Reboot then
         -- Give the other event handlers a chance to be executed.
         -- 'Reboot' event will be sent by the handler
-        UIManager:nextTick(self.event_handlers.Reboot)
+        UIManager:nextTick(self.event_handlers.Reboot, message_text)
     end
 end
 
-function UIManager:powerOff()
+function UIManager:askForPowerOff(message_text)
     -- Should always exist, as defined in `generic/device` or overwritten with `setEventHandlers`
     if self.event_handlers.PowerOff then
         -- Give the other event handlers a chance to be executed.
         -- 'PowerOff' event will be sent by the handler
-        UIManager:nextTick(self.event_handlers.PowerOff)
+        UIManager:nextTick(self.event_handlers.PowerOff, message_text)
+    end
+end
+
+function UIManager:askForRestart(message_text)
+    -- Should always exist, as defined in `generic/device` or overwritten with `setEventHandlers`
+    if self.event_handlers.PowerOff then
+        -- Give the other event handlers a chance to be executed.
+        -- 'Restart' event will be sent by the handler
+        UIManager:nextTick(self.event_handlers.Restart, message_text)
     end
 end
 

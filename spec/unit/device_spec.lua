@@ -48,10 +48,10 @@ describe("device module", function()
     end)
 
     describe("kobo", function()
-        local TimeVal
+        local time
         local NickelConf
         setup(function()
-            TimeVal = require("ui/timeval")
+            time = require("ui/time")
             NickelConf = require("device/kobo/nickel_conf")
         end)
 
@@ -91,20 +91,19 @@ describe("device module", function()
             local Screen = kobo_dev.screen
 
             assert.is.same("Kobo_trilogy_C", kobo_dev.model)
-            assert.falsy(kobo_dev:needsTouchScreenProbe())
             local x, y = Screen:getWidth()-5, 10
             -- mirror x, then switch_xy
             local ev_x = {
                 type = C.EV_ABS,
                 code = C.ABS_X,
                 value = y,
-                time = TimeVal:realtime(),
+                time = time:realtime(),
             }
             local ev_y = {
                 type = C.EV_ABS,
                 code = C.ABS_Y,
                 value = Screen:getWidth() - 1 - x,
-                time = TimeVal:realtime(),
+                time = time:realtime(),
             }
 
             kobo_dev.input:eventAdjustHook(ev_x)
@@ -140,7 +139,6 @@ describe("device module", function()
             local Screen = kobo_dev.screen
 
             assert.is.same("Kobo_trilogy_C", kobo_dev.model)
-            assert.falsy(kobo_dev:needsTouchScreenProbe())
             local x, y = Screen:getWidth()-5, 10
             local ev_x = {
                 type = C.EV_ABS,
@@ -252,7 +250,7 @@ describe("device module", function()
                         usec = 450565,
                         sec = 1471081881
                     },
-                    code = 24, -- C.ABS_PRESSURE -> ABS_OASIS_ORIENTATION
+                    code = 24, -- C.ABS_PRESSURE
                     value = 16
                 }
             })
@@ -350,8 +348,8 @@ describe("device module", function()
             Device.suspend:revert()
             Device.powerd.beforeSuspend:revert()
             Device.isCervantes:revert()
-            Device.screen_saver_mode = false
             readerui.onFlushSettings:revert()
+            Device.screen_saver_mode = false
             readerui:onClose()
         end)
 
@@ -381,8 +379,8 @@ describe("device module", function()
             Device.suspend:revert()
             Device.powerd.beforeSuspend:revert()
             Device.isSDL:revert()
-            Device.screen_saver_mode = false
             readerui.onFlushSettings:revert()
+            Device.screen_saver_mode = false
             readerui:onClose()
         end)
 
@@ -431,8 +429,8 @@ describe("device module", function()
             Device.suspend:revert()
             Device.powerd.beforeSuspend:revert()
             Device.isRemarkable:revert()
-            Device.screen_saver_mode = false
             readerui.onFlushSettings:revert()
+            Device.screen_saver_mode = false
             readerui:onClose()
         end)
     end)

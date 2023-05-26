@@ -3,6 +3,13 @@ local time = require("ui/time")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 
+-- We're going to need a few <linux/fb.h> & <linux/input.h> constants...
+local ffi = require("ffi")
+local C = ffi.C
+require("ffi/linux_fb_h")
+require("ffi/linux_input_h")
+require("ffi/posix_h")
+
 local function yes() return true end
 local function no() return false end  -- luacheck: ignore
 
@@ -61,24 +68,6 @@ local function isWifiUp()
     end
 end
 --]]
-
--- Faster lipc-less variant ;).
-local function isWifiUp()
-    -- Read carrier state from sysfs (so far, all Kindles appear to use wlan0)
-    -- NOTE: We can afford to use CLOEXEC, as devices too old for it don't support Wi-Fi anyway ;).
-    local file = io.open("/sys/class/net/wlan0/carrier", "re")
-
-    -- File only exists while Wi-Fi module is loaded.
-    if not file then
-        return false
-    end
-
-    -- 0 means not connected, 1 connected
-    local out = file:read("*number")
-    file:close()
-
-    return out == 1
-end
 
 --[[
 Test if a kindle device is flagged as a Special Offers device (i.e., ad supported) (FW >= 5.x)
@@ -193,7 +182,12 @@ function Kindle:initNetworkManager(NetworkMgr)
         end
     end
 
-    NetworkMgr.isWifiOn = isWifiUp
+    function NetworkMgr:getNetworkInterfaceName()
+        return "wlan0" -- so far, all Kindles appear to use wlan0
+    end
+
+    NetworkMgr.isWifiOn = NetworkMgr.sysfsWifiOn
+    NetworkMgr.isConnected = NetworkMgr.ifHasAnAddress
 end
 
 function Kindle:supportsScreensaver()
@@ -254,9 +248,9 @@ function Kindle:setDateTime(year, month, day, hour, min, sec)
     else
         local command
         if year and month and day then
-            command = string.format("date -s '%d-%d-%d %d:%d:%d' '+%Y-%m-%d %H:%M:%S'", year, month, day, hour, min, sec)
+            command = string.format("date -s '%d-%d-%d %d:%d:%d' '+%%Y-%%m-%%d %%H:%%M:%%S'", year, month, day, hour, min, sec)
         else
-            command = string.format("date -s '%d:%d' '+%H:%M'", hour, min)
+            command = string.format("date -s '%d:%d' '+%%H:%%M'", hour, min)
         end
         if os.execute(command) == 0 then
             os.execute("hwclock -u -w")
@@ -276,11 +270,10 @@ function Kindle:usbPlugIn()
     --       shooting themselves in the foot (c.f., https://github.com/koreader/koreader/issues/3220)!
     --       On the upside, we don't have to bother waking up the WM to show us the USBMS screen :D.
     -- NOTE: If the device is put in USBNet mode before we even start, everything's peachy, though :).
-    self.charging_mode = true
 end
 
 function Kindle:intoScreenSaver()
-    if self.screen_saver_mode == false then
+    if not self.screen_saver_mode then
         if self:supportsScreensaver() then
             -- NOTE: Meaning this is not a SO device ;)
             local Screensaver = require("ui/screensaver")
@@ -293,14 +286,17 @@ function Kindle:intoScreenSaver()
             elseif os.getenv("CVM_STOPPED") == "yes" then
                 os.execute("killall -CONT cvm")
             end
+
+            -- Don't forget to flag ourselves in ScreenSaver mode like Screensaver:show would,
+            -- so that we do the right thing on resume ;).
+            self.screen_saver_mode = true
         end
     end
     self.powerd:beforeSuspend()
-    self.screen_saver_mode = true
 end
 
 function Kindle:outofScreenSaver()
-    if self.screen_saver_mode == true then
+    if self.screen_saver_mode then
         if self:supportsScreensaver() then
             local Screensaver = require("ui/screensaver")
             local widget_was_closed = Screensaver:close()
@@ -345,16 +341,16 @@ function Kindle:outofScreenSaver()
             local UIManager = require("ui/uimanager")
             -- NOTE: We redraw after a slightly longer delay to take care of the potentially dynamic ad screen...
             --       This is obviously brittle as all hell. Tested on a slow-ass PW1.
-            UIManager:scheduleIn(1.5, function() UIManager:setDirty("all", "full") end)
+            UIManager:scheduleIn(3, function() UIManager:setDirty("all", "full") end)
+            -- Flip the switch again
+            self.screen_saver_mode = false
         end
     end
     self.powerd:afterResume()
-    self.screen_saver_mode = false
 end
 
 function Kindle:usbPlugOut()
     -- NOTE: See usbPlugIn(), we don't have anything fancy to do here either.
-    self.charging_mode = false
 end
 
 function Kindle:wakeupFromSuspend()
@@ -366,6 +362,11 @@ end
 function Kindle:readyToSuspend()
     self.powerd:readyToSuspend()
     self.suspend_time = time.boottime_or_realtime_coarse()
+end
+
+-- We add --no-same-permissions --no-same-owner to make the userstore fuse proxy happy...
+function Kindle:untar(archive, extract_to)
+    return os.execute(("./tar --no-same-permissions --no-same-owner -xf %q -C %q"):format(archive, extract_to))
 end
 
 function Kindle:setEventHandlers(UIManager)
@@ -599,13 +600,11 @@ local KindlePaperWhite5 = Kindle:extend{
     canDoSwipeAnimation = yes,
 }
 
-local KindleScribe = Kindle:extend{
-    model = "KindleScribe",
+local KindleBasic4 = Kindle:extend{
+    model = "KindleBasic4",
     isMTK = yes,
     isTouchDevice = yes,
     hasFrontlight = yes,
-    hasNaturalLight = yes,
-    hasNaturalLightMixer = yes,
     display_dpi = 300,
     -- TBD
     touch_dev = "/dev/input/by-path/platform-1001e000.i2c-event",
@@ -816,6 +815,46 @@ function KindlePaperWhite3:init()
     self.input.open("fake_events")
 end
 
+-- HAL for gyro orientation switches (EV_ABS:ABS_PRESSURE (?!) w/ custom values to EV_MSC:MSC_GYRO w/ our own custom values)
+local function OasisGyroTranslation(this, ev)
+    local DEVICE_ORIENTATION_PORTRAIT_LEFT          = 15
+    local DEVICE_ORIENTATION_PORTRAIT_RIGHT         = 17
+    local DEVICE_ORIENTATION_PORTRAIT               = 19
+    local DEVICE_ORIENTATION_PORTRAIT_ROTATED_LEFT  = 16
+    local DEVICE_ORIENTATION_PORTRAIT_ROTATED_RIGHT = 18
+    local DEVICE_ORIENTATION_PORTRAIT_ROTATED       = 20
+    local DEVICE_ORIENTATION_LANDSCAPE              = 21
+    local DEVICE_ORIENTATION_LANDSCAPE_ROTATED      = 22
+
+    if ev.type == C.EV_ABS and ev.code == C.ABS_PRESSURE then
+        if ev.value == DEVICE_ORIENTATION_PORTRAIT
+            or ev.value == DEVICE_ORIENTATION_PORTRAIT_LEFT
+            or ev.value == DEVICE_ORIENTATION_PORTRAIT_RIGHT then
+            -- i.e., UR
+            ev.type = C.EV_MSC
+            ev.code = C.MSC_GYRO
+            ev.value = C.DEVICE_ROTATED_UPRIGHT
+        elseif ev.value == DEVICE_ORIENTATION_LANDSCAPE then
+            -- i.e., CW
+            ev.type = C.EV_MSC
+            ev.code = C.MSC_GYRO
+            ev.value = C.DEVICE_ROTATED_CLOCKWISE
+        elseif ev.value == DEVICE_ORIENTATION_PORTRAIT_ROTATED
+            or ev.value == DEVICE_ORIENTATION_PORTRAIT_ROTATED_LEFT
+            or ev.value == DEVICE_ORIENTATION_PORTRAIT_ROTATED_RIGHT then
+            -- i.e., UD
+            ev.type = C.EV_MSC
+            ev.code = C.MSC_GYRO
+            ev.value = C.DEVICE_ROTATED_UPSIDE_DOWN
+        elseif ev.value == DEVICE_ORIENTATION_LANDSCAPE_ROTATED then
+            -- i.e., CCW
+            ev.type = C.EV_MSC
+            ev.code = C.MSC_GYRO
+            ev.value = C.DEVICE_ROTATED_COUNTER_CLOCKWISE
+        end
+    end
+end
+
 function KindleOasis:init()
     self.screen = require("ffi/framebuffer_mxcfb"):new{device = self, debug = logger.dbg}
     self.powerd = require("device/kindle/powerd"):new{
@@ -843,14 +882,14 @@ function KindleOasis:init()
                 "com.lab126.winmgr", "accelerometer")
             local rotation_mode = 0
             if orientation_code then
-                if orientation_code == "V" then
-                    rotation_mode = self.screen.ORIENTATION_PORTRAIT
+                if orientation_code == "U" then
+                    rotation_mode = self.screen.DEVICE_ROTATED_UPRIGHT
                 elseif orientation_code == "R" then
-                    rotation_mode = self.screen.ORIENTATION_LANDSCAPE
+                    rotation_mode = self.screen.DEVICE_ROTATED_CLOCKWISE
                 elseif orientation_code == "D" then
-                    rotation_mode = self.screen.ORIENTATION_PORTRAIT_ROTATED
+                    rotation_mode = self.screen.DEVICE_ROTATED_UPSIDE_DOWN
                 elseif orientation_code == "L" then
-                    rotation_mode = self.screen.ORIENTATION_LANDSCAPE_ROTATED
+                    rotation_mode = self.screen.DEVICE_ROTATED_COUNTER_CLOCKWISE
                 end
             end
 
@@ -865,7 +904,12 @@ function KindleOasis:init()
 
     Kindle.init(self)
 
-    self.input:registerEventAdjustHook(self.input.adjustKindleOasisOrientation)
+    self.input:registerEventAdjustHook(OasisGyroTranslation)
+    self.input.handleMiscEv = function(this, ev)
+        if ev.code == C.MSC_GYRO then
+            return this:handleGyroEv(ev)
+        end
+    end
 
     self.input.open(self.touch_dev)
     self.input.open("/dev/input/by-path/platform-gpiokey.0-event")
@@ -881,6 +925,39 @@ function KindleOasis:init()
     end
 
     self.input.open("fake_events")
+end
+
+-- HAL for gyro orientation switches (EV_ABS:ABS_PRESSURE (?!) w/ custom values to EV_MSC:MSC_GYRO w/ our own custom values)
+local function ZeldaGyroTranslation(this, ev)
+    -- c.f., drivers/input/misc/accel/bma2x2.c
+    local UPWARD_PORTRAIT_UP_INTERRUPT_HAPPENED     = 15
+    local UPWARD_PORTRAIT_DOWN_INTERRUPT_HAPPENED   = 16
+    local UPWARD_LANDSCAPE_LEFT_INTERRUPT_HAPPENED  = 17
+    local UPWARD_LANDSCAPE_RIGHT_INTERRUPT_HAPPENED = 18
+
+    if ev.type == C.EV_ABS and ev.code == C.ABS_PRESSURE then
+        if ev.value == UPWARD_PORTRAIT_UP_INTERRUPT_HAPPENED then
+            -- i.e., UR
+            ev.type = C.EV_MSC
+            ev.code = C.MSC_GYRO
+            ev.value = C.DEVICE_ROTATED_UPRIGHT
+        elseif ev.value == UPWARD_LANDSCAPE_LEFT_INTERRUPT_HAPPENED then
+            -- i.e., CW
+            ev.type = C.EV_MSC
+            ev.code = C.MSC_GYRO
+            ev.value = C.DEVICE_ROTATED_CLOCKWISE
+        elseif ev.value == UPWARD_PORTRAIT_DOWN_INTERRUPT_HAPPENED then
+            -- i.e., UD
+            ev.type = C.EV_MSC
+            ev.code = C.MSC_GYRO
+            ev.value = C.DEVICE_ROTATED_UPSIDE_DOWN
+        elseif ev.value == UPWARD_LANDSCAPE_RIGHT_INTERRUPT_HAPPENED then
+            -- i.e., CCW
+            ev.type = C.EV_MSC
+            ev.code = C.MSC_GYRO
+            ev.value = C.DEVICE_ROTATED_COUNTER_CLOCKWISE
+        end
+    end
 end
 
 function KindleOasis2:init()
@@ -919,13 +996,13 @@ function KindleOasis2:init()
             local rotation_mode = 0
             if orientation_code then
                 if orientation_code == "U" then
-                    rotation_mode = self.screen.ORIENTATION_PORTRAIT
+                    rotation_mode = self.screen.DEVICE_ROTATED_UPRIGHT
                 elseif orientation_code == "R" then
-                    rotation_mode = self.screen.ORIENTATION_LANDSCAPE
+                    rotation_mode = self.screen.DEVICE_ROTATED_CLOCKWISE
                 elseif orientation_code == "D" then
-                    rotation_mode = self.screen.ORIENTATION_PORTRAIT_ROTATED
+                    rotation_mode = self.screen.DEVICE_ROTATED_UPSIDE_DOWN
                 elseif orientation_code == "L" then
-                    rotation_mode = self.screen.ORIENTATION_LANDSCAPE_ROTATED
+                    rotation_mode = self.screen.DEVICE_ROTATED_COUNTER_CLOCKWISE
                 end
             end
 
@@ -940,7 +1017,12 @@ function KindleOasis2:init()
 
     Kindle.init(self)
 
-    self.input:registerEventAdjustHook(self.input.adjustKindleOasisOrientation)
+    self.input:registerEventAdjustHook(ZeldaGyroTranslation)
+    self.input.handleMiscEv = function(this, ev)
+        if ev.code == C.MSC_GYRO then
+            return this:handleGyroEv(ev)
+        end
+    end
 
     self.input.open(self.touch_dev)
     self.input.open("/dev/input/by-path/platform-gpio-keys-event")
@@ -990,13 +1072,13 @@ function KindleOasis3:init()
             local rotation_mode = 0
             if orientation_code then
                 if orientation_code == "U" then
-                    rotation_mode = self.screen.ORIENTATION_PORTRAIT
+                    rotation_mode = self.screen.DEVICE_ROTATED_UPRIGHT
                 elseif orientation_code == "R" then
-                    rotation_mode = self.screen.ORIENTATION_LANDSCAPE
+                    rotation_mode = self.screen.DEVICE_ROTATED_CLOCKWISE
                 elseif orientation_code == "D" then
-                    rotation_mode = self.screen.ORIENTATION_PORTRAIT_ROTATED
+                    rotation_mode = self.screen.DEVICE_ROTATED_UPSIDE_DOWN
                 elseif orientation_code == "L" then
-                    rotation_mode = self.screen.ORIENTATION_LANDSCAPE_ROTATED
+                    rotation_mode = self.screen.DEVICE_ROTATED_COUNTER_CLOCKWISE
                 end
             end
 
@@ -1011,7 +1093,12 @@ function KindleOasis3:init()
 
     Kindle.init(self)
 
-    self.input:registerEventAdjustHook(self.input.adjustKindleOasisOrientation)
+    self.input:registerEventAdjustHook(ZeldaGyroTranslation)
+    self.input.handleMiscEv = function(this, ev)
+        if ev.code == C.MSC_GYRO then
+            return this:handleGyroEv(ev)
+        end
+    end
 
     self.input.open(self.touch_dev)
     self.input.open("/dev/input/by-path/platform-gpio-keys-event")
@@ -1110,7 +1197,7 @@ function KindlePaperWhite5:init()
     self.input.open("fake_events")
 end
 
-function KindleScribe:init()
+function KindleBasic4:init()
     self.screen = require("ffi/framebuffer_mxcfb"):new{device = self, debug = logger.dbg}
     -- TBD, assume PW5 for now
     self.powerd = require("device/kindle/powerd"):new{
@@ -1141,6 +1228,8 @@ function KindleTouch:exit()
         self.framework_lipc_handle:close()
     end
 
+    self.powerd:__gc()
+
     Generic.exit(self)
 
     if self.isSpecialOffers then
@@ -1170,7 +1259,7 @@ KindlePaperWhite4.exit = KindleTouch.exit
 KindleBasic3.exit = KindleTouch.exit
 KindleOasis3.exit = KindleTouch.exit
 KindlePaperWhite5.exit = KindleTouch.exit
-KindleScribe.exit = KindleTouch.exit
+KindleBasic4.exit = KindleTouch.exit
 
 function Kindle3:exit()
     -- send double menu key press events to trigger screen refresh
@@ -1225,7 +1314,7 @@ local pw4_set = Set { "0PP", "0T1", "0T2", "0T3", "0T4", "0T5", "0T6",
 local kt4_set = Set { "10L", "0WF", "0WG", "0WH", "0WJ", "0VB" }
 local koa3_set = Set { "11L", "0WQ", "0WP", "0WN", "0WM", "0WL" }
 local pw5_set = Set { "1LG", "1Q0", "1PX", "1VD", "219", "21A", "2BH", "2BJ", "2DK" }
-local scribe_set = Set { "22D", "25T", "23A", "2AQ", "2AP", "1XH", "22C" }
+local kt5_set = Set { "22D", "25T", "23A", "2AQ", "2AP", "1XH", "22C" }
 
 if kindle_sn_lead == "B" or kindle_sn_lead == "9" then
     local kindle_devcode = string.sub(kindle_sn, 3, 4)
@@ -1270,8 +1359,8 @@ else
         return KindleOasis3
     elseif pw5_set[kindle_devcode_v2] then
         return KindlePaperWhite5
-    elseif scribe_set[kindle_devcode_v2] then
-        return KindleScribe
+    elseif kt5_set[kindle_devcode_v2] then
+        return KindleBasic4
     end
 end
 

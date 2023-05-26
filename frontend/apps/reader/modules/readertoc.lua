@@ -35,13 +35,7 @@ local ReaderToc = InputContainer:extend{
 }
 
 function ReaderToc:init()
-    if Device:hasKeyboard() then
-        self.key_events = {
-            ShowToc = {
-                { "T" },
-                doc = "show Table of Content menu" },
-        }
-    end
+    self:registerKeyEvents()
 
     if G_reader_settings:hasNot("toc_items_per_page") then
         -- The TOC items per page and items' font size can now be
@@ -59,7 +53,20 @@ function ReaderToc:init()
 
     self:resetToc()
     self.ui.menu:registerToMainMenu(self)
+
+    -- NOP our own gesture handling
+    self.ges_events = nil
 end
+
+function ReaderToc:onGesture() end
+
+function ReaderToc:registerKeyEvents()
+    if Device:hasKeyboard() then
+        self.key_events.ShowToc = { { "T" } }
+    end
+end
+
+ReaderToc.onPhysicalKeyboardConnected = ReaderToc.registerKeyEvents
 
 function ReaderToc:onReadSettings(config)
     self.toc_ticks_ignored_levels = config:readSetting("toc_ticks_ignored_levels") or {}
@@ -99,9 +106,12 @@ end
 function ReaderToc:onUpdateToc()
     self:resetToc()
     self.ui:handleEvent(Event:new("TocReset"))
+    return true
+end
 
-    --- @note: Let this propagate, plugins/statistics uses it to react to changes in document pagination
-    --return true
+-- Be sure to update the ToC after a CRE rerendering
+function ReaderToc:onDocumentRerendered()
+    self:onUpdateToc()
 end
 
 function ReaderToc:onPageUpdate(pageno)

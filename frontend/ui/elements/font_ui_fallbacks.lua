@@ -55,7 +55,7 @@ Fonts for many languages can be downloaded at:
 
 https://fonts.google.com/noto
 
-Only fonts named "Noto Sans xyz" or "Noto Sans xyz UI" (regular, not bold nor italic, not Serif) will be available in this menu.]])
+Only fonts named "Noto Sans xyz" or "Noto Sans xyz UI" (regular, not bold nor italic, not Serif) will be available in this menu. However, bold fonts will be used if their corresponding regular fonts exist.]])
 
 local getSubMenuItems = function()
     genFallbackCandidates()
@@ -145,9 +145,7 @@ local getSubMenuItems = function()
                         return
                     end
                 end
-                UIManager:show(InfoMessage:new{
-                    text = _("This will take effect on next restart."),
-                })
+                UIManager:askForRestart()
             end,
         }
         table.insert(menu_items, item)

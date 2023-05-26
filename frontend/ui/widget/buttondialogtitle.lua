@@ -45,9 +45,7 @@ function ButtonDialogTitle:init()
     if self.dismissable then
         if Device:hasKeys() then
             local close_keys = Device:hasFewKeys() and { "Back", "Left" } or Device.input.group.Back
-            self.key_events = {
-                Close = { { close_keys }, doc = "close button dialog" }
-            }
+            self.key_events.Close = { { close_keys } }
         end
         if Device:isTouchDevice() then
             self.ges_events.TapClose = {
@@ -63,30 +61,38 @@ function ButtonDialogTitle:init()
             }
         end
     end
+
     self.button_table = ButtonTable:new{
-        width = self.width,
+        width = self.width - 2*Size.border.window - 2*Size.padding.button,
         buttons = self.buttons,
         zero_sep = true,
         show_parent = self,
     }
+
+    local title_padding = self.use_info_style and self.info_padding or self.title_padding
+    local title_margin = self.use_info_style and self.info_margin or self.title_margin
+    local title_width = self.width - 2 * (Size.border.window + Size.padding.button + title_padding + title_margin)
+    local title_widget = FrameContainer:new{
+        padding = title_padding,
+        margin = title_margin,
+        bordersize = 0,
+        TextBoxWidget:new{
+            text = self.title,
+            width = title_width,
+            face = self.use_info_style and self.info_face or self.title_face,
+            alignment = self.title_align or "left",
+        },
+    }
+
     self[1] = CenterContainer:new{
         dimen = Screen:getSize(),
         ignore_if_over = "height",
         MovableContainer:new{
+            anchor = self.anchor,
             FrameContainer:new{
                 VerticalGroup:new{
                     align = "center",
-                    FrameContainer:new{
-                        padding = self.use_info_style and self.info_padding or self.title_padding,
-                        margin = self.use_info_style and self.info_margin or self.title_margin,
-                        bordersize = 0,
-                        TextBoxWidget:new{
-                            text = self.title,
-                            width = math.floor(self.width * 0.9),
-                            face = self.use_info_style and self.info_face or self.title_face,
-                            alignment = self.title_align or "left",
-                        },
-                    },
+                    title_widget,
                     VerticalSpan:new{ width = Size.span.vertical_default },
                     self.button_table,
                 },
@@ -109,7 +115,7 @@ end
 
 function ButtonDialogTitle:onShow()
     UIManager:setDirty(self, function()
-        return "ui", self[1][1].dimen
+        return "ui", self[1][1].dimen -- i.e., MovableContainer
     end)
 end
 
@@ -134,7 +140,7 @@ end
 
 function ButtonDialogTitle:paintTo(...)
     InputContainer.paintTo(self, ...)
-    self.dimen = self[1][1].dimen -- FrameContainer
+    self.dimen = self[1][1].dimen
 end
 
 return ButtonDialogTitle

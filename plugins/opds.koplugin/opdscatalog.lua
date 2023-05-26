@@ -20,7 +20,6 @@ function OPDSCatalog:init()
         show_parent = self,
         is_popout = false,
         is_borderless = true,
-        has_close_button = true,
         close_callback = function() return self:onClose() end,
         file_downloaded_callback = function(downloaded_file)
             UIManager:show(ConfirmBox:new{
@@ -51,7 +50,7 @@ end
 
 function OPDSCatalog:onShow()
     UIManager:setDirty(self, function()
-        return "ui", self[1].dimen
+        return "ui", self[1].dimen -- i.e., FrameContainer
     end)
 end
 
